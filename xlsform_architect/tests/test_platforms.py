@@ -121,3 +121,50 @@ def test_validator_without_target_has_no_platform_findings():
     qn = _form(Question(name="a", xlsform_type="integer", label="A"))
     report = Validator(deep=False).validate(qn)
     assert not [f for f in report.findings if f.category == "platform"]
+
+
+# --- Ona & CommCare -------------------------------------------------------------
+def test_five_platforms_loaded():
+    from xlsform_architect.engine.knowledge_base import KnowledgeBase
+    names = set(KnowledgeBase.load().platform_names())
+    assert {"kobo", "surveycto", "odk", "ona", "commcare"} <= names
+
+
+def test_ona_accepts_osm_and_rank():
+    qn = _form(Question(name="r", xlsform_type="rank items", label="R"),
+               Question(name="m", xlsform_type="osm", label="M"))
+    findings = PlatformValidator().validate(qn, "ona")
+    assert not [f for f in findings if f.level == "error"]
+
+
+def test_commcare_rejects_geotrace_and_rank():
+    qn = _form(Question(name="t", xlsform_type="geotrace", label="T"),
+               Question(name="r", xlsform_type="rank items", label="R"))
+    findings = PlatformValidator().validate(qn, "commcare")
+    errors = [f for f in findings if f.level == "error"]
+    assert len(errors) == 2
+    assert all("not supported by CommCare" in f.message for f in errors)
+
+
+def test_commcare_accepts_core_types():
+    qn = _form(Question(name="a", xlsform_type="integer", label="A"),
+               Question(name="g", xlsform_type="geopoint", label="G"))
+    findings = PlatformValidator().validate(qn, "commcare")
+    assert not [f for f in findings if f.level == "error"]
+
+
+def test_matrix_includes_new_platforms():
+    qn = _form(Question(name="t", xlsform_type="geotrace", label="T"))
+    matrix = PlatformValidator().matrix(qn, generally_valid=True)
+    assert matrix["commcare"] is False    # no geotrace on CommCare
+    assert matrix["odk"] is True
+    assert matrix["ona"] is True
+
+
+def test_workflow_accepts_commcare_target():
+    data = {"settings": {"form_title": "T", "form_id": "t"},
+            "survey": [{"question": "Age"}]}
+    result = Workflow().run_from_dict(data, target="commcare",
+                                      write_outputs=False)
+    assert result.is_valid
+    assert result.report.compatibility["commcare"] is True

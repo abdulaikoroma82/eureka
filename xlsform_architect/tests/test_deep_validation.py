@@ -44,7 +44,7 @@ def test_deep_flips_compatibility_on_error():
         questions=[Question(name="a", xlsform_type="integer", label="A",
                             relevant="${ghost} > 1")])
     report = Validator().validate(qn)
-    assert report.compatibility == {"kobo": False, "surveycto": False, "odk": False}
+    assert report.compatibility and not any(report.compatibility.values())
     assert report.deep_ran is True
 
 

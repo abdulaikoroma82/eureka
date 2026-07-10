@@ -91,8 +91,9 @@ def _sidebar():
             help="Word, Excel, PDF, CSV, plain text, or a structured JSON definition.")
 
         st.markdown("**2 · Where will you deploy it?**")
+        targets = _kb().platform_names() or list(DEPLOYMENT_TARGETS)
         target = st.selectbox(
-            "Target platform", DEPLOYMENT_TARGETS, label_visibility="collapsed",
+            "Target platform", targets, label_visibility="collapsed",
             format_func=_platform_label)
         profile = _kb().platform(target)
         if profile.get("dialect"):
@@ -127,7 +128,7 @@ def _render_landing() -> None:
     st.markdown(
         "Turn **any questionnaire** — Word, Excel, PDF, CSV or plain text — "
         "into a validated, deployment-ready **XLSForm** for KoboToolbox, "
-        "SurveyCTO or ODK.")
+        "SurveyCTO, ODK, Ona or CommCare.")
 
     c1, c2, c3 = st.columns(3)
     with c1:

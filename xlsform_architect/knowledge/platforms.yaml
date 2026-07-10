@@ -167,3 +167,98 @@ platforms:
       - "Set 'instance_name' in settings so submissions get human-readable names in ODK Central."
       - "Add an 'audit' metadata field to record enumerator behaviour for data-quality review."
       - "ODK Central re-validates on upload with ODK Validate - treat that as the final check."
+
+  ona:
+    label: "Ona"
+    docs: "https://help.ona.io/"
+    engine: "pyxform (ODK-based platform)"
+    extra_types:
+      - range
+      - rank
+      - audit
+      - background-audio
+      - background-geopoint
+      - start-geopoint
+      - trigger
+      - csv-external
+      - xml-external
+      - select_one_from_file
+      - select_multiple_from_file
+      - phonenumber
+      - simserial
+      - subscriberid
+      - email
+      - osm
+    unsupported_types:
+      - text audit
+      - audio audit
+      - sensor_statistic
+      - sensor_stream
+      - comments
+      - speed violations count
+      - speed violations list
+      - speed violations audit
+      - calculate_here
+      - caseid
+    dialect: {}          # Ona consumes standard XLSForm headers
+    name_rules:
+      must_start_with_letter: false
+      max_length: 64
+      max_length_level: warning
+      max_length_reason: "long names bloat submissions and exports"
+    settings:
+      recommended: ["form_title", "form_id", "version"]
+      optional: ["default_language", "instance_name"]
+    metadata_types: ["start", "end", "today", "deviceid", "username"]
+    tips:
+      - "Ona is built on the ODK stack and consumes standard XLSForms - the pyxform deep check in this tool mirrors its importer."
+      - "Data can be collected with ODK Collect (Android) or Enketo web forms; test appearances in both if you deploy to both."
+      - "Ona has first-class OSM (OpenStreetMap) question support for mapping surveys."
+      - "Re-uploading a form with the same form_id replaces it; bump the version each round."
+
+  commcare:
+    label: "CommCare"
+    docs: "https://dimagi.atlassian.net/wiki/spaces/commcarepublic/"
+    engine: "CommCare's XLSForm importer (Form Builder)"
+    extra_types: []
+    unsupported_types:
+      - range
+      - rank
+      - acknowledge
+      - trigger
+      - audit
+      - background-audio
+      - background-geopoint
+      - start-geopoint
+      - osm
+      - csv-external
+      - xml-external
+      - select_one_from_file
+      - select_multiple_from_file
+      - geotrace
+      - geoshape
+      - text audit
+      - audio audit
+      - sensor_statistic
+      - sensor_stream
+      - comments
+      - speed violations count
+      - speed violations list
+      - speed violations audit
+      - calculate_here
+      - caseid
+    dialect: {}          # CommCare's importer reads standard XLSForm headers
+    name_rules:
+      must_start_with_letter: false
+      max_length: 64
+      max_length_level: warning
+      max_length_reason: "long names make CommCare case properties and exports unwieldy"
+    settings:
+      recommended: ["form_title", "form_id"]
+      optional: ["default_language"]
+    metadata_types: ["start", "end", "deviceid", "username"]
+    tips:
+      - "Import this file in the CommCare Form Builder via 'Edit > Import from XLSForm'; after import, further edits happen in the Form Builder."
+      - "CommCare sticks to the core XLSForm set: single points for GPS (no geotrace/geoshape) and no range/rank widgets."
+      - "For pre-loaded reference data, use CommCare Lookup Tables instead of csv-external attachments."
+      - "Longitudinal tracking uses CommCare's case management, configured in the app builder rather than the XLSForm."

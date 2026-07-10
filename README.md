@@ -1,7 +1,7 @@
 # XLSForm Architect
 
 **A standalone, rule-based compiler that turns questionnaires into
-deployment-ready XLSForms for KoboToolbox, SurveyCTO and ODK.**
+deployment-ready XLSForms for KoboToolbox, SurveyCTO, ODK, Ona and CommCare.**
 
 XLSForm Architect lets a survey designer, M&E officer or researcher drop in a
 questionnaire of **any kind** (Word, Excel, PDF, CSV or JSON) and get back a
@@ -101,9 +101,9 @@ python run_ui.py
 ```
 
 Then in the browser: upload a questionnaire → pick a target (Kobo, SurveyCTO,
-ODK) → click **Generate XLSForm**. Live processing steps are shown, followed by
-the validation result and download buttons for the XLSForm and the full `.zip`
-package.
+ODK, Ona, CommCare) → click **Generate XLSForm**. Live processing steps are
+shown, followed by the validation result and download buttons for the XLSForm
+and the full `.zip` package.
 
 ### 2. Command line
 
@@ -216,18 +216,30 @@ and point the tool at it with `--rules` on the CLI or
 Choosing a target platform genuinely changes the output — the tool applies
 **that platform's** rules, not just the generic XLSForm spec. The profiles
 live in `xlsform_architect/knowledge/platforms.yaml` (editable, no code
-changes):
+changes — adding a platform is a YAML edit; the UI, CLI and compatibility
+matrix pick it up automatically):
 
-| | KoboToolbox | SurveyCTO | ODK |
+| Platform | Column dialect | Notable type support | Naming standards |
 | --- | --- | --- | --- |
-| **Column dialect** | standard | `relevance`, `constraint message` (SurveyCTO's template headers) | standard |
-| **Extra types accepted** | `range`, `rank`, `audit`, `background-audio`, … | `text audit`, `audio audit`, `sensor_*`, `calculate_here`, … | full pyxform set incl. `osm` |
-| **Types rejected** | SurveyCTO-only types | `range`, `rank`, `audit`, `background-*`, external selects | SurveyCTO-only types |
-| **Naming standards** | ≤ 64 chars | must start with a letter; ≤ 32 chars (Stata exports) | ≤ 64 chars |
+| **KoboToolbox** | standard | `range`, `rank`, `audit`, `background-audio`, … | ≤ 64 chars |
+| **SurveyCTO** | `relevance`, `constraint message` (its template headers) | `text audit`, `audio audit`, `sensor_*`, `calculate_here`; rejects `range`/`rank`/`audit` | must start with a letter; ≤ 32 chars (Stata exports) |
+| **ODK** | standard | full pyxform set incl. `osm` | ≤ 64 chars |
+| **Ona** | standard | ODK set incl. `osm` (ODK-based platform) | ≤ 64 chars |
+| **CommCare** | standard | core XLSForm set only — no `range`/`rank`/`geotrace`/`geoshape`/external selects | ≤ 64 chars |
 
 The **compatibility matrix is honest per platform**: a form that uses `rank`
-reports ✅ Kobo / ✅ ODK / ❌ SurveyCTO, with the error telling you which
-platforms *do* support the offending type.
+reports ✅ Kobo / ✅ ODK / ✅ Ona / ❌ SurveyCTO / ❌ CommCare, with the error
+telling you which platforms *do* support the offending type.
+
+### Coverage & the wider landscape
+
+XLSForm Architect covers the **XLSForm family** of mobile data collection
+platforms — KoboToolbox, SurveyCTO, ODK, Ona and CommCare — which all consume
+the XLSForm format this tool produces (CommCare via its Form Builder import).
+Platforms that use **entirely different form formats** — Survey Solutions
+(World Bank), REDCap, CSPro, Epicollect5, Magpi, Fulcrum — are out of scope:
+supporting them means building a separate exporter per format, not an
+XLSForm variant.
 
 ---
 
