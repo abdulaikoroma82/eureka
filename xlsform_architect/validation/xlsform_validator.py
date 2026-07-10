@@ -8,6 +8,11 @@ Verify deployment compatibility with KoboToolbox, SurveyCTO and ODK:
 * names are not XLSForm reserved words
 * types are recognised XLSForm types
 * names respect length limits used by the target platforms
+* the ``appearance`` column uses recognised appearance tokens
+
+These are fast, deterministic checks.  For near-authoritative compatibility
+the orchestrator additionally runs the pyxform deep check (see
+:mod:`~xlsform_architect.validation.pyxform_validator`).
 
 Inputs
 ------
@@ -46,9 +51,30 @@ _VALID_TYPES = {
     "start", "end", "today", "deviceid", "username", "hidden",
 }
 
-# XLSForm / XML reserved names that must not be used as variable names.
-_RESERVED = {"name", "label", "type", "calculation", "constraint", "relevant",
-             "required", "choice_filter", "or_other", "true", "false"}
+# XLSForm / XForm reserved names that must not be used as variable names.
+# Mirrors the reserved set enforced by pyxform (used by ODK & Kobo).
+_RESERVED = {
+    # XLSForm survey/choices column headers
+    "name", "label", "type", "calculation", "constraint", "constraint_message",
+    "relevant", "required", "required_message", "choice_filter", "or_other",
+    "hint", "default", "appearance", "read_only", "readonly", "repeat_count",
+    "media", "parameters", "trigger", "list_name",
+    # XForm / instance metadata & literals
+    "true", "false", "instance", "meta", "self", "text", "value", "item",
+    "itext", "setvalue", "setgeopoint", "start", "end", "today", "now",
+}
+
+# Recognised values for the ``appearance`` column (base tokens; some accept a
+# parenthesised argument, e.g. ``field-list`` or ``columns-2``).
+_VALID_APPEARANCES = {
+    "multiline", "url", "numbers", "thousands-sep", "month-year", "year",
+    "no-calendar", "week-number", "minimal", "quick", "columns", "columns-pack",
+    "no-buttons", "field-list", "table-list", "label", "list-nolabel",
+    "compact", "quickcompact", "map", "placement-map", "signature", "draw",
+    "annotate", "new", "hidden", "spinner", "horizontal", "horizontal-compact",
+    "likert", "autocomplete", "search", "rating", "printer", "bearing",
+    "distress", "counter", "compact-1", "image-map", "masked",
+}
 
 
 class XLSFormValidator:
@@ -60,7 +86,7 @@ class XLSFormValidator:
 
         for q in questionnaire.questions:
             base = q.base_type
-            if base in ("begin group", "end group"):
+            if base in ("begin group", "end group", "begin repeat", "end repeat"):
                 continue
 
             # Type recognised?
@@ -87,6 +113,30 @@ class XLSFormValidator:
                 findings.append(Finding("warning", "deployment",
                                         f"Variable name '{q.name}' exceeds 64 characters.", q.name))
 
+            # Appearance recognised?
+            findings.extend(self._check_appearance(q))
+
+        return findings
+
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _check_appearance(q) -> List[Finding]:
+        appearance = (q.appearance or "").strip()
+        if not appearance:
+            return []
+        findings: List[Finding] = []
+        for token in appearance.split():
+            # Strip any parenthesised argument, e.g. "columns-2" stays, but
+            # "field-list(...)" -> "field-list".
+            base = token.split("(", 1)[0].strip()
+            # Allow the "columns-N" family with a numeric suffix.
+            core = re.sub(r"-\d+$", "", base)
+            if base and base not in _VALID_APPEARANCES and core not in _VALID_APPEARANCES:
+                findings.append(Finding(
+                    "warning", "deployment",
+                    f"Appearance '{token}' on '{q.name}' is not a standard "
+                    f"appearance; check it is supported on your target platform.",
+                    q.name))
         return findings
 
     # ------------------------------------------------------------------

@@ -209,13 +209,25 @@ and point the tool at it with `--rules` on the CLI or
 
 ## Validation & deployment compatibility
 
-Before export the validator checks:
+The validator runs in layers:
 
-* **Structure** — survey/choices/settings present, every question typed and named
+* **Structure** — survey/choices/settings present, every question typed and
+  named, and `begin/end group` & `begin/end repeat` markers balanced.
 * **Logic** — no duplicate names, no broken `${…}` references, no missing/empty
-  choice lists
+  choice lists.
 * **Deployment** — valid ODK/XML identifiers, no reserved words, recognised
-  types — reported per platform (Kobo / SurveyCTO / ODK)
+  types and appearances — reported per platform (Kobo / SurveyCTO / ODK).
+* **Deep check (pyxform)** — the tool then runs **pyxform**, the same engine
+  KoboToolbox and ODK use, to convert the form to an ODK XForm **offline**. If
+  that succeeds, the form is compatible with the ODK/Kobo toolchain at a
+  near-authoritative level; if pyxform rejects it (e.g. an unresolved
+  reference or a broken group), the form is marked incompatible on every
+  platform. This runs automatically when `pyxform` is installed and can be
+  turned off with `Validator(deep=False)`.
+
+> The one thing this does **not** do is run ODK Validate (the Java step that
+> checks full XForm runtime semantics). Every platform still runs its own
+> validation when you upload — treat that as the final authoritative check.
 
 Results are written to `QA_Report.pdf` in the output package.
 

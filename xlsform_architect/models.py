@@ -117,8 +117,16 @@ class Question:
     # -- convenience -----------------------------------------------------
     @property
     def base_type(self) -> str:
-        """The bare type keyword, e.g. ``select_one`` from ``select_one yes_no``."""
-        return self.xlsform_type.split(" ", 1)[0] if self.xlsform_type else ""
+        """The bare type keyword, e.g. ``select_one`` from ``select_one yes_no``.
+
+        Two-word structural markers (``begin group`` / ``end group`` /
+        ``begin repeat`` / ``end repeat``) are returned whole.
+        """
+        t = (self.xlsform_type or "").strip()
+        for marker in ("begin group", "end group", "begin repeat", "end repeat"):
+            if t == marker or t.startswith(marker + " "):
+                return marker
+        return t.split(" ", 1)[0] if t else ""
 
     @property
     def is_select(self) -> bool:

@@ -70,4 +70,44 @@ class StructureValidator:
         if not questionnaire.settings.form_id:
             findings.append(Finding("warning", "structure",
                                     "Form id is empty (a default will be generated)."))
+
+        findings.extend(self._check_group_balance(questionnaire))
+        return findings
+
+    # ------------------------------------------------------------------
+    def _check_group_balance(self, questionnaire: Questionnaire) -> List[Finding]:
+        """Verify begin/end group and begin/end repeat markers are balanced.
+
+        A form that opens a group or repeat without closing it (or closes one
+        that was never opened) is rejected by ODK/Kobo/SurveyCTO.
+        """
+        findings: List[Finding] = []
+        stack: List[str] = []
+        openers = {"begin group": "end group", "begin repeat": "end repeat"}
+        closers = {"end group": "begin group", "end repeat": "begin repeat"}
+
+        for q in questionnaire.questions:
+            marker = q.base_type
+            if marker in openers:
+                stack.append(marker)
+            elif marker in closers:
+                expected_opener = closers[marker]
+                if not stack:
+                    findings.append(Finding(
+                        "error", "structure",
+                        f"'{marker}' appears without a matching opener.",
+                        q.name))
+                elif stack[-1] != expected_opener:
+                    findings.append(Finding(
+                        "error", "structure",
+                        f"'{marker}' does not match the currently open "
+                        f"'{stack[-1]}'.", q.name))
+                    stack.pop()
+                else:
+                    stack.pop()
+
+        for unclosed in stack:
+            findings.append(Finding(
+                "error", "structure",
+                f"'{unclosed}' was never closed with '{openers[unclosed]}'."))
         return findings

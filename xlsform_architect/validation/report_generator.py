@@ -62,6 +62,8 @@ class ValidationReport:
 
     findings: List[Finding] = field(default_factory=list)
     compatibility: Dict[str, bool] = field(default_factory=dict)
+    #: True when the pyxform deep check actually ran (pyxform installed).
+    deep_ran: bool = False
 
     @property
     def errors(self) -> List[Finding]:
@@ -101,6 +103,12 @@ class ReportGenerator:
         lines.append(f"## Overall status: {status}")
         lines.append("")
         lines.append(report.summary())
+        lines.append("")
+        deep = ("Deep validation via pyxform (the ODK/Kobo engine) was run."
+                if report.deep_ran else
+                "Deep validation via pyxform was NOT run (pyxform not installed); "
+                "standard checks only.")
+        lines.append(f"_{deep}_")
         lines.append("")
 
         # Deployment compatibility.
