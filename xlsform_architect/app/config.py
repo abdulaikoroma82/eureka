@@ -33,7 +33,9 @@ DEFAULT_OUTPUT_DIR: Path = PACKAGE_ROOT / "output"
 EXAMPLES_DIR: Path = PACKAGE_ROOT / "examples"
 
 # --- supported deployment targets -----------------------------------------
-DEPLOYMENT_TARGETS: List[str] = ["kobo", "surveycto", "odk"]
+# Fallback list; the authoritative set is knowledge/platforms.yaml (loaded via
+# KnowledgeBase.platform_names()), so adding a platform is a YAML-only change.
+DEPLOYMENT_TARGETS: List[str] = ["kobo", "surveycto", "odk", "ona", "commcare"]
 
 # --- supported input formats ----------------------------------------------
 SUPPORTED_INPUT_EXTENSIONS: List[str] = [".json", ".csv", ".xlsx", ".xls",

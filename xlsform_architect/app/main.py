@@ -31,8 +31,20 @@ import argparse
 import sys
 from pathlib import Path
 
-from .config import CONFIG
+from .config import CONFIG, DEPLOYMENT_TARGETS
 from .workflow import Workflow
+
+
+def _available_targets() -> list:
+    """Platform keys from the knowledge pack (YAML-driven), with a fallback."""
+    try:
+        from ..engine.knowledge_base import KnowledgeBase
+        names = KnowledgeBase.load().platform_names()
+        if names:
+            return names
+    except Exception:  # pragma: no cover - defensive
+        pass
+    return list(DEPLOYMENT_TARGETS)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -41,7 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Transform a questionnaire into a deployment-ready XLSForm package.")
     parser.add_argument("input", help="Questionnaire file "
                         "(.json .csv .xlsx .xls .docx .pdf .txt .md)")
-    parser.add_argument("--target", "-t", choices=["kobo", "surveycto", "odk"],
+    parser.add_argument("--target", "-t", choices=_available_targets(),
                         default=None,
                         help="Deployment platform: validates against that "
                              "platform's standards and writes its column "

@@ -3,7 +3,8 @@
 A plain-language guide. **No coding knowledge needed.**
 
 XLSForm Architect turns a questionnaire (a Word, Excel, PDF, or text file) into
-a ready-to-use survey form for **KoboToolbox, SurveyCTO, or ODK** — plus a set
+a ready-to-use survey form for **KoboToolbox, SurveyCTO, ODK, Ona, or
+CommCare** — plus a set
 of supporting documents. It runs on your own computer and does **not** use any
 paid or online AI service.
 
@@ -92,7 +93,8 @@ Once the app is open in your browser:
 1. **Upload your questionnaire.** Use the box on the left. It accepts Word
    (`.docx`), Excel (`.xlsx`), PDF, CSV, plain text (`.txt`), or a prepared
    JSON file.
-2. **Choose where the form is going** — KoboToolbox, SurveyCTO, or ODK.
+2. **Choose where the form is going** — KoboToolbox, SurveyCTO, ODK, Ona,
+   or CommCare.
    This matters: the tool checks your form against **that platform's own
    rules** and writes the file in its expected format (SurveyCTO, for
    example, uses slightly different column names — handled for you). The

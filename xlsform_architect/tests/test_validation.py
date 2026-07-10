@@ -53,7 +53,10 @@ def test_compatibility_matrix():
     qn = Questionnaire(questions=[
         Question(name="age", xlsform_type="integer", label="Age")])
     matrix = Validator().validate(qn).compatibility
-    assert matrix == {"kobo": True, "surveycto": True, "odk": True}
+    # Every platform profile in the knowledge pack gets a verdict, and a
+    # plain integer question is compatible everywhere.
+    assert {"kobo", "surveycto", "odk", "ona", "commcare"} <= set(matrix)
+    assert all(matrix.values())
 
 
 def test_empty_choice_list_flagged():
