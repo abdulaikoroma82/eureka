@@ -11,9 +11,9 @@ Usage
 
 Examples
 --------
-    python -m xlsform_architect.app.main survey.docx --category imam
-    python -m xlsform_architect.app.main form.json --title "OTP Register" \
-        --output ./out
+    python -m xlsform_architect.app.main survey.docx --title "Household Survey"
+    python -m xlsform_architect.app.main form.json --output ./out
+    python -m xlsform_architect.app.main survey.docx --rules ./my_rules
 
 Inputs
 ------
@@ -31,7 +31,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .config import CONFIG, SURVEY_CATEGORIES
+from .config import CONFIG
 from .workflow import Workflow
 
 
@@ -43,8 +43,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--title", help="Override the form title")
     parser.add_argument("--form-id", help="Override the form id")
     parser.add_argument("--version", help="Override the form version")
-    parser.add_argument("--category", choices=SURVEY_CATEGORIES, default=None,
-                        help="Survey category / knowledge pack")
+    parser.add_argument("--rules", default=None,
+                        help="Path to a custom rules directory (defaults to the "
+                             "bundled standard XLSForm rules)")
     parser.add_argument("--output", "-o", default=str(CONFIG.output_dir),
                         help="Output directory")
     parser.add_argument("--quiet", "-q", action="store_true", help="Suppress step output")
@@ -63,14 +64,20 @@ def main(argv=None) -> int:
         print(f"error: input file not found: {input_path}", file=sys.stderr)
         return 2
 
-    workflow = Workflow()
+    knowledge = None
+    if args.rules:
+        from pathlib import Path as _P
+
+        from ..engine.knowledge_base import KnowledgeBase
+        knowledge = KnowledgeBase.load(directory=_P(args.rules))
+
+    workflow = Workflow(knowledge=knowledge)
     print(f"Processing: {input_path}")
     result = workflow.run_from_file(
         input_path,
         form_title=args.title,
         form_id=args.form_id,
         version=args.version,
-        category=args.category,
         output_dir=args.output,
         progress=None if args.quiet else _progress,
     )

@@ -12,7 +12,7 @@ Rules (summary)
 * Several options, one pick  -> ``select_one <list>``
 * Several options, many picks -> ``select_multiple <list>``
 * "age", "how many"          -> ``integer``
-* "weight", "muac"           -> ``decimal``
+* "weight", "amount"         -> ``decimal``
 * "date"                     -> ``date``
 * "gps"                      -> ``geopoint``
 * "photo"                    -> ``image``

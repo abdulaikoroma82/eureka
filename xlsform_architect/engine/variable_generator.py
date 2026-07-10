@@ -20,8 +20,8 @@ Examples
 >>> gen = VariableGenerator()
 >>> gen.generate("Child age in months")
 'child_age_months'
->>> gen.generate("Mother received MMS")
-'mother_received_mms'
+>>> gen.generate("Preferred contact method")
+'preferred_contact_method'
 >>> gen.generate("Child age in months")   # duplicate -> suffixed
 'child_age_months_2'
 """

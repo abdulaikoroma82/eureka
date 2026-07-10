@@ -192,7 +192,7 @@ class QuestionnaireParser:
     def _is_imperative(self, line: str) -> bool:
         """Detect data-collection prompts phrased as commands.
 
-        e.g. "Record GPS location", "Take a photo", "Measure the MUAC".
+        e.g. "Record GPS location", "Take a photo", "Enter the total amount".
         """
         return bool(_IMPERATIVE.match(line))
 

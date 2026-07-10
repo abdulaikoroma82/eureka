@@ -20,11 +20,11 @@ def test_if_no_references_previous():
 
 
 def test_under_5_years_in_months():
-    age = Question(name="child_age_months", raw_label="Child age in months",
+    age = Question(name="age_months", raw_label="Age in months",
                    xlsform_type="integer")
-    q = Question(raw_label="Give MUAC", logic="if child is under 5 years")
+    q = Question(raw_label="Follow-up question", logic="if under 5 years")
     expr = LogicEngine().resolve(q, previous=None, known=[age, q])
-    assert expr == "${child_age_months}<60"
+    assert expr == "${age_months}<60"
 
 
 def test_explicit_relevant_untouched():
@@ -40,31 +40,25 @@ def test_unresolvable_logic_logged():
 
 
 # --- constraint engine -----------------------------------------------------
-def test_age_months_constraint():
-    q = Question(raw_label="Child age in months", xlsform_type="integer")
+def test_age_constraint():
+    q = Question(raw_label="Respondent age", xlsform_type="integer")
     ConstraintEngine().apply(q)
-    assert q.constraint == ". >= 0 and . <= 60"
+    assert q.constraint == ". >= 0 and . <= 120"
 
 
 def test_percentage_constraint():
-    q = Question(raw_label="Coverage percentage", xlsform_type="decimal")
+    q = Question(raw_label="Completion percentage", xlsform_type="decimal")
     ConstraintEngine().apply(q)
     assert q.constraint == ". >= 0 and . <= 100"
 
 
-def test_weight_constraint():
-    q = Question(raw_label="Weight in kg", xlsform_type="decimal")
-    ConstraintEngine().apply(q)
-    assert q.constraint == ". > 0 and . <= 200"
-
-
 def test_date_not_future():
-    q = Question(raw_label="Admission date", xlsform_type="date")
+    q = Question(raw_label="Interview date", xlsform_type="date")
     ConstraintEngine().apply(q)
     assert q.constraint == ". <= today()"
 
 
 def test_explicit_constraint_preserved():
-    q = Question(raw_label="Weight", xlsform_type="decimal", constraint=". > 1")
+    q = Question(raw_label="Amount", xlsform_type="decimal", constraint=". > 1")
     ConstraintEngine().apply(q)
     assert q.constraint == ". > 1"

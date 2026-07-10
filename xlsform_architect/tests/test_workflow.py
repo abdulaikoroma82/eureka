@@ -1,4 +1,4 @@
-"""End-to-end tests for the workflow controller (Iterations 1-6)."""
+"""End-to-end tests for the workflow controller."""
 
 import json
 
@@ -8,14 +8,13 @@ from xlsform_architect.app.workflow import Workflow
 
 
 SAMPLE = {
-    "settings": {"form_title": "OTP Register"},
-    "category": "imam",
+    "settings": {"form_title": "Event Registration"},
     "survey": [
-        {"question": "Is the child currently enrolled in OTP?",
+        {"question": "Are you attending the event?",
          "choices": ["Yes", "No"], "required": True},
-        {"question": "Admission date", "logic": "ask if yes"},
-        {"question": "Child age in months"},
-        {"question": "MUAC (cm)"},
+        {"question": "Preferred session date", "logic": "ask if yes"},
+        {"question": "Number of guests"},
+        {"question": "Full name"},
     ],
 }
 
@@ -24,21 +23,23 @@ def test_run_from_dict_valid():
     result = Workflow().run_from_dict(SAMPLE, write_outputs=False)
     assert result.is_valid
     names = [q.name for q in result.questionnaire.questions]
-    assert "child_enrolled_otp" in names
-    assert "admission_date" in names
+    assert "attending_event" in names
+    assert "preferred_session_date" in names
 
 
 def test_relevant_compiled_end_to_end():
     result = Workflow().run_from_dict(SAMPLE, write_outputs=False)
-    admission = next(q for q in result.questionnaire.questions
-                     if q.name == "admission_date")
-    assert admission.relevant == "${child_enrolled_otp}='1'"
+    dated = next(q for q in result.questionnaire.questions
+                 if q.name == "preferred_session_date")
+    assert dated.relevant == "${attending_event}='1'"
 
 
-def test_muac_classification_added():
+def test_types_inferred():
     result = Workflow().run_from_dict(SAMPLE, write_outputs=False)
-    names = [q.name for q in result.questionnaire.questions]
-    assert "muac_class" in names
+    by_name = {q.name: q for q in result.questionnaire.questions}
+    assert by_name["attending_event"].xlsform_type == "select_one yes_no"
+    assert by_name["num_guests"].xlsform_type == "integer"
+    assert by_name["full_name"].xlsform_type == "text"
 
 
 def test_full_output_package_written(tmp_path):

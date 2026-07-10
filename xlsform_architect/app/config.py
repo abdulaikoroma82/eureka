@@ -35,9 +35,6 @@ EXAMPLES_DIR: Path = PACKAGE_ROOT / "examples"
 # --- supported deployment targets -----------------------------------------
 DEPLOYMENT_TARGETS: List[str] = ["kobo", "surveycto", "odk"]
 
-# --- supported survey categories (map to knowledge packs) ------------------
-SURVEY_CATEGORIES: List[str] = ["imam", "vas_d", "mms", "anc", "household", "custom"]
-
 # --- supported input formats ----------------------------------------------
 SUPPORTED_INPUT_EXTENSIONS: List[str] = [".json", ".csv", ".xlsx", ".xls", ".docx", ".pdf"]
 
