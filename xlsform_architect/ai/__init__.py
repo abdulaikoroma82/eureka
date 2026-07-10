@@ -11,7 +11,11 @@ See :class:`~xlsform_architect.ai.pipeline.AIPipeline` for the integration
 point, and the individual feature modules for what each one does:
 
 * :mod:`translator` - generate translation columns
-* :mod:`skip_logic` - resolve "skip to question N" instructions
+* :mod:`skip_logic` - resolve "skip to question N" jumps and other
+  unparseable conditional logic
+* :mod:`constraint_reviewer` - suggest cross-field validation constraints
+  (e.g. end date after start date) that a single-question constraint engine
+  cannot express
 * :mod:`type_classifier` - reclassify keyword-fallback "text" questions
 * :mod:`quality_reviewer` - holistic semantic review of the compiled form
 """

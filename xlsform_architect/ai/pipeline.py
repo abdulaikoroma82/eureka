@@ -7,9 +7,12 @@ rule-engine-compiled questionnaire:
 
     1. Type-classification fallback (may change a question's type, so it
        runs first - everything downstream should see the corrected type)
-    2. Skip-logic inversion (adds ``relevant`` conditions)
-    3. Translation (labels are final by now, so translations are accurate)
-    4. Quality review (reads the fully-settled form last)
+    2. Skip/condition logic fallback (adds ``relevant`` conditions)
+    3. Cross-field constraint suggestions (adds ``constraint`` conditions
+       spanning two questions - a job the deterministic constraint engine
+       structurally cannot do, since it only ever looks at one question)
+    4. Translation (labels are final by now, so translations are accurate)
+    5. Quality review (reads the fully-settled form last)
 
 This is the single integration point :class:`~xlsform_architect.app.
 workflow.Workflow` calls; it is a no-op with zero network activity whenever
@@ -46,6 +49,7 @@ from ..models import Questionnaire
 from ..validation.report_generator import Finding
 from .client import DeepSeekClient
 from .config import AIConfig
+from .constraint_reviewer import AICrossFieldConstraintReviewer
 from .quality_reviewer import AIQualityReviewer
 from .skip_logic import AISkipLogicResolver
 from .translator import AITranslator
@@ -78,6 +82,10 @@ class AIPipeline:
 
         if config.wants("skip_logic"):
             notes.extend(AISkipLogicResolver(self.client).resolve(questionnaire))
+
+        if config.wants("cross_constraints"):
+            notes.extend(AICrossFieldConstraintReviewer(self.client)
+                        .suggest(questionnaire))
 
         if config.wants("translate") and config.translate_languages:
             notes.extend(AITranslator(self.client).translate(

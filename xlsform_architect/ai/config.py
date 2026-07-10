@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from typing import List, Tuple
 
 #: All AI sub-features, by key. Used to validate CLI/UI input.
-AI_FEATURES = ("translate", "skip_logic", "classify", "review")
+AI_FEATURES = ("translate", "skip_logic", "cross_constraints", "classify", "review")
 
 
 @dataclass

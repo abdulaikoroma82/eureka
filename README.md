@@ -262,9 +262,32 @@ explicitly enable it **and** provide an API key.
 | Feature | What it does | Why it can't be deterministic |
 | --- | --- | --- |
 | **Translation** | Generates `label::French (fr)`-style columns from your English labels | Translation is language generation, not pattern matching |
-| **Skip-logic inversion** | Turns "if no, skip to question 20" into a proper `relevant` condition on the skipped question(s) | Requires understanding the whole form's structure to find the jump target — genuine multi-step reasoning |
+| **Logic fallback** | Resolves both "skip to question 20" jumps *and* complex conditions the compiler's pattern matching couldn't parse, into a proper `relevant` expression | Both require understanding the whole form's structure or unanticipated phrasing — genuine reasoning, not lookup |
+| **Cross-field constraints** | Suggests constraints that depend on another question, e.g. "end date must be on/after start date" | The constraint engine only ever looks at one question at a time — it structurally cannot see the relationship between two |
 | **Type-classification fallback** | Reclassifies a question that keyword rules defaulted to `text`, when the phrasing wasn't anticipated | Keyword lists always have blind spots; a model classifies by meaning |
 | **AI quality review** | A holistic second pass flagging things structural checks can't see — e.g. a constraint that contradicts its own label | Requires reasoning across multiple fields' relationship to each other |
+
+### What stays deterministic on purpose
+
+Not everything that *could* be done with AI *should* be. Two things were
+deliberately left alone even though a model could technically improve them
+slightly:
+
+* **Variable naming.** AI could produce marginally more natural names, but
+  naming needs to be free, instant, and — critically — **stable**: the same
+  question must always produce the same variable name across re-runs, or
+  version history and diffs become meaningless. Determinism is the better
+  tool here, not a compromise.
+* **Single-field constraints and all structural/type/deployment validation.**
+  These are enumerable, must be exactly right, and run on every question in
+  every form — exactly what rule engines are for. AI only ever supplements
+  this with the *cross-field* case it structurally cannot cover (above).
+
+If a cross-field AI suggestion targets a question that already has a
+constraint (very common — a date field usually already got a generic "not in
+the future" rule from the deterministic engine), the two are **combined with
+`and`**, not one discarded — both the rule engine's contribution and AI's
+stay enforced.
 
 ### Setup
 
