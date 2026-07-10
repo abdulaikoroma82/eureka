@@ -10,14 +10,22 @@ package existed - zero cost, zero network activity, zero new dependency.
 See :class:`~xlsform_architect.ai.pipeline.AIPipeline` for the integration
 point, and the individual feature modules for what each one does:
 
-* :mod:`translator` - generate translation columns
+* :mod:`translator` - generate translation columns (only fills gaps; never
+  overwrites a translation you already supplied - a genuine rules/AI
+  co-share on the same output)
 * :mod:`skip_logic` - resolve "skip to question N" jumps and other
   unparseable conditional logic
 * :mod:`constraint_reviewer` - suggest cross-field validation constraints
   (e.g. end date after start date) that a single-question constraint engine
-  cannot express
+  cannot express; combines with an existing single-field constraint rather
+  than discarding it - another rules/AI co-share
 * :mod:`type_classifier` - reclassify keyword-fallback "text" questions
-* :mod:`quality_reviewer` - holistic semantic review of the compiled form
+* :mod:`quality_reviewer` - holistic review of the compiled form: semantic
+  contradictions plus advisory-only naming/label clarity commentary (never
+  renames anything - the rule engine keeps sole ownership of names)
+* :mod:`finding_explainer` - adds a plain-English explanation to the
+  deterministic validator's own findings, after validation runs; a strict
+  co-share where rules own every fact and AI only makes them easier to read
 """
 
 from .client import AIError, DeepSeekClient, get_default_client

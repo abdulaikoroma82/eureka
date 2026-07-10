@@ -165,7 +165,8 @@ class Workflow:
         self._emit(progress, STEP_LABELS[3], "running")
         ai_config = ai_config or AIConfig.disabled()
         client = ai_client if ai_client is not None else self.ai_client
-        questionnaire, ai_notes, ai_findings = AIPipeline(client).run(
+        ai_pipeline = AIPipeline(client)
+        questionnaire, ai_notes, ai_findings = ai_pipeline.run(
             questionnaire, ai_config)
         notes.extend(ai_notes)
         self._emit(progress, STEP_LABELS[3], "done")
@@ -179,6 +180,10 @@ class Workflow:
         self._emit(progress, STEP_LABELS[5], "running")
         report = self.validator.validate(questionnaire, target=target)
         report.findings.extend(ai_findings)
+        # AI may add a plain-English explanation to the findings above -
+        # this must run AFTER validation produces them; it never changes
+        # the findings themselves, only annotates them (see AIFindingExplainer).
+        notes.extend(ai_pipeline.explain_findings(report, ai_config))
         self._emit(progress, STEP_LABELS[5], "done")
 
         result = WorkflowResult(questionnaire=questionnaire, report=report,

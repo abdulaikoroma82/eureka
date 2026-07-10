@@ -2,16 +2,24 @@
 
 Purpose
 -------
-A final, holistic read of the compiled form that catches semantic problems
+A final, holistic read of the compiled form that catches problems
 structural/logic validators cannot see because they only ever check one rule
-at a time - e.g. a constraint that contradicts its own label (age constraint
-0-120 on a field labelled "age in months"), a relevant condition that can
-never be true, or a question whose type doesn't match what it is clearly
-asking for.
+at a time. Two kinds of issue, both advisory-only:
+
+* **Semantic contradictions** - e.g. a constraint that contradicts its own
+  label (age constraint 0-120 on a field labelled "age in months"), a
+  relevant condition that can never be true, or a question whose type
+  doesn't match what it is clearly asking for.
+* **Naming/label clarity** - a variable name or label that would confuse
+  someone reading the exported data later (e.g. a name so abbreviated its
+  meaning is lost). This is commentary only: the rule engine permanently
+  owns the actual ``name`` and ``label`` values (naming must stay
+  deterministic and stable - see the README) - this pass never renames
+  anything, it only surfaces a suggestion for a human to act on.
 
 Design
 ------
-One API call per form: the entire compiled survey (types, labels,
+One API call per form: the entire compiled survey (names, labels, types,
 constraints, relevant expressions, choice lists) is sent together, since
 these are inherently cross-question checks. Findings come back as structured
 JSON and are converted into the same :class:`Finding` type the deterministic
@@ -20,7 +28,9 @@ distinguishable as advisory rather than authoritative.
 
 Findings from this pass are always capped at ``warning`` level (never
 ``error``) - the AI review is a second pair of eyes, not a gate. It cannot
-block export the way a real structural error does.
+block export the way a real structural error does, and it never mutates the
+questionnaire (unlike the other AI features) - it only ever returns
+findings for a human to read.
 
 Inputs
 ------
@@ -49,15 +59,22 @@ _SYSTEM_PROMPT = (
     "You are a meticulous XLSForm quality reviewer. You are given a compiled "
     "survey as json: each question's name, label, type, constraint, "
     "constraint_message, relevant condition, calculation and choice list. "
-    "Find SEMANTIC problems that simple rule checks would miss, such as: "
-    "a constraint or type that contradicts what the label is asking for; "
-    "a relevant condition that references the wrong field or looks like it "
-    "can never be satisfied; a calculation that doesn't match its inputs; "
-    "a choice list whose options look incomplete or inconsistent for the "
-    "question asked. Do NOT repeat purely structural issues like missing "
-    "names or duplicate names - assume those are already checked elsewhere. "
-    "Only report genuine, explainable concerns; if the form looks fine, "
-    "return an empty list. Respond ONLY with a json object of the form "
+    "Look for two kinds of issue, both ADVISORY ONLY - you are never asked "
+    "to change anything, only to flag it for a human to review: "
+    "(1) SEMANTIC problems simple rule checks would miss, such as a "
+    "constraint or type that contradicts what the label is asking for; a "
+    "relevant condition that references the wrong field or looks like it "
+    "can never be satisfied; a calculation that doesn't match its inputs; a "
+    "choice list whose options look incomplete or inconsistent for the "
+    "question asked. "
+    "(2) NAMING/LABEL CLARITY - a variable name or label so unclear, "
+    "ambiguous, or inconsistently abbreviated that someone reading the "
+    "exported data later would struggle to understand it. Only flag names "
+    "that are genuinely confusing, not just short. "
+    "Do NOT repeat purely structural issues like missing names or duplicate "
+    "names - assume those are already checked elsewhere. Only report "
+    "genuine, explainable concerns; if the form looks fine, return an empty "
+    "list. Respond ONLY with a json object of the form "
     "{\"findings\": [{\"question_name\": \"...\", \"issue\": \"...\", "
     "\"explanation\": \"...\"}]}.")
 

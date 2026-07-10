@@ -167,6 +167,8 @@ def main(argv=None) -> int:
     for f in report.sorted_findings():
         loc = f" [{f.location}]" if f.location else ""
         print(f"   - {f.level.upper():7} {f.category}{loc}: {f.message}")
+        if f.explanation:
+            print(f"             → {f.explanation}")
 
     print()
     print("Compatibility:")

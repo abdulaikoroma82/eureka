@@ -44,16 +44,23 @@ class Finding:
     category: "structure" | "logic" | "deployment" | ...
     message:  human readable description
     location: variable / list name the finding refers to (optional)
+    explanation: optional plain-English elaboration on ``message``. Rules
+        remain the sole authority on level/category/message/location; this
+        field is purely additive commentary, set only by the optional AI
+        "explain findings" pass (never changes what was found, only how it
+        is described to a reader).
     """
 
     level: str
     category: str
     message: str
     location: str = ""
+    explanation: str = ""
 
     def to_dict(self) -> Dict[str, str]:
         return {"level": self.level, "category": self.category,
-                "message": self.message, "location": self.location}
+                "message": self.message, "location": self.location,
+                "explanation": self.explanation}
 
 
 @dataclass
@@ -136,6 +143,8 @@ class ReportGenerator:
             for f in group:
                 loc = f" [`{f.location}`]" if f.location else ""
                 lines.append(f"- **{f.category}**{loc}: {f.message}")
+                if f.explanation:
+                    lines.append(f"  - _{f.explanation}_")
             lines.append("")
 
         if report.is_valid:

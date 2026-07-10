@@ -261,11 +261,29 @@ explicitly enable it **and** provide an API key.
 
 | Feature | What it does | Why it can't be deterministic |
 | --- | --- | --- |
-| **Translation** | Generates `label::French (fr)`-style columns from your English labels | Translation is language generation, not pattern matching |
+| **Translation** | Generates `label::French (fr)`-style columns from your English labels — **only for labels you haven't already translated yourself** | Translation is language generation, not pattern matching |
 | **Logic fallback** | Resolves both "skip to question 20" jumps *and* complex conditions the compiler's pattern matching couldn't parse, into a proper `relevant` expression | Both require understanding the whole form's structure or unanticipated phrasing — genuine reasoning, not lookup |
-| **Cross-field constraints** | Suggests constraints that depend on another question, e.g. "end date must be on/after start date" | The constraint engine only ever looks at one question at a time — it structurally cannot see the relationship between two |
+| **Cross-field constraints** | Suggests constraints that depend on another question, e.g. "end date must be on/after start date" — **combined with `and`** if the field already has a rule-authored constraint | The constraint engine only ever looks at one question at a time — it structurally cannot see the relationship between two |
 | **Type-classification fallback** | Reclassifies a question that keyword rules defaulted to `text`, when the phrasing wasn't anticipated | Keyword lists always have blind spots; a model classifies by meaning |
-| **AI quality review** | A holistic second pass flagging things structural checks can't see — e.g. a constraint that contradicts its own label | Requires reasoning across multiple fields' relationship to each other |
+| **AI quality review** | A holistic second pass flagging things structural checks can't see — e.g. a constraint that contradicts its own label, or a name/label so unclear it would confuse someone reading the exported data (advisory only — never renames anything) | Requires reasoning across multiple fields' relationship to each other |
+| **Explain findings** | Adds a one-sentence plain-English explanation to the validator's own findings, after validation runs | Rules own every fact (level, category, message); AI only makes them easier to read |
+
+### Where rules and AI genuinely co-share the same output
+
+Three of the features above aren't a handoff ("rules tried, AI took over") —
+they're true co-authorship of a single value, with a strict division of
+authority:
+
+* **Translation**: your supplied text always wins; AI only fills gaps, and
+  skips the API call entirely for a language you already fully translated.
+* **Cross-field constraints**: a field's final constraint can be the
+  combination of the rule engine's single-field rule *and* AI's cross-field
+  rule, e.g. `(. <= today()) and (. >= ${start_date})` — neither
+  contribution is discarded.
+* **Explain findings**: the finding itself (is it an error? what's wrong?)
+  is 100% rules, always; AI only ever adds an `explanation` string beside
+  it. Turn AI off and every finding is exactly as valid and exactly as
+  severe — just less elaborated.
 
 ### What stays deterministic on purpose
 
