@@ -8,31 +8,31 @@ from xlsform_architect.parsers.questionnaire_parser import QuestionnaireParser
 
 # --- text parser (drives DOCX/PDF) -----------------------------------------
 def test_text_parser_question_and_options():
-    text = ("Is the child currently enrolled in OTP?\n"
+    text = ("Are you a registered member?\n"
             "Yes\n"
             "No\n"
-            "If yes, record admission date.")
+            "If yes, record membership date.")
     qn = QuestionnaireParser().parse_text(text)
     assert len(qn.questions) == 1
     q = qn.questions[0]
-    assert q.raw_label.startswith("Is the child")
+    assert q.raw_label.startswith("Are you")
     assert q.raw_choices == ["Yes", "No"]
-    assert "admission date" in q.logic
+    assert "membership date" in q.logic
 
 
 def test_text_parser_sections():
     text = ("SECTION A: DEMOGRAPHICS\n"
             "What is the household size?\n"
-            "SECTION B: NUTRITION\n"
-            "What is the MUAC?\n")
+            "SECTION B: FEEDBACK\n"
+            "How would you rate the service?\n")
     qn = QuestionnaireParser().parse_text(text)
     sections = {q.section for q in qn.questions}
     assert any("Demographics" in s for s in sections)
-    assert any("Nutrition" in s for s in sections)
+    assert any("Feedback" in s for s in sections)
 
 
 def test_text_parser_bulleted_options():
-    text = ("What is the child's sex?\n"
+    text = ("What is your gender?\n"
             "- Male\n"
             "- Female\n")
     qn = QuestionnaireParser().parse_text(text)
@@ -40,16 +40,16 @@ def test_text_parser_bulleted_options():
 
 
 def test_stacked_options_do_not_swallow_next_question():
-    # "Child age in months" names a new topic and must not become an option
+    # "Number of guests" names a new topic and must not become an option
     # of the preceding Yes/No question.
-    text = ("Is the child enrolled?\n"
+    text = ("Are you attending?\n"
             "Yes\n"
             "No\n"
-            "Child age in months\n")
+            "Number of guests\n")
     qn = QuestionnaireParser().parse_text(text)
     assert len(qn.questions) == 2
     assert qn.questions[0].raw_choices == ["Yes", "No"]
-    assert qn.questions[1].raw_label == "Child age in months"
+    assert qn.questions[1].raw_label == "Number of guests"
 
 
 def test_imperative_prompt_becomes_question():
@@ -59,7 +59,7 @@ def test_imperative_prompt_becomes_question():
 
 
 def test_slash_bulleted_option_split():
-    text = "Child sex\n- Male / Female\n"
+    text = "Gender\n- Male / Female\n"
     qn = QuestionnaireParser().parse_text(text)
     assert qn.questions[0].raw_choices == ["Male", "Female"]
 
@@ -67,8 +67,8 @@ def test_slash_bulleted_option_split():
 # --- excel design grid ------------------------------------------------------
 def test_excel_design_grid(tmp_path):
     df = pd.DataFrame([
-        {"question": "Child age in months", "type": "integer", "required": "yes"},
-        {"question": "Child sex", "choices": "Male|Female"},
+        {"question": "Respondent age", "type": "integer", "required": "yes"},
+        {"question": "Gender", "choices": "Male|Female"},
     ])
     path = tmp_path / "design.xlsx"
     df.to_excel(path, index=False)
@@ -103,6 +103,6 @@ def test_excel_reads_existing_xlsform(tmp_path):
 
 def test_csv_design_grid(tmp_path):
     path = tmp_path / "design.csv"
-    path.write_text("question,type\nChild age in months,integer\n", encoding="utf-8")
+    path.write_text("question,type\nRespondent age,integer\n", encoding="utf-8")
     qn = ExcelParser().parse(path)
-    assert qn.questions[0].raw_label == "Child age in months"
+    assert qn.questions[0].raw_label == "Respondent age"

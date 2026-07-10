@@ -5,7 +5,7 @@ Purpose
 Produce the supporting deliverables that accompany the XLSForm:
 
 * **Data dictionary** (.xlsx + .csv) - every variable, type, list, constraint
-  and DHIS2 mapping.
+  and calculation.
 * **Assumption log** (.md) - every deterministic decision the engine made.
 * **Logic map** (.md) - relevance / constraint / calculation relationships.
 * **Version history** (.json, appended) - an audit trail across runs.
@@ -65,7 +65,6 @@ class ArtifactBuilder:
                 cl = questionnaire.choice_lists.get(list_name)
                 if cl:
                     choices = " | ".join(f"{c.name}={c.label}" for c in cl.choices)
-            dhis2 = self.kb.dhis2_element(q.name) or {}
             rows.append({
                 "variable": q.name,
                 "label": q.label or q.raw_label,
@@ -75,10 +74,9 @@ class ArtifactBuilder:
                 "required": "yes" if q.required else "",
                 "relevant": q.relevant,
                 "constraint": q.constraint,
+                "constraint_message": q.constraint_message,
                 "calculation": q.calculation,
                 "section": q.section,
-                "dhis2_element": dhis2.get("dhis2_name", ""),
-                "dhis2_uid": dhis2.get("uid", ""),
             })
         return pd.DataFrame(rows)
 

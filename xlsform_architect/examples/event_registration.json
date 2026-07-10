@@ -1,0 +1,18 @@
+{
+  "settings": {
+    "form_title": "Event Registration",
+    "form_id": "event_registration",
+    "version": "2026070101"
+  },
+  "survey": [
+    {"question": "Full name", "section": "Attendee", "required": true},
+    {"question": "Email address", "section": "Attendee"},
+    {"question": "Date of birth", "section": "Attendee"},
+    {"question": "Are you attending the event?", "choices": ["Yes", "No"], "required": true, "section": "Attendance"},
+    {"question": "Preferred session date", "logic": "ask if yes", "section": "Attendance"},
+    {"question": "Number of guests", "section": "Attendance"},
+    {"question": "Which sessions will you attend?", "type": "select_multiple", "choices": ["Morning", "Afternoon", "Evening"], "section": "Attendance"},
+    {"question": "How would you rate your interest (percentage)?", "section": "Attendance"},
+    {"question": "Any additional comments", "section": "Feedback"}
+  ]
+}

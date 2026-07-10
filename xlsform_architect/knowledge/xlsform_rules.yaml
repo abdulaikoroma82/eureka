@@ -1,51 +1,62 @@
 # =============================================================================
-# XLSForm Architect - Core classification & compilation rules
+# XLSForm Architect - Standard XLSForm classification & compilation rules
 # =============================================================================
-# This file drives the deterministic engine.  Editing it changes behaviour
-# WITHOUT touching Python code (Module 8 requirement).
+# This file drives the deterministic engine.  It holds the STANDARD, general
+# rules that apply to any questionnaire - it is not tied to any specific
+# survey domain.  Editing it changes behaviour WITHOUT touching Python code
+# (Module 8 requirement).
 #
 # Sections:
 #   type_keywords     -> keyword -> xlsform type detection (Module 2)
 #   yes_no            -> canonical yes/no list + detection tokens
-#   constraints       -> semantic constraint templates (Module 6)
+#   constraints       -> generic constraint templates (Module 6)
+#   type_constraints  -> per-type default constraints
+#   calculations      -> reusable standard calculate expressions (Module 7)
 #   logic_tokens      -> natural-language logic vocabulary (Module 5)
 #   naming            -> variable naming rules (Module 3)
 # =============================================================================
 
 # --- Module 2: Question classification --------------------------------------
 # Ordered, first-match-wins list.  Each rule matches when ANY keyword appears
-# in the (lower-cased) question label AND the guard conditions hold.
+# in the (lower-cased) question label.
 type_keywords:
   - type: geopoint
-    keywords: ["gps", "geopoint", "coordinates", "gps location", "record location", "lat/long", "latitude and longitude"]
+    keywords: ["gps", "geopoint", "coordinates", "gps location", "record location",
+               "lat/long", "latitude and longitude", "geolocation"]
   - type: image
-    keywords: ["photo", "photograph", "picture", "image", "take a photo", "upload a photo"]
+    keywords: ["photo", "photograph", "picture", "image", "take a photo",
+               "upload a photo", "attach a photo", "snapshot"]
   - type: audio
     keywords: ["audio recording", "voice recording", "record audio"]
   - type: video
     keywords: ["video recording", "record video"]
-  - type: date
-    keywords: ["date of", "date", "admission date", "birth date", "date of birth", "dob", "when did", "day of"]
-  - type: time
-    keywords: ["time of", "what time", "time (hh"]
+  - type: file
+    keywords: ["upload file", "attach file", "attachment", "upload document",
+               "attach document"]
   - type: datetime
     keywords: ["date and time", "datetime", "timestamp"]
+  - type: date
+    keywords: ["date of", "date", "birth date", "date of birth", "dob",
+               "when did", "day of", "start date", "end date"]
+  - type: time
+    keywords: ["time of", "what time", "start time", "end time"]
   - type: decimal
-    keywords: ["weight", "height", "muac", "mid-upper arm", "temperature", "amount", "dosage",
-               "haemoglobin", "hemoglobin", "bmi", "kg", "cm", "litre", "liters"]
+    keywords: ["weight", "height", "temperature", "amount", "price", "cost",
+               "rate", "distance", "average", "decimal", "kilograms", "litres",
+               "liters", "currency", "percentage", "percent", "score"]
   - type: integer
-    keywords: ["age", "how many", "number of", "count", "how old", "quantity", "months",
-               "years", "household size", "number", "no. of", "parity", "gravida"]
+    keywords: ["age", "how many", "number of", "count", "how old", "quantity",
+               "years", "months", "number", "no. of", "total", "size", "how much"]
   - type: barcode
     keywords: ["barcode", "qr code", "scan code"]
   - type: text
-    keywords: ["name of", "specify", "describe", "comment", "remark", "other (specify)", "explain", "notes"]
+    keywords: ["name of", "full name", "specify", "describe", "comment", "remark",
+               "other (specify)", "explain", "notes", "email", "address",
+               "phone", "telephone", "id number", "reason"]
 
 # --- Yes/No detection (Module 2) --------------------------------------------
 yes_no:
   list_name: yes_no
-  # If the extracted choices match this set (order/case-insensitive) the
-  # question is a boolean and uses the shared yes_no list.
   positive_tokens: ["yes", "y", "true", "1"]
   negative_tokens: ["no", "n", "false", "0"]
   choices:
@@ -54,48 +65,35 @@ yes_no:
     - name: "0"
       label: "No"
 
-# --- Module 6: Semantic constraint templates --------------------------------
+# --- Module 6: Generic constraint templates ---------------------------------
 # Applied by matching the question label keywords.  ``.`` is the XLSForm
-# self-reference for the current answer.
+# self-reference for the current answer.  Only universally-valid constraints
+# live here; domain-specific ranges belong in a custom rule file.
 constraints:
   - match: ["age in months", "age (months)", "age months"]
     applies_to: ["integer", "decimal"]
-    constraint: ". >= 0 and . <= 60"
-    message: "Age in months must be between 0 and 60."
-  - match: ["age in years", "age (years)", "age years", "how old", "age"]
+    constraint: ". >= 0 and . <= 1200"
+    message: "Age in months must be between 0 and 1200."
+  - match: ["age"]
     applies_to: ["integer", "decimal"]
     constraint: ". >= 0 and . <= 120"
     message: "Age must be between 0 and 120."
-  - match: ["muac", "mid-upper arm"]
-    applies_to: ["decimal", "integer"]
-    constraint: ". >= 5 and . <= 30"
-    message: "MUAC (cm) must be between 5 and 30."
-  - match: ["weight"]
-    applies_to: ["decimal", "integer"]
-    constraint: ". > 0 and . <= 200"
-    message: "Weight (kg) must be greater than 0 and at most 200."
-  - match: ["height", "length"]
-    applies_to: ["decimal", "integer"]
-    constraint: ". > 0 and . <= 250"
-    message: "Height (cm) must be greater than 0 and at most 250."
-  - match: ["temperature"]
-    applies_to: ["decimal"]
-    constraint: ". >= 30 and . <= 45"
-    message: "Temperature (Celsius) must be between 30 and 45."
-  - match: ["percent", "percentage", "%", "coverage", "proportion"]
+  - match: ["percent", "percentage", "proportion"]
     applies_to: ["decimal", "integer"]
     constraint: ". >= 0 and . <= 100"
     message: "Percentage must be between 0 and 100."
-  - match: ["haemoglobin", "hemoglobin", "hb "]
-    applies_to: ["decimal"]
-    constraint: ". >= 2 and . <= 25"
-    message: "Haemoglobin (g/dL) must be between 2 and 25."
 
 # Generic per-type constraints applied when no semantic match is found.
 type_constraints:
   date:
     constraint: ". <= today()"
     message: "Date cannot be in the future."
+
+# --- Module 7: Standard calculate expressions -------------------------------
+# ${dob} is substituted with the actual date-of-birth variable at build time.
+calculations:
+  age_years_from_dob: "int((today() - ${dob}) div 365.25)"
+  age_months_from_dob: "int((today() - ${dob}) div 30.4375)"
 
 # --- Module 5: Natural-language logic vocabulary ----------------------------
 logic_tokens:
@@ -108,12 +106,10 @@ logic_tokens:
 # --- Module 3: Variable naming ----------------------------------------------
 naming:
   max_length: 40           # ODK/XLSForm safe identifier length
-  # Words removed to keep names concise and meaningful.
   stopwords: ["the", "a", "an", "of", "is", "are", "to", "in", "on", "for",
               "please", "what", "which", "did", "do", "does", "was", "were",
               "how", "your", "you", "this", "that", "record", "enter",
               "currently", "have", "has", "been", "with", "and", "or", "at"]
-  # Domain abbreviations applied AFTER tokenisation to shorten names.
   abbreviations:
     number: num
     identifier: id

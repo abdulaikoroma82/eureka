@@ -67,8 +67,8 @@ class RuleEngine:
         """Enrich *questionnaire* in place and return (questionnaire, notes)."""
         self.namer.reset()
 
-        # Seed category choice lists so selects can reference them.
-        self._seed_category_lists(questionnaire)
+        # Seed the standard shared choice lists (yes_no).
+        self._seed_standard_lists(questionnaire)
 
         # Pass 1: names + types + choice lists.
         for q in questionnaire.questions:
@@ -138,22 +138,14 @@ class RuleEngine:
             used.add(name)
             cl.choices.append(Choice(name=name, label=str(opt).strip()))
 
-    def _seed_category_lists(self, qn: Questionnaire) -> None:
-        # Always ensure the shared yes_no list exists.
+    def _seed_standard_lists(self, qn: Questionnaire) -> None:
+        # Always ensure the shared, standard yes_no list exists.
         cfg = self.kb.yes_no()
         yn_name = cfg.get("list_name", "yes_no")
         if yn_name not in qn.choice_lists:
             cl = qn.get_or_create_list(yn_name)
             for ch in cfg.get("choices", []):
                 cl.choices.append(Choice(name=str(ch["name"]), label=str(ch["label"])))
-
-        for list_name, options in self.kb.category_choice_lists(qn.category).items():
-            if list_name in qn.choice_lists:
-                continue
-            cl = qn.get_or_create_list(list_name)
-            for ch in options:
-                cl.choices.append(Choice(name=str(ch.get("name", "")),
-                                         label=str(ch.get("label", ch.get("name", "")))))
 
     # ------------------------------------------------------------------
     @staticmethod

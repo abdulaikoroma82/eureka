@@ -37,7 +37,7 @@ except ImportError:  # pragma: no cover
 import pandas as pd
 
 from xlsform_architect.app.artifacts import ArtifactBuilder
-from xlsform_architect.app.config import DEPLOYMENT_TARGETS, SURVEY_CATEGORIES
+from xlsform_architect.app.config import DEPLOYMENT_TARGETS
 from xlsform_architect.app.workflow import STEP_LABELS, Workflow
 from xlsform_architect.xlsform.choices_builder import ChoicesBuilder
 from xlsform_architect.xlsform.survey_builder import SurveyBuilder
@@ -65,16 +65,11 @@ def main() -> None:
             type=["json", "csv", "xlsx", "xls", "docx", "pdf"],
             help="DOCX, XLSX, PDF, CSV or a structured JSON form definition.")
 
-        st.header("2. Survey category")
-        category = st.selectbox("Category", SURVEY_CATEGORIES,
-                                index=len(SURVEY_CATEGORIES) - 1,
-                                format_func=lambda c: c.upper())
-
-        st.header("3. Deployment target")
+        st.header("2. Deployment target")
         target = st.selectbox("Target platform", DEPLOYMENT_TARGETS,
                               format_func=lambda t: t.upper())
 
-        st.header("4. Form details (optional)")
+        st.header("3. Form details (optional)")
         form_title = st.text_input("Form title", "")
         form_id = st.text_input("Form id", "")
         version = st.text_input("Version", "")
@@ -115,7 +110,6 @@ def main() -> None:
             form_title=form_title or None,
             form_id=form_id or None,
             version=version or None,
-            category=category,
             progress=progress,
         )
     except Exception as exc:  # pragma: no cover - surfaced to the user

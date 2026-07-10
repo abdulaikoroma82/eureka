@@ -208,8 +208,8 @@ class Questionnaire:
     settings: FormSettings = field(default_factory=FormSettings)
     questions: List[Question] = field(default_factory=list)
     choice_lists: Dict[str, ChoiceList] = field(default_factory=dict)
-    #: Survey category (imam, vas_d, mms, anc, household, custom).
-    category: str = "custom"
+    #: Optional free-form category / tag for the form (metadata only).
+    category: str = "general"
 
     # -- choice list management -----------------------------------------
     def get_or_create_list(self, list_name: str) -> ChoiceList:
@@ -242,7 +242,7 @@ class Questionnaire:
         )
         questions = [Question.from_dict(item) for item in data.get("survey", [])]
         q = cls(settings=settings, questions=questions,
-                category=data.get("category", "custom"))
+                category=data.get("category", "general"))
 
         # Pre-defined choice lists may be supplied explicitly.
         for list_name, list_data in (data.get("choices", {}) or {}).items():

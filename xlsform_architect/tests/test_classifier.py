@@ -29,11 +29,11 @@ def test_age_is_integer():
 
 
 def test_weight_is_decimal():
-    assert classify("Child weight in kg").xlsform_type == "decimal"
+    assert classify("Total weight in kg").xlsform_type == "decimal"
 
 
-def test_muac_is_decimal():
-    assert classify("MUAC measurement").xlsform_type == "decimal"
+def test_amount_is_decimal():
+    assert classify("Amount paid").xlsform_type == "decimal"
 
 
 def test_date():

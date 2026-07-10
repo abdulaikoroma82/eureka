@@ -1,0 +1,36 @@
+SECTION A: RESPONDENT
+
+What is your full name?
+
+What is your age?
+
+What is your gender?
+Male
+Female
+Prefer not to say
+
+SECTION B: EXPERIENCE
+
+Did you make a purchase today?
+Yes
+No
+
+How much did you spend in total?
+If yes, record the amount spent.
+
+How would you rate your overall experience?
+Very satisfied
+Satisfied
+Neutral
+Dissatisfied
+Very dissatisfied
+
+Would you recommend us to others?
+Yes
+No
+
+SECTION C: FOLLOW UP
+
+Record the date of visit.
+
+Any additional comments or suggestions?
