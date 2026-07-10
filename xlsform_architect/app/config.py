@@ -36,7 +36,8 @@ EXAMPLES_DIR: Path = PACKAGE_ROOT / "examples"
 DEPLOYMENT_TARGETS: List[str] = ["kobo", "surveycto", "odk"]
 
 # --- supported input formats ----------------------------------------------
-SUPPORTED_INPUT_EXTENSIONS: List[str] = [".json", ".csv", ".xlsx", ".xls", ".docx", ".pdf"]
+SUPPORTED_INPUT_EXTENSIONS: List[str] = [".json", ".csv", ".xlsx", ".xls",
+                                         ".docx", ".pdf", ".txt", ".md"]
 
 # --- XLSForm sheet definitions --------------------------------------------
 SURVEY_COLUMNS: List[str] = [

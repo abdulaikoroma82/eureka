@@ -57,7 +57,7 @@ class ChoicesBuilder:
     def _referenced_lists(questionnaire: Questionnaire) -> Set[str]:
         refs: Set[str] = set()
         for q in questionnaire.questions:
-            if q.is_select:
+            if q.references_choices:
                 parts = q.xlsform_type.split()
                 if len(parts) >= 2:
                     refs.add(parts[1])
@@ -69,7 +69,7 @@ class ChoicesBuilder:
     def _ordered_lists(questionnaire: Questionnaire, referenced: Set[str]) -> List[str]:
         ordered: List[str] = []
         for q in questionnaire.questions:
-            if not q.is_select:
+            if not q.references_choices:
                 continue
             parts = q.xlsform_type.split()
             name = parts[1] if len(parts) >= 2 else q.list_name

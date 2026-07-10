@@ -68,6 +68,8 @@ class WorkflowResult:
     assumptions: List[str] = field(default_factory=list)
     outputs: Dict[str, Path] = field(default_factory=dict)
     xlsform_bytes: bytes = b""
+    #: Deployment platform the run targeted ("" = generic XLSForm).
+    target: str = ""
 
     @property
     def is_valid(self) -> bool:
@@ -113,6 +115,7 @@ class Workflow:
              form_id: Optional[str] = None,
              version: Optional[str] = None,
              category: Optional[str] = None,
+             target: Optional[str] = None,
              output_dir: Optional[Union[str, Path]] = None,
              write_outputs: bool = True,
              source_name: str = "questionnaire",
@@ -127,6 +130,7 @@ class Workflow:
             questionnaire.settings.version = version
         if category:
             questionnaire.category = category
+        target = (target or "").lower() or None
 
         # --- compile (rule engine) -------------------------------------
         self._emit(progress, STEP_LABELS[1], "running")
@@ -135,28 +139,30 @@ class Workflow:
         questionnaire, notes = self.engine.compile(questionnaire)
         self._emit(progress, STEP_LABELS[2], "done")
 
-        # --- build XLSForm ---------------------------------------------
+        # --- build XLSForm (in the target platform's dialect) -----------
         self._emit(progress, STEP_LABELS[3], "running")
-        xls_bytes = self.exporter.export_bytes(questionnaire)
+        xls_bytes = self.exporter.export_bytes(questionnaire, target=target)
         self._emit(progress, STEP_LABELS[3], "done")
 
-        # --- validate --------------------------------------------------
+        # --- validate (generic + the chosen platform's standards) -------
         self._emit(progress, STEP_LABELS[4], "running")
-        report = self.validator.validate(questionnaire)
+        report = self.validator.validate(questionnaire, target=target)
         self._emit(progress, STEP_LABELS[4], "done")
 
         result = WorkflowResult(questionnaire=questionnaire, report=report,
-                                assumptions=notes, xlsform_bytes=xls_bytes)
+                                assumptions=notes, xlsform_bytes=xls_bytes,
+                                target=target or "")
 
         if write_outputs:
             out_dir = Path(output_dir) if output_dir else CONFIG.output_dir
             result.outputs = self._write_all(questionnaire, report, notes,
-                                              out_dir, source_name)
+                                              out_dir, source_name, target)
         return result
 
     # ------------------------------------------------------------------
     def _write_all(self, qn: Questionnaire, report: ValidationReport,
-                   notes: List[str], out_dir: Path, source_name: str) -> Dict[str, Path]:
+                   notes: List[str], out_dir: Path, source_name: str,
+                   target: Optional[str] = None) -> Dict[str, Path]:
         stamp = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
         base = qn.settings.form_id or "form"
         folder = out_dir / f"{base}_{stamp}"
@@ -164,8 +170,9 @@ class Workflow:
 
         outputs: Dict[str, Path] = {}
 
-        # 1. XLSForm.
-        outputs["xlsform"] = self.exporter.export(qn, folder / f"{base}.xlsx")
+        # 1. XLSForm (written in the target platform's dialect).
+        outputs["xlsform"] = self.exporter.export(qn, folder / f"{base}.xlsx",
+                                                  target=target)
         # 2. Data dictionary.
         outputs["data_dictionary"] = self.artifacts.write_data_dictionary(
             qn, folder / f"{base}_data_dictionary.xlsx")
@@ -184,7 +191,7 @@ class Workflow:
         # 6. Version history (append-only, at the output-dir root).
         outputs["version_history"] = self.artifacts.append_version_history(
             out_dir / "version_history.json", qn, source_name,
-            report.is_valid, len(report.errors))
+            report.is_valid, len(report.errors), target=target or "")
 
         outputs["folder"] = folder
         return outputs

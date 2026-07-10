@@ -114,16 +114,25 @@ class Question:
     #: Provenance / audit trail entries (assumptions the engine made).
     assumptions: List[str] = field(default_factory=list)
 
+    #: XLSForm type keywords that contain spaces and must not be split when
+    #: deriving the base type (structural markers + SurveyCTO audit types).
+    MULTIWORD_TYPES = (
+        "begin group", "end group", "begin repeat", "end repeat",
+        "text audit", "audio audit",
+        "speed violations count", "speed violations list",
+        "speed violations audit",
+    )
+
     # -- convenience -----------------------------------------------------
     @property
     def base_type(self) -> str:
         """The bare type keyword, e.g. ``select_one`` from ``select_one yes_no``.
 
-        Two-word structural markers (``begin group`` / ``end group`` /
-        ``begin repeat`` / ``end repeat``) are returned whole.
+        Multi-word type keywords (``begin group``, ``text audit``, ...) are
+        returned whole.
         """
         t = (self.xlsform_type or "").strip()
-        for marker in ("begin group", "end group", "begin repeat", "end repeat"):
+        for marker in self.MULTIWORD_TYPES:
             if t == marker or t.startswith(marker + " "):
                 return marker
         return t.split(" ", 1)[0] if t else ""
@@ -131,6 +140,15 @@ class Question:
     @property
     def is_select(self) -> bool:
         return self.base_type in ("select_one", "select_multiple")
+
+    @property
+    def references_choices(self) -> bool:
+        """True for types whose second token names a choice list.
+
+        Covers selects plus ``rank`` (ODK/Kobo), which also draws its items
+        from the choices sheet.
+        """
+        return self.base_type in ("select_one", "select_multiple", "rank")
 
     @property
     def is_calculate(self) -> bool:

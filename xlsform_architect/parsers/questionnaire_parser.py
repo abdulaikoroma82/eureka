@@ -52,7 +52,10 @@ _OPTION_BULLET = re.compile(r"^\s*(?:[-*•·o]|\[\s*\]|\(\s*\)|[a-zA-Z][\.\)]|\
 _SECTION_KW = re.compile(r"^\s*(section|module|part|chapter)\b", re.IGNORECASE)
 _INSTRUCTION_KW = re.compile(r"^\s*(instruction|note|enumerator|interviewer)\s*[:\-]", re.IGNORECASE)
 _SKIP_KW = re.compile(r"^\s*\(?\s*if\b", re.IGNORECASE)
-_INLINE_SLASH = re.compile(r"^\s*(yes\s*/\s*no|male\s*/\s*female)\s*$", re.IGNORECASE)
+# A short line of 2-4 slash-separated options, e.g. "Yes / No" or
+# "Low / Medium / High".  Each part must be a brief phrase (<=3 words).
+_INLINE_SLASH = re.compile(
+    r"^\s*([^/?]{1,30})(?:\s*/\s*([^/?]{1,30})){1,3}\s*$")
 _TYPE_HINT = re.compile(r"\[(select_one|select_multiple|integer|decimal|text|date|"
                         r"time|datetime|geopoint|image|audio|video|barcode|calculate|note)"
                         r"(?:\s+[a-z0-9_]+)?\]", re.IGNORECASE)
@@ -118,12 +121,7 @@ class QuestionnaireParser:
                     current.logic = (current.logic + " " + line).strip() if current.logic else line
                 continue
 
-            # 4. "Yes / No" single-line options.
-            if _INLINE_SLASH.match(line) and current is not None:
-                current.raw_choices.extend([p.strip() for p in re.split(r"/", line)])
-                continue
-
-            # 5. Bulleted / lettered option line.
+            # 4. Bulleted / lettered option line.
             opt = self._as_option(line)
             if opt is not None and current is not None and self._looks_like_option(opt, current):
                 # A bulleted "Male / Female" is two options.
@@ -131,6 +129,13 @@ class QuestionnaireParser:
                     current.raw_choices.extend([p.strip() for p in opt.split("/") if p.strip()])
                 else:
                     current.raw_choices.append(opt)
+                continue
+
+            # 5. Single-line slash-separated options, e.g. "Yes / No" or
+            #    "Low / Medium / High".
+            if current is not None and self._is_inline_options(line):
+                current.raw_choices.extend(
+                    [p.strip() for p in line.split("/") if p.strip()])
                 continue
 
             # 6. A new question.
@@ -195,6 +200,23 @@ class QuestionnaireParser:
         e.g. "Record GPS location", "Take a photo", "Enter the total amount".
         """
         return bool(_IMPERATIVE.match(line))
+
+    def _is_inline_options(self, line: str) -> bool:
+        """True for a short line of 2-4 slash-separated answer options.
+
+        e.g. "Yes / No", "Male / Female", "Low / Medium / High".  Guarded so
+        prompts that merely contain a slash ("Record weight / height") are
+        not swallowed: every part must be a brief phrase and the line must
+        not read as a command or a new question topic.
+        """
+        if not _INLINE_SLASH.match(line) or "/" not in line:
+            return False
+        if self._is_imperative(line) or self._looks_like_topic(line):
+            return False
+        parts = [p.strip() for p in line.split("/")]
+        if not (2 <= len(parts) <= 4):
+            return False
+        return all(p and len(p.split()) <= 3 for p in parts)
 
     def _looks_like_topic(self, line: str) -> bool:
         """True if the line names a new question topic (has a type keyword).

@@ -39,7 +39,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="xlsform-architect",
         description="Transform a questionnaire into a deployment-ready XLSForm package.")
-    parser.add_argument("input", help="Questionnaire file (.json .csv .xlsx .xls .docx .pdf)")
+    parser.add_argument("input", help="Questionnaire file "
+                        "(.json .csv .xlsx .xls .docx .pdf .txt .md)")
+    parser.add_argument("--target", "-t", choices=["kobo", "surveycto", "odk"],
+                        default=None,
+                        help="Deployment platform: validates against that "
+                             "platform's standards and writes its column "
+                             "dialect (e.g. SurveyCTO's 'relevance')")
     parser.add_argument("--title", help="Override the form title")
     parser.add_argument("--form-id", help="Override the form id")
     parser.add_argument("--version", help="Override the form version")
@@ -78,6 +84,7 @@ def main(argv=None) -> int:
         form_title=args.title,
         form_id=args.form_id,
         version=args.version,
+        target=args.target,
         output_dir=args.output,
         progress=None if args.quiet else _progress,
     )
@@ -87,6 +94,9 @@ def main(argv=None) -> int:
     print(f"Form:    {result.questionnaire.settings.form_title}")
     print(f"Form id: {result.questionnaire.settings.form_id}")
     print(f"Version: {result.questionnaire.settings.version}")
+    if result.target:
+        print(f"Target:  {result.target.upper()} "
+              f"(platform standards applied; dialect columns written)")
     print(f"Questions compiled: "
           f"{len([q for q in result.questionnaire.questions if q.base_type not in ('begin group', 'end group')])}")
     print()

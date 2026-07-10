@@ -42,13 +42,25 @@ from .report_generator import Finding
 
 _VALID_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
-# Types accepted across ODK/Kobo/SurveyCTO (base keyword).
+# Types accepted by AT LEAST ONE of ODK / Kobo / SurveyCTO (base keyword).
+# Whether the *chosen* target supports a given type is enforced separately by
+# the PlatformValidator using knowledge/platforms.yaml.
 _VALID_TYPES = {
+    # common core
     "integer", "decimal", "text", "select_one", "select_multiple", "note",
     "date", "time", "datetime", "geopoint", "geotrace", "geoshape",
-    "image", "audio", "video", "file", "barcode", "calculate", "acknowledge",
-    "range", "begin group", "end group", "begin repeat", "end repeat",
+    "image", "audio", "video", "file", "barcode", "calculate",
+    "begin group", "end group", "begin repeat", "end repeat",
     "start", "end", "today", "deviceid", "username", "hidden",
+    "phonenumber", "simserial", "subscriberid", "email",
+    # ODK / Kobo (pyxform engine)
+    "acknowledge", "trigger", "range", "rank", "audit", "background-audio",
+    "background-geopoint", "start-geopoint", "osm", "csv-external",
+    "xml-external", "select_one_from_file", "select_multiple_from_file",
+    # SurveyCTO
+    "text audit", "audio audit", "sensor_statistic", "sensor_stream",
+    "comments", "speed violations count", "speed violations list",
+    "speed violations audit", "calculate_here", "caseid",
 }
 
 # XLSForm / XForm reserved names that must not be used as variable names.
