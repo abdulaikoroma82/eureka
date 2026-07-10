@@ -13,7 +13,8 @@ from unittest.mock import patch
 import pytest
 
 from xlsform_architect.ai.client import AIError, DeepSeekClient
-from xlsform_architect.ai.config import AIConfig
+from xlsform_architect.ai.config import AI_FEATURES, AIConfig
+from xlsform_architect.ai.constraint_reviewer import AICrossFieldConstraintReviewer
 from xlsform_architect.ai.pipeline import AIPipeline
 from xlsform_architect.ai.quality_reviewer import AIQualityReviewer
 from xlsform_architect.ai.skip_logic import AISkipLogicResolver
@@ -155,6 +156,49 @@ def test_skip_logic_noop_when_nothing_pending():
     assert notes == []
 
 
+def test_logic_fallback_also_handles_unparseable_condition_on_same_question():
+    """The broadened resolver must also catch generic compile failures, not
+    just 'skip to' phrasing, and can target the SAME question."""
+    q1 = Question(name="hh_size", label="Household size", xlsform_type="integer")
+    q2 = Question(name="crowding", label="Crowding index", xlsform_type="text",
+                 logic="only if household has more than 3 members and a child under 5")
+    q2.add_assumption("Logic 'only if household has more than 3 members and "
+                      "a child under 5' could not be auto-compiled; please "
+                      "review the relevant column.")
+    qn = Questionnaire(questions=[q1, q2])
+    reply = {"suggestions": [{"question_name": "crowding",
+                              "relevant": "${hh_size}>3",
+                              "rationale": "same-question complex condition"}]}
+    notes = AISkipLogicResolver(_client(reply)).resolve(qn)
+    assert qn.questions[1].relevant == "${hh_size}>3"
+    assert any("Applied suggested relevant" in n for n in notes)
+
+
+def test_logic_fallback_request_includes_both_kinds():
+    """Both a skip and an unparseable condition in the same form are batched
+    into a single request."""
+    q1 = Question(name="enrolled", xlsform_type="select_one yes_no")
+    q2 = Question(name="notes", xlsform_type="text", logic="if no, skip to question 20")
+    q2.add_assumption("Skip pattern detected ('if no, skip to question 20').")
+    q3 = Question(name="crowding", xlsform_type="text", logic="complex phrase")
+    q3.add_assumption("Logic 'complex phrase' could not be auto-compiled; "
+                      "please review the relevant column.")
+    qn = Questionnaire(questions=[q1, q2, q3])
+
+    captured = {}
+    client = DeepSeekClient(api_key="k")
+
+    def fake_complete(system, user, **kw):
+        captured["user"] = user
+        return {"suggestions": []}
+    client.complete_json = fake_complete
+
+    AISkipLogicResolver(client).resolve(qn)
+    compact = captured["user"].replace(" ", "")
+    assert '"kind":"skip"' in compact
+    assert '"kind":"condition"' in compact
+
+
 # --- AITypeClassifier ---------------------------------------------------------
 def _questionnaire_with_fallback():
     q = Question(name="misc", label="Preferred appointment slot", xlsform_type="text")
@@ -227,6 +271,102 @@ def test_reviewer_degrades_gracefully_on_error():
     assert findings[0].level == "info"
 
 
+# --- AICrossFieldConstraintReviewer ---------------------------------------------
+def _questionnaire_with_date_pair():
+    q1 = Question(name="start_date", label="Start date", xlsform_type="date")
+    q2 = Question(name="end_date", label="End date", xlsform_type="date")
+    return Questionnaire(questions=[q1, q2])
+
+
+def test_cross_constraint_applied_when_valid():
+    qn = _questionnaire_with_date_pair()
+    reply = {"suggestions": [{"question_name": "end_date",
+                              "constraint": ". >= ${start_date}",
+                              "constraint_message": "End date must be on or after start date.",
+                              "rationale": "end after start"}]}
+    notes = AICrossFieldConstraintReviewer(_client(reply)).suggest(qn)
+    assert qn.questions[1].constraint == ". >= ${start_date}"
+    assert qn.questions[1].constraint_message == "End date must be on or after start date."
+    assert any("Applied suggested" in n for n in notes)
+    assert any("AI-suggested cross-field constraint" in a
+              for a in qn.questions[1].assumptions)
+
+
+def test_cross_constraint_rejects_self_reference():
+    qn = _questionnaire_with_date_pair()
+    reply = {"suggestions": [{"question_name": "end_date",
+                              "constraint": ". >= ${end_date}"}]}
+    notes = AICrossFieldConstraintReviewer(_client(reply)).suggest(qn)
+    assert qn.questions[1].constraint == ""
+    assert any("references itself" in n for n in notes)
+
+
+def test_cross_constraint_rejects_non_cross_field():
+    """A constraint with no ${...} reference isn't this feature's job."""
+    qn = _questionnaire_with_date_pair()
+    reply = {"suggestions": [{"question_name": "end_date", "constraint": ". <= today()"}]}
+    notes = AICrossFieldConstraintReviewer(_client(reply)).suggest(qn)
+    assert qn.questions[1].constraint == ""
+    assert any("not a cross-field constraint" in n for n in notes)
+
+
+def test_cross_constraint_rejects_unknown_field_reference():
+    qn = _questionnaire_with_date_pair()
+    reply = {"suggestions": [{"question_name": "end_date",
+                              "constraint": ". >= ${ghost}"}]}
+    notes = AICrossFieldConstraintReviewer(_client(reply)).suggest(qn)
+    assert qn.questions[1].constraint == ""
+    assert any("unknown field" in n for n in notes)
+
+
+def test_cross_constraint_combines_with_existing_single_field_constraint():
+    """The common real case: the deterministic engine already set a generic
+    single-field constraint (e.g. 'not in the future'); the AI's cross-field
+    addition must be COMBINED, not blocked, so both rules end up enforced."""
+    qn = _questionnaire_with_date_pair()
+    qn.questions[1].constraint = ". <= today()"
+    qn.questions[1].constraint_message = "Date cannot be in the future."
+    reply = {"suggestions": [{"question_name": "end_date",
+                              "constraint": ". >= ${start_date}",
+                              "constraint_message": "Must be after start date."}]}
+    notes = AICrossFieldConstraintReviewer(_client(reply)).suggest(qn)
+    assert qn.questions[1].constraint == "(. <= today()) and (. >= ${start_date})"
+    assert "Must be after start date." in qn.questions[1].constraint_message
+    assert "Date cannot be in the future." in qn.questions[1].constraint_message
+    assert any("Combined suggested" in n for n in notes)
+
+
+def test_cross_constraint_skips_when_reference_already_present():
+    """Avoid combining a duplicate/conflicting reference to the same field."""
+    qn = _questionnaire_with_date_pair()
+    qn.questions[1].constraint = ". >= ${start_date} and . <= today()"
+    reply = {"suggestions": [{"question_name": "end_date",
+                              "constraint": ". >= ${start_date}"}]}
+    notes = AICrossFieldConstraintReviewer(_client(reply)).suggest(qn)
+    assert qn.questions[1].constraint == ". >= ${start_date} and . <= today()"
+    assert any("avoid a conflict" in n for n in notes)
+
+
+def test_cross_constraint_rejects_unknown_target():
+    qn = _questionnaire_with_date_pair()
+    reply = {"suggestions": [{"question_name": "nope", "constraint": ". >= ${start_date}"}]}
+    notes = AICrossFieldConstraintReviewer(_client(reply)).suggest(qn)
+    assert any("unknown question" in n for n in notes)
+
+
+def test_cross_constraint_noop_on_empty_form():
+    qn = Questionnaire()
+    notes = AICrossFieldConstraintReviewer(_client({"suggestions": []})).suggest(qn)
+    assert notes == []
+
+
+def test_cross_constraint_degrades_gracefully_on_error():
+    qn = _questionnaire_with_date_pair()
+    notes = AICrossFieldConstraintReviewer(_failing_client("timeout")).suggest(qn)
+    assert any("Skipped" in n for n in notes)
+    assert qn.questions[1].constraint == ""
+
+
 # --- AIPipeline orchestration --------------------------------------------------
 def test_pipeline_noop_when_disabled():
     qn = Questionnaire(questions=[Question(name="a", xlsform_type="integer")])
@@ -249,6 +389,22 @@ def test_pipeline_runs_only_requested_features():
     reply = {"classifications": [{"name": "misc", "type": "time", "confidence": "high"}]}
     AIPipeline(client=_client(reply)).run(qn, config)
     assert qn.questions[0].xlsform_type == "time"
+
+
+def test_pipeline_default_features_include_cross_constraints():
+    """A default AIConfig() must include the new feature without any code
+    needing to know about it explicitly - proves the wiring is data-driven."""
+    assert "cross_constraints" in AI_FEATURES
+    assert "cross_constraints" in AIConfig(enabled=True).features
+
+
+def test_pipeline_runs_cross_constraints_feature():
+    qn = _questionnaire_with_date_pair()
+    config = AIConfig(enabled=True, features=["cross_constraints"])
+    reply = {"suggestions": [{"question_name": "end_date",
+                              "constraint": ". >= ${start_date}"}]}
+    AIPipeline(client=_client(reply)).run(qn, config)
+    assert qn.questions[1].constraint == ". >= ${start_date}"
 
 
 def test_pipeline_unavailable_client_is_treated_as_no_key():
