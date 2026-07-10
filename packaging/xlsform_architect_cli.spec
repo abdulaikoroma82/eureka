@@ -22,8 +22,10 @@ datas = []
 datas += [(str(p), "xlsform_architect/knowledge") for p in (pkg / "knowledge").glob("*.yaml")]
 datas += [(str(p), "xlsform_architect/templates") for p in (pkg / "templates").glob("*.xlsx")]
 datas += collect_data_files("xlsform_architect", includes=["examples/*"])
+# pyxform ships template/data files that must travel with the executable.
+datas += collect_data_files("pyxform")
 
-hiddenimports = ["openpyxl", "pandas", "docx", "fitz", "lxml", "yaml"]
+hiddenimports = ["openpyxl", "pandas", "docx", "fitz", "lxml", "yaml", "pyxform"]
 
 block_cipher = None
 
