@@ -161,10 +161,41 @@ assumption it made in the assumption log.
 
 ---
 
+## Optional: AI assist
+
+By default, everything described above happens entirely on your own
+computer — nothing is sent anywhere. There is also an **optional** AI
+add-on that can help with a few things a plain checklist-style tool can't
+do:
+
+- **Translate** your form's questions into other languages.
+- **Untangle tricky skip instructions** — e.g. "if no, skip to question 20" —
+  into the proper format automatically.
+- **Suggest a better answer type** for a question that was hard to classify.
+- **Give the finished form a second read-through** for anything that looks
+  off, in plain English.
+
+This is completely optional and **off unless you turn it on**. To use it:
+
+1. Get a DeepSeek API key (a paid service, separate from this tool) at
+   [platform.deepseek.com](https://platform.deepseek.com).
+2. In the app, open **"4 · 🤖 AI assist"** in the sidebar, paste your key,
+   tick **Enable AI assist**, and pick what you want it to help with.
+3. Anything AI suggests is clearly labelled and never applied blindly — it's
+   always shown to you to review before you deploy the form.
+
+If you never set this up, you'll never see a cost, and nothing about your
+questionnaire ever leaves your computer.
+
+---
+
 ## A note on privacy
 
-Everything happens on your own computer. Your questionnaires and data are never
-sent to any external website or AI service.
+By default, everything happens on your own computer — your questionnaires and
+data are never sent anywhere. The one exception is the **optional AI assist**
+feature above: if (and only if) you turn it on and supply an API key,
+question labels are sent to DeepSeek's service to power that specific
+feature. Nothing else in the tool ever makes a network connection.
 
 ---
 

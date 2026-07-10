@@ -10,10 +10,14 @@ QA report, assumption log, logic map and version history. It applies the
 **standard rules of the XLSForm specification**; it is not tied to any
 particular survey domain.
 
-> **No AI service required.** The tool contains no dependency on Claude,
-> ChatGPT, the OpenAI API or any subscription service. All of its intelligence
-> comes from deterministic **parsers, rule engines, templates and validators**.
-> It runs entirely offline on a laptop or an internal server.
+> **AI is optional, not required.** The core pipeline — parsing, type
+> classification, naming, logic, constraints, calculations, validation,
+> export — is 100% deterministic and runs fully offline with zero API
+> dependency. An **optional AI-assist layer** (DeepSeek) can be switched on
+> for the handful of things a rule engine genuinely cannot do (see
+> [AI-assisted features](#ai-assisted-features-optional) below). It is off by
+> default; nothing leaves your computer unless you explicitly enable it and
+> supply an API key.
 
 > 🟢 **New to this / non-technical?** Start with the plain-language
 > [Getting Started guide](docs/GETTING_STARTED.md) — no coding needed.
@@ -42,6 +46,8 @@ Architect standardises that work and catches the errors before deployment.
       |                  |                        |
       ---------------------------------------------
                       |
+           [optional]  AI Assist  (ai/)  — DeepSeek, off by default
+                      |
               XLSForm Generator  (xlsform/)
                       |
                 Output Package
@@ -52,7 +58,9 @@ Architect standardises that work and catches the errors before deployment.
 All stages communicate through one intermediate representation
 (`xlsform_architect/models.py`): a `Questionnaire` of `Question`, `Choice` and
 `ChoiceList` objects. A parser only has to produce a `Questionnaire`; everything
-downstream then works unchanged.
+downstream then works unchanged. The `ai/` package is the **only** part of
+the codebase that makes a network call, and only when explicitly enabled —
+see [AI-assisted features](#ai-assisted-features-optional).
 
 ### Project layout
 
@@ -61,6 +69,7 @@ xlsform_architect/
 ├── app/            # controller, config, CLI (main.py) and Streamlit UI (ui.py)
 ├── parsers/        # DOCX / XLSX / PDF / CSV / JSON / text parsers  (Module 1)
 ├── engine/         # classifier, naming, logic, constraint, calculation  (Modules 2,3,5,6,7)
+├── ai/             # optional AI-assist layer (DeepSeek) — off by default
 ├── xlsform/        # survey / choices / settings builders + exporter  (Module 4)
 ├── validation/     # structure / logic / deployment validators + report  (Module 9)
 ├── knowledge/      # editable YAML rule packs  (Module 8)
@@ -116,6 +125,11 @@ python -m xlsform_architect.app.main survey.docx --target surveycto
 python -m xlsform_architect.app.main survey.docx --rules ./my_rules
 # after `pip install -e .`
 xlsform-architect design.csv --target kobo
+
+# optional AI assist (requires DEEPSEEK_API_KEY) — see the AI section below
+python -m xlsform_architect.app.main survey.docx --ai
+python -m xlsform_architect.app.main survey.docx --ai \
+    --ai-features translate,review --ai-languages "French:fr,Spanish:es"
 ```
 
 The process exits non-zero if validation finds blocking errors, so it slots
@@ -229,6 +243,60 @@ behaviour that fits any questionnaire. To specialise the tool (e.g. add
 domain-specific constraints or reusable choice lists), copy the file, edit it,
 and point the tool at it with `--rules` on the CLI or
 `KnowledgeBase.load(directory=...)` in code. The Python code never changes.
+
+---
+
+## AI-assisted features (optional)
+
+The deterministic pipeline above solves the vast majority of what a
+questionnaire needs. A small number of things are inherently language/
+reasoning problems that no rule engine can solve — for those, an **optional**
+AI layer using [DeepSeek](https://api-docs.deepseek.com/) is available.
+
+**This layer is off by default.** With no flag/checkbox and no
+`DEEPSEEK_API_KEY`, the tool behaves exactly as if `xlsform_architect/ai/`
+did not exist — no network calls, no new dependency (the client uses only
+the Python standard library), identical output. It only activates when you
+explicitly enable it **and** provide an API key.
+
+| Feature | What it does | Why it can't be deterministic |
+| --- | --- | --- |
+| **Translation** | Generates `label::French (fr)`-style columns from your English labels | Translation is language generation, not pattern matching |
+| **Skip-logic inversion** | Turns "if no, skip to question 20" into a proper `relevant` condition on the skipped question(s) | Requires understanding the whole form's structure to find the jump target — genuine multi-step reasoning |
+| **Type-classification fallback** | Reclassifies a question that keyword rules defaulted to `text`, when the phrasing wasn't anticipated | Keyword lists always have blind spots; a model classifies by meaning |
+| **AI quality review** | A holistic second pass flagging things structural checks can't see — e.g. a constraint that contradicts its own label | Requires reasoning across multiple fields' relationship to each other |
+
+### Setup
+
+```bash
+export DEEPSEEK_API_KEY="sk-..."          # https://platform.deepseek.com
+python -m xlsform_architect.app.main survey.docx --ai
+```
+
+Or in the Streamlit app: expand **"4 · 🤖 AI assist"** in the sidebar, paste a
+key (kept only for that browser session, never written to disk) or rely on
+the environment variable, tick **Enable AI assist**, and choose which
+features and languages you want.
+
+### Safety and cost design
+
+* **Bounded, batched calls.** Each feature makes at most **one API call per
+  form** (translation makes one call per target *language*), regardless of
+  how many questions the form has — not one call per question.
+* **AI output is never trusted blindly.** Every suggestion is validated
+  before being applied: skip-logic conditions must reference real question
+  names or they are rejected; reclassifications must be a recognised XLSForm
+  type or they are rejected; AI review findings are capped at `warning`
+  severity and can never fail validation the way a real structural error
+  does.
+* **Everything is logged.** AI-applied changes are written to the assumption
+  log with an explicit "AI-suggested... please review" note, and AI review
+  findings appear in the QA report tagged `ai_review` so they're never
+  confused with the deterministic checks.
+* **Fails open, not closed.** If the API key is missing, the network is
+  unreachable, or DeepSeek returns something unexpected, the affected
+  feature is skipped with a clear note — the deterministic result is
+  returned regardless, never blocked by an AI failure.
 
 ---
 

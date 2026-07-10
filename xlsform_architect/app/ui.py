@@ -11,12 +11,19 @@ against that platform's standards (from ``knowledge/platforms.yaml``) and the
 workbook is written in that platform's column dialect (e.g. SurveyCTO's
 ``relevance`` header).
 
+An optional AI-assist layer (DeepSeek) can be enabled in the sidebar for
+translation, skip-logic resolution, type reclassification and a quality
+review pass. It is off by default; the deterministic pipeline's behaviour is
+completely unchanged unless a user explicitly enables it AND a DeepSeek API
+key is configured.
+
 Run
 ---
     streamlit run xlsform_architect/app/ui.py
 
-The UI is a thin layer over :class:`Workflow`; all logic lives in the
-deterministic engine, so the interface adds no intelligence of its own.
+The UI is a thin layer over :class:`Workflow`; all deterministic logic lives
+in the rule engine, and all AI logic lives in the ``ai`` package - the
+interface itself adds no intelligence of its own.
 """
 
 from __future__ import annotations
@@ -41,6 +48,8 @@ except ImportError:  # pragma: no cover
 
 import pandas as pd
 
+from xlsform_architect.ai.client import DeepSeekClient
+from xlsform_architect.ai.config import AIConfig
 from xlsform_architect.app.artifacts import ArtifactBuilder
 from xlsform_architect.app.config import DEPLOYMENT_TARGETS, EXAMPLES_DIR
 from xlsform_architect.app.workflow import STEP_LABELS, Workflow
@@ -51,6 +60,21 @@ from xlsform_architect.xlsform.survey_builder import SurveyBuilder
 _UPLOAD_TYPES = ["docx", "xlsx", "xls", "pdf", "csv", "txt", "md", "json"]
 
 _LEVEL_ICONS = {"error": "🔴", "warning": "🟠", "info": "🔵"}
+
+#: Curated languages commonly used in M&E/survey work; users can add more
+#: via the "Other language" field.
+_COMMON_LANGUAGES = [
+    ("French", "fr"), ("Spanish", "es"), ("Portuguese", "pt"),
+    ("Arabic", "ar"), ("Swahili", "sw"), ("Hindi", "hi"),
+    ("Bengali", "bn"), ("Amharic", "am"),
+]
+
+_AI_FEATURE_LABELS = {
+    "classify": "Improve type detection (reclassify ambiguous questions)",
+    "skip_logic": "Resolve 'skip to question N' logic",
+    "translate": "Generate translations",
+    "review": "AI quality review (a second pair of eyes)",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -82,7 +106,7 @@ def _sidebar():
     with st.sidebar:
         st.markdown("### 🧩 XLSForm Architect")
         st.caption("Questionnaire → deployment-ready XLSForm. "
-                   "Runs 100% locally, no AI services.")
+                   "Runs fully offline by default; AI assist is optional.")
         st.divider()
 
         st.markdown("**1 · Upload your questionnaire**")
@@ -111,13 +135,67 @@ def _sidebar():
             version = st.text_input(
                 "Version", "", placeholder="auto-generated timestamp")
 
+        ai_config, ai_client = _ai_sidebar()
+
         st.divider()
         generate = st.button("⚙️  Generate XLSForm", type="primary",
                              use_container_width=True, disabled=uploaded is None)
         if uploaded is None:
             st.caption("Upload a questionnaire to enable generation.")
 
-    return uploaded, target, form_title, form_id, version, generate
+    return uploaded, target, form_title, form_id, version, ai_config, ai_client, generate
+
+
+def _ai_sidebar():
+    """AI-assist controls. Off by default; requires a DeepSeek API key."""
+    with st.expander("4 · 🤖 AI assist (optional, uses DeepSeek)"):
+        st.caption("Sends question labels to DeepSeek's API when enabled. "
+                   "Off by default — the rest of this tool never leaves "
+                   "your computer.")
+
+        env_key = DeepSeekClient().api_key
+        api_key = env_key
+        if env_key:
+            st.caption("✓ DEEPSEEK_API_KEY found in the environment.")
+        else:
+            api_key = st.text_input(
+                "DeepSeek API key", type="password",
+                help="Kept only for this browser session; never written to disk. "
+                     "Set the DEEPSEEK_API_KEY environment variable instead to "
+                     "avoid entering it here.")
+
+        enabled = st.checkbox("Enable AI assist", value=False,
+                              disabled=not api_key)
+        if not api_key:
+            st.caption("Enter an API key above to enable AI features.")
+            return AIConfig.disabled(), None
+
+        features = []
+        if enabled:
+            for key, label in _AI_FEATURE_LABELS.items():
+                if st.checkbox(label, value=True, key=f"ai_feat_{key}"):
+                    features.append(key)
+
+        languages = []
+        if enabled and "translate" in features:
+            chosen = st.multiselect(
+                "Languages to translate into",
+                options=[f"{name} ({code})" for name, code in _COMMON_LANGUAGES],
+                default=[])
+            languages = [(n, c) for n, c in _COMMON_LANGUAGES
+                        if f"{n} ({c})" in chosen]
+            other = st.text_input("Other language (Name:code)", "",
+                                  placeholder="e.g. German:de")
+            name, _, code = other.partition(":")
+            if name.strip() and code.strip():
+                languages.append((name.strip(), code.strip()))
+            if not languages:
+                st.caption("Pick at least one language, or translation will be skipped.")
+
+        config = AIConfig(enabled=enabled, features=features,
+                          translate_languages=languages)
+        client = DeepSeekClient(api_key=api_key) if enabled else None
+        return config, client
 
 
 # ---------------------------------------------------------------------------
@@ -227,6 +305,10 @@ def _render_result(result, target: str) -> None:
     if report.deep_ran:
         st.caption("Deep check: this form was converted by pyxform — the same "
                    "engine ODK and KoboToolbox run — as part of validation.")
+    if result.ai_ran:
+        st.caption("🤖 AI assist ran on this form — review any AI-suggested "
+                   "changes (marked in the assumption log and findings below) "
+                   "before deploying.")
 
     # --- downloads ---------------------------------------------------------
     st.markdown("##### Downloads")
@@ -267,7 +349,7 @@ def _render_result(result, target: str) -> None:
         if not report.findings:
             st.success("No issues found — a completely clean run.")
         for f in report.sorted_findings():
-            icon = _LEVEL_ICONS.get(f.level, "🔵")
+            icon = "🤖" if f.category == "ai_review" else _LEVEL_ICONS.get(f.level, "🔵")
             loc = f" — `{f.location}`" if f.location else ""
             st.markdown(f"{icon} **{f.category}**{loc}: {f.message}")
 
@@ -306,7 +388,8 @@ def main() -> None:
     st.set_page_config(page_title="XLSForm Architect", page_icon="🧩",
                        layout="wide")
 
-    uploaded, target, form_title, form_id, version, generate = _sidebar()
+    (uploaded, target, form_title, form_id, version,
+     ai_config, ai_client, generate) = _sidebar()
 
     if uploaded is None:
         _render_landing()
@@ -335,13 +418,14 @@ def main() -> None:
             placeholders[step].markdown(f"{icon} {step}")
 
         try:
-            result = Workflow(knowledge=_kb()).run_from_file(
+            result = Workflow(knowledge=_kb(), ai_client=ai_client).run_from_file(
                 tmp_path,
                 form_title=form_title or None,
                 form_id=form_id or None,
                 version=version or None,
                 target=target,
                 source_name=uploaded.name,
+                ai_config=ai_config,
                 progress=progress,
             )
         except Exception as exc:  # pragma: no cover - surfaced to the user

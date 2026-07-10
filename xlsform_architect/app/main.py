@@ -15,14 +15,20 @@ Examples
     python -m xlsform_architect.app.main form.json --output ./out
     python -m xlsform_architect.app.main survey.docx --rules ./my_rules
 
+    # Optional AI enrichment (requires DEEPSEEK_API_KEY):
+    python -m xlsform_architect.app.main survey.docx --ai
+    python -m xlsform_architect.app.main survey.docx --ai --ai-features translate,review \
+        --ai-languages "French:fr,Spanish:es"
+
 Inputs
 ------
-Any supported questionnaire file (.json .csv .xlsx .xls .docx .pdf).
+Any supported questionnaire file (.json .csv .xlsx .xls .docx .pdf .txt .md).
 
 Outputs
 -------
 Writes the full output package to the output directory and prints a summary.
-Exit code is non-zero when validation fails.
+Exit code is non-zero when validation fails. AI enrichment (if requested) is
+strictly additive and never affects the deterministic exit code semantics.
 """
 
 from __future__ import annotations
@@ -31,6 +37,8 @@ import argparse
 import sys
 from pathlib import Path
 
+from ..ai.client import DeepSeekClient
+from ..ai.config import AI_FEATURES, AIConfig
 from .config import CONFIG, DEPLOYMENT_TARGETS
 from .workflow import Workflow
 
@@ -67,7 +75,30 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", "-o", default=str(CONFIG.output_dir),
                         help="Output directory")
     parser.add_argument("--quiet", "-q", action="store_true", help="Suppress step output")
+
+    ai = parser.add_argument_group(
+        "optional AI enrichment (DeepSeek)",
+        "Opt-in only; requires the DEEPSEEK_API_KEY environment variable. "
+        "The deterministic pipeline is unaffected if omitted.")
+    ai.add_argument("--ai", action="store_true",
+                    help="Enable AI-assisted enrichment")
+    ai.add_argument("--ai-features", default=",".join(AI_FEATURES),
+                    help=f"Comma-separated subset of: {','.join(AI_FEATURES)} "
+                         f"(default: all)")
+    ai.add_argument("--ai-languages", default="",
+                    help="Comma-separated Name:code pairs for translation, "
+                         "e.g. 'French:fr,Spanish:es' (requires --ai-features "
+                         "to include 'translate')")
     return parser
+
+
+def _parse_languages(raw: str) -> list:
+    languages = []
+    for part in filter(None, (p.strip() for p in raw.split(","))):
+        name, _, code = part.partition(":")
+        if name and code:
+            languages.append((name.strip(), code.strip()))
+    return languages
 
 
 def _progress(step: str, status: str) -> None:
@@ -89,7 +120,23 @@ def main(argv=None) -> int:
         from ..engine.knowledge_base import KnowledgeBase
         knowledge = KnowledgeBase.load(directory=_P(args.rules))
 
-    workflow = Workflow(knowledge=knowledge)
+    ai_config = AIConfig.disabled()
+    ai_client = None
+    if args.ai:
+        features = [f.strip() for f in args.ai_features.split(",") if f.strip()]
+        unknown = set(features) - set(AI_FEATURES)
+        if unknown:
+            print(f"error: unknown --ai-features: {', '.join(sorted(unknown))} "
+                 f"(choose from: {', '.join(AI_FEATURES)})", file=sys.stderr)
+            return 2
+        ai_config = AIConfig(enabled=True, features=features,
+                             translate_languages=_parse_languages(args.ai_languages))
+        ai_client = DeepSeekClient()
+        if not ai_client.available:
+            print("warning: --ai was requested but DEEPSEEK_API_KEY is not "
+                 "set; continuing without AI enrichment.", file=sys.stderr)
+
+    workflow = Workflow(knowledge=knowledge, ai_client=ai_client)
     print(f"Processing: {input_path}")
     result = workflow.run_from_file(
         input_path,
@@ -98,6 +145,7 @@ def main(argv=None) -> int:
         version=args.version,
         target=args.target,
         output_dir=args.output,
+        ai_config=ai_config,
         progress=None if args.quiet else _progress,
     )
 
@@ -109,8 +157,10 @@ def main(argv=None) -> int:
     if result.target:
         print(f"Target:  {result.target.upper()} "
               f"(platform standards applied; dialect columns written)")
+    if args.ai:
+        print(f"AI:      {'ran (' + ', '.join(ai_config.features) + ')' if result.ai_ran else 'requested but did not run (no API key)'}")
     print(f"Questions compiled: "
-          f"{len([q for q in result.questionnaire.questions if q.base_type not in ('begin group', 'end group')])}")
+          f"{len([q for q in result.questionnaire.questions if not q.is_structural])}")
     print()
     print("Validation:", "PASSED" if report.is_valid else "FAILED")
     print(" ", report.summary())
