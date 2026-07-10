@@ -59,7 +59,7 @@ class ArtifactBuilder:
                 continue
             list_name = ""
             choices = ""
-            if q.is_select:
+            if q.references_choices:
                 parts = q.xlsform_type.split()
                 list_name = parts[1] if len(parts) >= 2 else q.list_name
                 cl = questionnaire.choice_lists.get(list_name)
@@ -165,7 +165,7 @@ class ArtifactBuilder:
     def append_version_history(self, path: Union[str, Path],
                                questionnaire: Questionnaire,
                                source_name: str, is_valid: bool,
-                               error_count: int) -> Path:
+                               error_count: int, target: str = "") -> Path:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         history: List[Dict] = []
@@ -180,6 +180,7 @@ class ArtifactBuilder:
             "form_id": questionnaire.settings.form_id,
             "version": questionnaire.settings.version,
             "source": source_name,
+            "target": target,
             "category": questionnaire.category,
             "question_count": len([q for q in questionnaire.questions
                                    if q.base_type not in ("begin group", "end group")]),

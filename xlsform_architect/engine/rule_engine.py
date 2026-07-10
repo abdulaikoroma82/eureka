@@ -113,6 +113,13 @@ class RuleEngine:
             return
         if q.list_name:
             return
+        # An explicit type like "select_one mylist" (or "rank mylist") already
+        # names the list - honour it so the supplied choices are materialised
+        # under that name.
+        parts = (q.xlsform_type or "").split()
+        if len(parts) >= 2 and parts[0] in ("select_one", "select_multiple", "rank"):
+            q.list_name = parts[1]
+            return
         # Yes/No is handled by the classifier; here derive from the variable.
         cfg = self.kb.yes_no()
         if self._is_yes_no(q.raw_choices, cfg):
@@ -123,8 +130,8 @@ class RuleEngine:
         q.list_name = list_name
 
     def _materialise_choices(self, q: Question, qn: Questionnaire) -> None:
-        """Create Choice rows for a select question's raw options."""
-        if not q.is_select or not q.raw_choices:
+        """Create Choice rows for a select/rank question's raw options."""
+        if not q.references_choices or not q.raw_choices:
             return
         list_name = q.list_name
         if not list_name:

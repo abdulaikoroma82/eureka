@@ -93,6 +93,11 @@ Once the app is open in your browser:
    (`.docx`), Excel (`.xlsx`), PDF, CSV, plain text (`.txt`), or a prepared
    JSON file.
 2. **Choose where the form is going** — KoboToolbox, SurveyCTO, or ODK.
+   This matters: the tool checks your form against **that platform's own
+   rules** and writes the file in its expected format (SurveyCTO, for
+   example, uses slightly different column names — handled for you). The
+   result screen also includes a **platform guide** tab with tips for the
+   platform you chose.
 3. *(Optional)* Type a **form title** and version.
 4. Click **⚙️ Generate XLSForm.**
 5. Watch the progress ticks, then **download** your results:

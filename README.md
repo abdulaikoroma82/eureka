@@ -110,10 +110,12 @@ package.
 ```bash
 python -m xlsform_architect.app.main xlsform_architect/examples/event_registration.json
 python -m xlsform_architect.app.main survey.docx --title "Household Survey" --output ./out
+# target a platform: validates against ITS standards and writes ITS dialect
+python -m xlsform_architect.app.main survey.docx --target surveycto
 # use a customised ruleset instead of the bundled standard rules
 python -m xlsform_architect.app.main survey.docx --rules ./my_rules
 # after `pip install -e .`
-xlsform-architect design.csv
+xlsform-architect design.csv --target kobo
 ```
 
 The process exits non-zero if validation finds blocking errors, so it slots
@@ -190,7 +192,9 @@ Every decision is recorded in the **assumption log** so it can be reviewed.
 
 ## The rule pack (editable, no code changes)
 
-All standard rules live in `xlsform_architect/knowledge/xlsform_rules.yaml`:
+Platform profiles live in `xlsform_architect/knowledge/platforms.yaml`
+(dialects, supported types, naming standards, per-platform tips). All other
+standard rules live in `xlsform_architect/knowledge/xlsform_rules.yaml`:
 
 * `type_keywords` — keyword → XLSForm type detection
 * `yes_no` — the canonical shared Yes/No list and its detection tokens
@@ -207,6 +211,26 @@ and point the tool at it with `--rules` on the CLI or
 
 ---
 
+## Platform-specific standards
+
+Choosing a target platform genuinely changes the output — the tool applies
+**that platform's** rules, not just the generic XLSForm spec. The profiles
+live in `xlsform_architect/knowledge/platforms.yaml` (editable, no code
+changes):
+
+| | KoboToolbox | SurveyCTO | ODK |
+| --- | --- | --- | --- |
+| **Column dialect** | standard | `relevance`, `constraint message` (SurveyCTO's template headers) | standard |
+| **Extra types accepted** | `range`, `rank`, `audit`, `background-audio`, … | `text audit`, `audio audit`, `sensor_*`, `calculate_here`, … | full pyxform set incl. `osm` |
+| **Types rejected** | SurveyCTO-only types | `range`, `rank`, `audit`, `background-*`, external selects | SurveyCTO-only types |
+| **Naming standards** | ≤ 64 chars | must start with a letter; ≤ 32 chars (Stata exports) | ≤ 64 chars |
+
+The **compatibility matrix is honest per platform**: a form that uses `rank`
+reports ✅ Kobo / ✅ ODK / ❌ SurveyCTO, with the error telling you which
+platforms *do* support the offending type.
+
+---
+
 ## Validation & deployment compatibility
 
 The validator runs in layers:
@@ -216,7 +240,9 @@ The validator runs in layers:
 * **Logic** — no duplicate names, no broken `${…}` references, no missing/empty
   choice lists.
 * **Deployment** — valid ODK/XML identifiers, no reserved words, recognised
-  types and appearances — reported per platform (Kobo / SurveyCTO / ODK).
+  types and appearances.
+* **Platform** — the chosen target's own standards (types, naming, settings)
+  from `platforms.yaml`, as described above.
 * **Deep check (pyxform)** — the tool then runs **pyxform**, the same engine
   KoboToolbox and ODK use, to convert the form to an ODK XForm **offline**. If
   that succeeds, the form is compatible with the ODK/Kobo toolchain at a

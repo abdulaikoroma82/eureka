@@ -42,19 +42,23 @@ class SurveyBuilder:
     def build(self, questionnaire: Questionnaire) -> List[Dict[str, str]]:
         rows: List[Dict[str, str]] = []
         current_section = None
+        current_group = ""
+        used_groups: set = set()
 
         for q in questionnaire.questions:
             section = (q.section or "").strip()
             if section != current_section:
                 if current_section:
-                    rows.append(self._group_row("end group", current_section))
+                    rows.append(self._group_row("end group", current_group))
                 if section:
-                    rows.append(self._group_row("begin group", section))
+                    current_group = self._unique_group_name(section, used_groups)
+                    used_groups.add(current_group)
+                    rows.append(self._group_row("begin group", current_group, section))
                 current_section = section
             rows.append(self._question_row(q))
 
         if current_section:
-            rows.append(self._group_row("end group", current_section))
+            rows.append(self._group_row("end group", current_group))
         return rows
 
     # ------------------------------------------------------------------
@@ -76,11 +80,21 @@ class SurveyBuilder:
             row["required"] = ""
         return row
 
-    def _group_row(self, marker: str, section: str) -> Dict[str, str]:
+    def _group_row(self, marker: str, group_name: str,
+                   label: str = "") -> Dict[str, str]:
         row = {col: "" for col in SURVEY_COLUMNS}
         row["type"] = marker
-        name = _NON_WORD.sub("_", section.lower()).strip("_")[:40] or "section"
-        row["name"] = f"grp_{name}"
+        row["name"] = group_name
         if marker == "begin group":
-            row["label"] = section
+            row["label"] = label
         return row
+
+    @staticmethod
+    def _unique_group_name(section: str, used: set) -> str:
+        base = _NON_WORD.sub("_", section.lower()).strip("_")[:40] or "section"
+        name = f"grp_{base}"
+        counter = 2
+        while name in used:
+            name = f"grp_{base}_{counter}"
+            counter += 1
+        return name

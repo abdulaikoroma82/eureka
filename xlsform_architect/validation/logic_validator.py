@@ -69,7 +69,7 @@ class LogicValidator:
 
         # --- missing / empty choice lists ------------------------------
         for q in questions:
-            if not q.is_select:
+            if not q.references_choices:
                 continue
             parts = q.xlsform_type.split()
             list_name = parts[1] if len(parts) >= 2 else ""

@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, List, Optional, Union
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
@@ -44,16 +44,34 @@ _HEADER_FONT = Font(bold=True, color="FFFFFFFF")
 
 
 class XLSFormExporter:
-    """Serialise a questionnaire to an XLSForm workbook."""
+    """Serialise a questionnaire to an XLSForm workbook.
 
-    def __init__(self) -> None:
+    When a *target* platform is given, the survey sheet is written in that
+    platform's column dialect (from ``knowledge/platforms.yaml``) - e.g. for
+    SurveyCTO the ``relevant`` header becomes ``relevance`` and
+    ``constraint_message`` becomes ``constraint message``, matching
+    SurveyCTO's published form template.
+    """
+
+    def __init__(self, knowledge=None) -> None:
         self.survey_builder = SurveyBuilder()
         self.choices_builder = ChoicesBuilder()
         self.settings_builder = SettingsBuilder()
+        self._kb = knowledge  # lazy: only loaded when a dialect is needed
 
     # ------------------------------------------------------------------
-    def build_workbook(self, questionnaire: Questionnaire) -> Workbook:
+    def _dialect(self, target: Optional[str]) -> Dict[str, str]:
+        if not target:
+            return {}
+        if self._kb is None:
+            from ..engine.knowledge_base import KnowledgeBase
+            self._kb = KnowledgeBase.load()
+        return dict(self._kb.platform(target).get("dialect", {}) or {})
+
+    def build_workbook(self, questionnaire: Questionnaire,
+                       target: Optional[str] = None) -> Workbook:
         wb = Workbook()
+        dialect = self._dialect(target)
 
         survey_rows = self.survey_builder.build(questionnaire)
         choices_rows = self.choices_builder.build(questionnaire)
@@ -61,7 +79,7 @@ class XLSFormExporter:
 
         ws_survey = wb.active
         ws_survey.title = "survey"
-        self._write_sheet(ws_survey, SURVEY_COLUMNS, survey_rows)
+        self._write_sheet(ws_survey, SURVEY_COLUMNS, survey_rows, dialect)
 
         ws_choices = wb.create_sheet("choices")
         self._write_sheet(ws_choices, CHOICES_COLUMNS, choices_rows)
@@ -71,24 +89,29 @@ class XLSFormExporter:
 
         return wb
 
-    def export(self, questionnaire: Questionnaire, path: Union[str, Path]) -> Path:
+    def export(self, questionnaire: Questionnaire, path: Union[str, Path],
+               target: Optional[str] = None) -> Path:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        wb = self.build_workbook(questionnaire)
+        wb = self.build_workbook(questionnaire, target=target)
         wb.save(str(path))
         return path
 
-    def export_bytes(self, questionnaire: Questionnaire) -> bytes:
-        wb = self.build_workbook(questionnaire)
+    def export_bytes(self, questionnaire: Questionnaire,
+                     target: Optional[str] = None) -> bytes:
+        wb = self.build_workbook(questionnaire, target=target)
         buffer = io.BytesIO()
         wb.save(buffer)
         return buffer.getvalue()
 
     # ------------------------------------------------------------------
-    def _write_sheet(self, ws, columns: List[str], rows: List[Dict[str, str]]) -> None:
-        # Header row.
+    def _write_sheet(self, ws, columns: List[str], rows: List[Dict[str, str]],
+                     dialect: Optional[Dict[str, str]] = None) -> None:
+        dialect = dialect or {}
+        # Header row (renamed to the platform dialect where applicable; the
+        # row dicts keep their canonical keys).
         for col_idx, name in enumerate(columns, start=1):
-            cell = ws.cell(row=1, column=col_idx, value=name)
+            cell = ws.cell(row=1, column=col_idx, value=dialect.get(name, name))
             cell.fill = _HEADER_FILL
             cell.font = _HEADER_FONT
         # Data rows.

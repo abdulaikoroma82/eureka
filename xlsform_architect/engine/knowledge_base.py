@@ -48,9 +48,10 @@ def _read_yaml(path: Path) -> Dict[str, Any]:
 
 @dataclass
 class KnowledgeBase:
-    """In-memory view of the standard XLSForm rule pack."""
+    """In-memory view of the standard XLSForm rule pack and platform profiles."""
 
     xlsform_rules: Dict[str, Any] = field(default_factory=dict)
+    platforms: Dict[str, Any] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
     @classmethod
@@ -59,10 +60,24 @@ class KnowledgeBase:
         """Load the rule pack from *directory* (defaults to the bundled one).
 
         Pass a different *rules_file* to use a customised ruleset that follows
-        the same structure as ``xlsform_rules.yaml``.
+        the same structure as ``xlsform_rules.yaml``.  Platform profiles are
+        always read from ``platforms.yaml`` in the same directory (falling
+        back to the bundled one so custom rule dirs need not duplicate it).
         """
         directory = directory or KNOWLEDGE_DIR
-        return cls(xlsform_rules=_read_yaml(directory / rules_file))
+        platform_data = _read_yaml(directory / "platforms.yaml")
+        if not platform_data and directory != KNOWLEDGE_DIR:
+            platform_data = _read_yaml(KNOWLEDGE_DIR / "platforms.yaml")
+        return cls(xlsform_rules=_read_yaml(directory / rules_file),
+                   platforms=platform_data.get("platforms", {}))
+
+    # -- platform accessors ---------------------------------------------
+    def platform(self, target: str) -> Dict[str, Any]:
+        """Return the profile for *target* (kobo/surveycto/odk), or {}."""
+        return self.platforms.get((target or "").lower(), {})
+
+    def platform_names(self) -> List[str]:
+        return list(self.platforms.keys())
 
     # -- xlsform_rules accessors ---------------------------------------
     def type_keywords(self) -> List[Dict[str, Any]]:

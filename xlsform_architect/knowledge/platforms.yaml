@@ -1,0 +1,169 @@
+# =============================================================================
+# Platform profiles: KoboToolbox, SurveyCTO, ODK
+# =============================================================================
+# Encodes each platform's XLSForm dialect and standards so the validator and
+# exporter can apply THE RULES OF THE CHOSEN TARGET, not just the generic
+# XLSForm spec.  Sources: the pyxform engine (ODK/Kobo's actual converter,
+# including its SurveyCTO column aliases) and each platform's published
+# documentation.  Edit here to track platform changes - no code change needed.
+#
+# Per-platform keys:
+#   label / docs        - display name and official documentation URL
+#   engine              - what converts the form on that platform
+#   extra_types         - types this platform supports BEYOND the common core
+#   unsupported_types   - types this platform REJECTS (error when targeted)
+#   dialect             - survey-sheet header renames applied at export time
+#   name_rules          - platform naming standards
+#   settings            - recommended settings-sheet fields
+#   metadata_types      - meta fields commonly added for this platform
+#   tips                - guidance surfaced in the UI's platform guide
+# =============================================================================
+
+platforms:
+  kobo:
+    label: "KoboToolbox"
+    docs: "https://support.kobotoolbox.org/"
+    engine: "pyxform (same engine as ODK)"
+    extra_types:
+      - range
+      - rank
+      - audit
+      - background-audio
+      - background-geopoint
+      - start-geopoint
+      - trigger
+      - csv-external
+      - xml-external
+      - select_one_from_file
+      - select_multiple_from_file
+      - phonenumber
+      - simserial
+      - subscriberid
+      - email
+    unsupported_types:
+      - text audit
+      - audio audit
+      - sensor_statistic
+      - sensor_stream
+      - comments
+      - speed violations count
+      - speed violations list
+      - speed violations audit
+      - calculate_here
+      - caseid
+    dialect: {}          # Kobo consumes standard XLSForm headers
+    name_rules:
+      must_start_with_letter: false     # underscore also allowed
+      max_length: 64
+      max_length_level: warning
+      max_length_reason: "very long names make Kobo exports unwieldy"
+    settings:
+      recommended: ["form_title", "form_id", "version"]
+      optional: ["style", "default_language"]
+    metadata_types: ["start", "end", "today", "username", "deviceid", "audit"]
+    tips:
+      - "Kobo runs the same pyxform engine as ODK - the deep check in this tool is Kobo's own converter."
+      - "Use the settings 'style' column (e.g. 'pages' or 'theme-grid') to control web-form layout in Enketo."
+      - "Some appearances render differently in Enketo (web forms) vs the Collect Android app - test both if you deploy to both."
+      - "Kobo auto-bumps the version on redeploy; the version written here is a starting value."
+
+  surveycto:
+    label: "SurveyCTO"
+    docs: "https://docs.surveycto.com/"
+    engine: "SurveyCTO's own converter (accepts its 'relevance' dialect)"
+    extra_types:
+      - text audit
+      - audio audit
+      - sensor_statistic
+      - sensor_stream
+      - comments
+      - speed violations count
+      - speed violations list
+      - speed violations audit
+      - calculate_here
+      - caseid
+      - phonenumber
+      - simserial
+      - subscriberid
+    unsupported_types:
+      - range
+      - rank
+      - acknowledge
+      - trigger
+      - audit                # SurveyCTO uses 'text audit' instead
+      - background-audio
+      - background-geopoint
+      - start-geopoint
+      - osm
+      - csv-external
+      - xml-external
+      - select_one_from_file
+      - select_multiple_from_file
+    # SurveyCTO's published template headers differ from the generic spec.
+    dialect:
+      relevant: "relevance"
+      constraint_message: "constraint message"
+    name_rules:
+      must_start_with_letter: true      # SurveyCTO requires a letter first
+      max_length: 32
+      max_length_level: warning
+      max_length_reason: "names over 32 characters are truncated when exporting to Stata"
+    settings:
+      recommended: ["form_title", "form_id", "version"]
+      optional: ["public_key", "submission_url", "default_language", "instance_name"]
+    metadata_types: ["start", "end", "deviceid", "subscriberid", "simserial",
+                     "phonenumber", "username", "caseid", "text audit"]
+    tips:
+      - "This tool exports SurveyCTO's column dialect for you: 'relevance' instead of 'relevant' and 'constraint message' instead of 'constraint_message'."
+      - "Add a 'text audit' field to capture time spent on each question - SurveyCTO's flagship data-quality feature."
+      - "Keep field names at 32 characters or fewer if your team exports to Stata."
+      - "SurveyCTO manages form versions on upload; use Test Form in the console to preview before deploying."
+      - "For pre-loading data use SurveyCTO server datasets rather than csv-external attachments."
+
+  odk:
+    label: "ODK"
+    docs: "https://docs.getodk.org/"
+    engine: "pyxform + ODK Validate"
+    extra_types:
+      - range
+      - rank
+      - audit
+      - background-audio
+      - background-geopoint
+      - start-geopoint
+      - trigger
+      - csv-external
+      - xml-external
+      - select_one_from_file
+      - select_multiple_from_file
+      - phonenumber
+      - simserial
+      - subscriberid
+      - email
+      - osm
+    unsupported_types:
+      - text audit
+      - audio audit
+      - sensor_statistic
+      - sensor_stream
+      - comments
+      - speed violations count
+      - speed violations list
+      - speed violations audit
+      - calculate_here
+      - caseid
+    dialect: {}          # ODK consumes standard XLSForm headers
+    name_rules:
+      must_start_with_letter: false
+      max_length: 64
+      max_length_level: warning
+      max_length_reason: "long names bloat submissions and exports"
+    settings:
+      recommended: ["form_title", "form_id", "version"]
+      optional: ["instance_name", "public_key", "auto_send", "auto_delete", "default_language"]
+    metadata_types: ["start", "end", "today", "deviceid", "username", "audit"]
+    tips:
+      - "The deep check in this tool runs pyxform, the first stage of ODK's own pipeline."
+      - "Set 'instance_name' in settings so submissions get human-readable names in ODK Central."
+      - "Add an 'audit' metadata field to record enumerator behaviour for data-quality review."
+      - "ODK Central re-validates on upload with ODK Validate - treat that as the final check."

@@ -64,6 +64,8 @@ class ValidationReport:
     compatibility: Dict[str, bool] = field(default_factory=dict)
     #: True when the pyxform deep check actually ran (pyxform installed).
     deep_ran: bool = False
+    #: The deployment platform the form was validated against ("" = generic).
+    target: str = ""
 
     @property
     def errors(self) -> List[Finding]:
@@ -102,6 +104,9 @@ class ReportGenerator:
         status = "PASSED" if report.is_valid else "FAILED"
         lines.append(f"## Overall status: {status}")
         lines.append("")
+        if report.target:
+            lines.append(f"**Validated against:** {report.target.upper()} "
+                         f"standards (plus the generic XLSForm spec)  ")
         lines.append(report.summary())
         lines.append("")
         deep = ("Deep validation via pyxform (the ODK/Kobo engine) was run."
