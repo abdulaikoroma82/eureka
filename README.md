@@ -182,9 +182,30 @@ choice list, relevance, constraint and any derived calculations.
 | --- | --- | --- |
 | **Classifier** (M2) | Assigns XLSForm types | `Yes/No → select_one yes_no`, `age → integer`, `amount → decimal`, `GPS → geopoint`, `photo → image` |
 | **Variable namer** (M3) | Safe, unique names | `"Preferred contact method" → preferred_contact_method` |
-| **Logic engine** (M5) | Natural language → expressions | `"if yes" → ${prev}='1'`, `"under 5 years" → ${age_months}<60` |
+| **Logic engine** (M5) | Natural language → expressions, incl. compound conditions | `"if yes" → ${prev}='1'`, `"if yes and age over 18" → ${prev}='1' and ${age}>18`, `"at least 5" → >=5`; multi-selects use `selected(...)` |
 | **Constraint engine** (M6) | Validation ranges | `age → . >= 0 and . <= 120`, `% → . >= 0 and . <= 100`, `date → . <= today()` |
 | **Calculation engine** (M7) | Derived fields | age in years from a date of birth |
+
+And structural intelligence on top:
+
+* **Matrix / grid questions** — a Word table with items down the side and a
+  rating scale across the top becomes one `select_one` per row, all sharing a
+  single choice list.
+* **Repeat groups (rosters)** — a heading like `FOR EACH HOUSEHOLD MEMBER`
+  (or `"repeat": true` in JSON, or a `repeat` column in the design grid)
+  wraps its questions in `begin repeat`/`end repeat`. Explicit
+  `begin/end repeat` rows in JSON or an imported XLSForm pass through intact.
+* **"Other (specify)"** — a select offering an Other option automatically
+  gains a text follow-up shown only when Other is chosen.
+* **Choice-list sharing** — identical option sets (e.g. a Likert scale used
+  by ten questions) are merged into one list instead of duplicated.
+* **Cascading selects & translations** — `choice_filter` and passthrough
+  columns (`label::French (fr)`, media columns, cascade filter columns) are
+  carried from structured inputs into the exported workbook.
+* **PDF noise removal** — page numbers and repeated running headers/footers
+  are stripped before parsing.
+* **Skip-to patterns** — "skip to question 20" cannot be inverted safely, so
+  it is surfaced as an explicit review note instead of a silent guess.
 
 Every decision is recorded in the **assumption log** so it can be reviewed.
 

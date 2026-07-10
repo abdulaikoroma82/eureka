@@ -11,5 +11,5 @@ rule engines, templates and validators.  It does NOT depend on any external
 AI or subscription service.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __all__ = ["__version__"]

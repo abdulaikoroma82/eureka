@@ -55,7 +55,7 @@ class ArtifactBuilder:
     def data_dictionary_frame(self, questionnaire: Questionnaire) -> pd.DataFrame:
         rows: List[Dict[str, str]] = []
         for q in questionnaire.questions:
-            if q.base_type in ("begin group", "end group"):
+            if q.is_structural:
                 continue
             list_name = ""
             choices = ""
@@ -183,7 +183,7 @@ class ArtifactBuilder:
             "target": target,
             "category": questionnaire.category,
             "question_count": len([q for q in questionnaire.questions
-                                   if q.base_type not in ("begin group", "end group")]),
+                                   if not q.is_structural]),
             "valid": is_valid,
             "errors": error_count,
         }

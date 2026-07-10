@@ -7,17 +7,26 @@ Translate natural-language skip / relevance instructions into XLSForm
 
 Supported patterns (deterministic)
 -----------------------------------
-* "if yes"                     -> ``${prev}='1'``  (when prev is yes_no)
-* "ask ... if yes"             -> ``${prev}='1'``
-* "if no"                      -> ``${prev}='0'``
-* "if child is under 5 years"  -> ``${age}<60`` (months) / ``<5`` (years)
-* "if X = value"               -> ``${x}='value'``
+* "if yes" / "ask ... if yes"        -> ``${prev}='1'``  (prev is yes_no)
+* "if no"                            -> ``${prev}='0'``
+* "if child is under 5 years"        -> ``${age}<60`` (months) / ``<5`` (years)
+* "if X = value" / "if X is value"   -> ``${x}='value'``
+                                        (``selected(${x},'value')`` when x is
+                                        a select_multiple)
+* comparisons: "if age is at least 18", "if income over 500",
+  "if weight <= 20"                  -> ``${age}>=18`` etc.
+* compound: "if yes and age over 18",
+  "if under 5 years or oedema is yes" -> parts joined with ``and`` / ``or``
+
+"Skip to question N" patterns cannot be inverted safely (XLSForm puts the
+condition on the questions being *shown*, not a jump instruction), so they
+are surfaced as an explicit review note rather than guessed.
 
 Inputs
 ------
 * The current :class:`~xlsform_architect.models.Question`.
 * The *previous* question (used to resolve bare "if yes" references).
-* An optional lookup of variable names by keyword, for cross references.
+* The list of known questions, for cross references.
 
 Outputs
 -------
@@ -27,10 +36,10 @@ preserved verbatim as an assumption so nothing is silently dropped.
 Example
 -------
 >>> from xlsform_architect.models import Question
->>> prev = Question(name="enrolled_otp", xlsform_type="select_one yes_no")
+>>> prev = Question(name="enrolled", xlsform_type="select_one yes_no")
 >>> q = Question(raw_label="Admission date", logic="ask if yes")
 >>> LogicEngine().resolve(q, previous=prev)
-"${enrolled_otp}='1'"
+"${enrolled}='1'"
 """
 
 from __future__ import annotations
@@ -43,6 +52,16 @@ from .knowledge_base import KnowledgeBase
 
 _NUM = r"(\d+(?:\.\d+)?)"
 
+# Word / symbol comparison operators -> XLSForm operators.
+_OP_PATTERNS: List[tuple] = [
+    (r">=|=>|at least|no less than|minimum of", ">="),
+    (r"<=|=<|at most|no more than|maximum of", "<="),
+    (r">|over|more than|above|older than|greater than|exceeds", ">"),
+    (r"<|under|less than|below|younger than|fewer than", "<"),
+]
+
+_SKIP_TO = re.compile(r"\bskip\s+to\b", re.IGNORECASE)
+
 
 class LogicEngine:
     """Compile natural-language logic to XLSForm expressions."""
@@ -52,8 +71,6 @@ class LogicEngine:
         tokens = self.kb.logic_tokens()
         self.affirmative = [t.lower() for t in tokens.get("affirmative", [])]
         self.negative = [t.lower() for t in tokens.get("negative", [])]
-        self.under = [t.lower() for t in tokens.get("under", [])]
-        self.over = [t.lower() for t in tokens.get("over", [])]
 
     # ------------------------------------------------------------------
     def resolve(self, question: Question, previous: Optional[Question] = None,
@@ -69,93 +86,175 @@ class LogicEngine:
         if not logic:
             return ""
 
+        if _SKIP_TO.search(logic):
+            question.add_assumption(
+                f"Skip pattern detected ('{logic}'). XLSForm expresses skips "
+                "as 'relevant' conditions on the questions being shown, not "
+                "as jumps - please add the condition to the skipped-to "
+                "questions and review.")
+            return ""
+
         expr = self._compile(logic, previous, known or [])
         if expr:
             question.relevant = expr
             question.add_assumption(f"Relevant compiled from logic: '{logic}'.")
         else:
             question.add_assumption(
-                f"Logic '{logic}' could not be auto-compiled; please review the relevant column."
-            )
+                f"Logic '{logic}' could not be auto-compiled; please review "
+                f"the relevant column.")
         return question.relevant
 
     # ------------------------------------------------------------------
     def _compile(self, logic: str, previous: Optional[Question],
                  known: List[Question]) -> str:
-        low = logic.lower()
+        """Compile *logic*, handling compound and/or conditions."""
+        # Split into atoms on standalone and/or (case-insensitive), keeping
+        # the connectives so they can be re-joined in order.
+        parts = re.split(r"\s+\b(and|or)\b\s+", logic, flags=re.IGNORECASE)
+        if len(parts) > 1:
+            exprs: List[str] = []
+            for i in range(0, len(parts), 2):
+                atom = self._compile_atom(parts[i], previous, known)
+                if not atom:
+                    return ""      # one uncompilable atom -> honest failure
+                exprs.append(atom)
+            joined = exprs[0]
+            for i in range(1, len(parts), 2):
+                connective = parts[i].lower()
+                joined += f" {connective} {exprs[(i + 1) // 2]}"
+            return joined
+        return self._compile_atom(logic, previous, known)
 
-        # --- yes / no against the previous question ---------------------
-        if previous is not None:
-            if self._contains_any(low, self.affirmative):
-                return f"${{{previous.name}}}={self._truthy_value(previous)}"
-            if self._contains_any(low, self.negative):
-                return f"${{{previous.name}}}={self._falsy_value(previous)}"
+    # ------------------------------------------------------------------
+    def _compile_atom(self, atom: str, previous: Optional[Question],
+                      known: List[Question]) -> str:
+        atom = atom.strip().strip(".,;")
+        low = atom.lower()
 
-        # --- age comparisons -------------------------------------------
-        age_expr = self._compile_age(low, known)
-        if age_expr:
-            return age_expr
+        # --- bare yes / no ------------------------------------------------
+        # Binds to the previous question when it is a yes/no; otherwise to
+        # the nearest preceding yes/no question (so "if yes and age over 18"
+        # attaches 'yes' to the yes/no even when an age question intervenes).
+        if self._is_bare(low, self.affirmative) or self._is_bare(low, self.negative):
+            target = self._nearest_yes_no(previous, known)
+            if target is not None:
+                value = (self._truthy_value(target)
+                         if self._is_bare(low, self.affirmative)
+                         else self._falsy_value(target))
+                return f"${{{target.name}}}={value}"
 
-        # --- explicit "X = value" / "X is value" -----------------------
-        eq = self._compile_equality(logic, known)
+        # --- numeric comparison ("age is at least 18", "under 5 years") --
+        cmp_expr = self._compile_comparison(low, known)
+        if cmp_expr:
+            return cmp_expr
+
+        # --- "X = value" / "X is value" ----------------------------------
+        eq = self._compile_equality(atom, known)
         if eq:
             return eq
 
         return ""
 
     # ------------------------------------------------------------------
-    def _compile_age(self, low: str, known: List[Question]) -> str:
-        age_var = self._find_var(known, ["age", "months", "years"]) or "age"
-        # "under 5 years" -> months if the field is in months.
-        m = re.search(rf"(?:{'|'.join(map(re.escape, self.under))})\s+{_NUM}\s*(year|month)?", low)
-        if m and any(w in low for w in self.under):
-            value = float(m.group(1))
-            unit = m.group(2) or ("year" if "year" in low else "")
-            months = value * 12 if unit == "year" else value
-            if "month" in age_var:
-                return f"${{{age_var}}}<{int(months)}"
-            return f"${{{age_var}}}<{self._fmt(value)}"
-        m = re.search(rf"(?:{'|'.join(map(re.escape, self.over))})\s+{_NUM}\s*(year|month)?", low)
-        if m and any(w in low for w in self.over):
-            value = float(m.group(1))
-            unit = m.group(2) or ("year" if "year" in low else "")
-            months = value * 12 if unit == "year" else value
-            if "month" in age_var:
-                return f"${{{age_var}}}>{int(months)}"
-            return f"${{{age_var}}}>{self._fmt(value)}"
+    def _compile_comparison(self, low: str, known: List[Question]) -> str:
+        for pattern, op in _OP_PATTERNS:
+            m = re.search(rf"(?:if\s+)?(.*?)\s*(?:is\s+)?(?:{pattern})\s+{_NUM}"
+                          rf"\s*(years?|months?)?\s*$", low)
+            if not m:
+                continue
+            subject = m.group(1).strip()
+            value = float(m.group(2))
+            unit = (m.group(3) or "").rstrip("s")
+
+            q = self._find_question(known, subject.split() or ["age"])
+            if q is None and ("year" in low or "month" in low or "age" in low):
+                q = self._find_question(known, ["age", "months", "years"])
+            if q is None:
+                return ""
+            var = q.name
+            # Convert years to months when the target field is in months.
+            if unit == "year" and "month" in var:
+                value *= 12
+            return f"${{{var}}}{op}{self._fmt(value)}"
         return ""
 
-    def _compile_equality(self, logic: str, known: List[Question]) -> str:
-        m = re.search(r"if\s+(.+?)\s*(?:=|==|\bis\b|\bequals\b)\s*(.+)", logic, re.IGNORECASE)
+    def _compile_equality(self, atom: str, known: List[Question]) -> str:
+        m = re.search(r"(?:if\s+)?(.+?)\s*(?:=|==|\bis\b|\bequals\b)\s*(.+)",
+                      atom, re.IGNORECASE)
         if not m:
             return ""
         subject = m.group(1).strip()
         value = m.group(2).strip().strip(".,;").strip("'\"")
-        var = self._find_var(known, subject.lower().split())
-        if not var:
+        q = self._find_question(known, subject.lower().split())
+        if q is None:
             return ""
+        var = q.name
         if re.fullmatch(_NUM, value):
             return f"${{{var}}}={value}"
-        return f"${{{var}}}='{value.lower()}'"
+        value_slug = value.lower().replace(" ", "_")
+        # Yes/No answers are stored as 1/0 in the shared yes_no list.
+        if "yes_no" in (q.xlsform_type or ""):
+            if value.lower() in ("yes", "true"):
+                return f"${{{var}}}='1'"
+            if value.lower() in ("no", "false"):
+                return f"${{{var}}}='0'"
+        if q.base_type == "select_multiple":
+            return f"selected(${{{var}}}, '{value_slug}')"
+        return f"${{{var}}}='{value_slug}'"
 
     # ------------------------------------------------------------------
+    @staticmethod
+    def _nearest_yes_no(previous: Optional[Question],
+                        known: List[Question]) -> Optional[Question]:
+        """The question a bare yes/no condition refers to.
+
+        Prefers the immediately preceding question when it is a yes/no;
+        otherwise the last yes/no *before* the previous question in document
+        order; finally falls back to the previous question itself.
+        """
+        def is_yes_no(q: Optional[Question]) -> bool:
+            return q is not None and "yes_no" in (q.xlsform_type or "")
+
+        if is_yes_no(previous):
+            return previous
+        if previous is not None and known:
+            try:
+                cut = known.index(previous) + 1
+            except ValueError:
+                cut = len(known)
+            for q in reversed(known[:cut]):
+                if is_yes_no(q):
+                    return q
+        return previous
+
     def _truthy_value(self, question: Question) -> str:
-        # yes_no list uses '1'/'0'; fall back to 'yes'.
         return "'1'" if "yes_no" in (question.xlsform_type or "") else "'yes'"
 
     def _falsy_value(self, question: Question) -> str:
         return "'0'" if "yes_no" in (question.xlsform_type or "") else "'no'"
 
-    def _find_var(self, known: List[Question], keywords: List[str]) -> str:
+    def _find_question(self, known: List[Question],
+                       keywords: List[str]) -> Optional[Question]:
+        """Best-match question whose name/label mentions the keywords."""
+        keywords = [k for k in keywords
+                    if k and k not in ("if", "the", "a", "an", "is", "are")]
+        if not keywords:
+            return None
+        best, best_score = None, 0
         for q in known:
+            if q.is_structural or not q.name:
+                continue
             hay = f"{q.name} {q.raw_label}".lower()
-            if any(kw and kw in hay for kw in keywords):
-                return q.name
-        return ""
+            score = sum(1 for kw in keywords if kw in hay)
+            if score > best_score:
+                best, best_score = q, score
+        return best
 
     @staticmethod
-    def _contains_any(text: str, tokens: List[str]) -> bool:
-        return any(re.search(rf"\b{re.escape(t)}\b", text) for t in tokens if t)
+    def _is_bare(text: str, tokens: List[str]) -> bool:
+        """True when *text* is essentially just an (if-)yes/no token."""
+        stripped = re.sub(r"^\s*(if|ask if|only if|when)\s+", "", text).strip()
+        return stripped in tokens or text.strip() in tokens
 
     @staticmethod
     def _fmt(value: float) -> str:

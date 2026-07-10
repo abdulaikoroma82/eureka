@@ -45,12 +45,25 @@ class ChoicesBuilder:
             if not cl:
                 continue
             for choice in cl.choices:
-                rows.append({
+                row = {
                     "list_name": cl.list_name,
                     "name": choice.name,
                     "label": choice.label,
-                })
+                }
+                row.update(choice.extra)
+                rows.append(row)
         return rows
+
+    # ------------------------------------------------------------------
+    def extra_columns(self, questionnaire: Questionnaire) -> List[str]:
+        """Union of passthrough choice column headers, in first-seen order."""
+        seen: List[str] = []
+        for cl in questionnaire.choice_lists.values():
+            for choice in cl.choices:
+                for key in choice.extra:
+                    if key not in seen and key not in CHOICES_COLUMNS:
+                        seen.append(key)
+        return seen
 
     # ------------------------------------------------------------------
     @staticmethod

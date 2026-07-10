@@ -62,6 +62,12 @@ _TYPE_HINT = re.compile(r"\[(select_one|select_multiple|integer|decimal|text|dat
 _IMPERATIVE = re.compile(r"^\s*(record|take|enter|measure|note|indicate|scan|capture|"
                          r"write|specify|provide|give|read|collect|mark|photograph)\b",
                          re.IGNORECASE)
+# Headings that introduce a roster / repeat block.
+_REPEAT_HEADING = re.compile(r"\b(for\s+each|repeat\s+for|per\s+each)\b",
+                             re.IGNORECASE)
+# Internal forced-question sentinel emitted by upstream parsers (e.g. the
+# DOCX grid flattener) to start a new question unambiguously.
+_FORCED_QUESTION = re.compile(r"^\s*Q::\s*")
 
 
 class QuestionnaireParser:
@@ -96,6 +102,7 @@ class QuestionnaireParser:
     def parse_lines(self, lines: List[str]) -> Questionnaire:
         qn = Questionnaire()
         current_section = ""
+        current_section_type = "group"
         current: Optional[Question] = None
 
         for raw in lines:
@@ -103,9 +110,12 @@ class QuestionnaireParser:
             if not line:
                 continue
 
-            # 1. Section heading.
+            # 1. Section heading.  Headings phrased "FOR EACH ..." /
+            #    "REPEAT FOR ..." start a repeat group (roster).
             if self._is_section(line):
                 current_section = self._clean_section(line)
+                current_section_type = ("repeat" if _REPEAT_HEADING.search(line)
+                                        else "group")
                 current = None
                 continue
 
@@ -140,7 +150,7 @@ class QuestionnaireParser:
 
             # 6. A new question.
             if self._is_question(line):
-                current = self._new_question(line, current_section)
+                current = self._new_question(line, current_section, current_section_type)
                 qn.questions.append(current)
                 continue
 
@@ -154,15 +164,17 @@ class QuestionnaireParser:
             else:
                 # Otherwise treat as a standalone prompt / statement question
                 # so nothing in the source document is silently dropped.
-                current = self._new_question(line, current_section)
+                current = self._new_question(line, current_section, current_section_type)
                 qn.questions.append(current)
 
         return qn
 
     # ------------------------------------------------------------------
-    def _new_question(self, line: str, section: str) -> Question:
+    def _new_question(self, line: str, section: str,
+                      section_type: str = "group") -> Question:
+        line = _FORCED_QUESTION.sub("", line)
         label = _QUESTION_NUM.sub("", line).strip()
-        q = Question(raw_label=label, section=section)
+        q = Question(raw_label=label, section=section, section_type=section_type)
         m = _TYPE_HINT.search(label)
         if m:
             q.xlsform_type = m.group(0).strip("[]").strip()
@@ -173,6 +185,9 @@ class QuestionnaireParser:
     def _is_section(self, line: str) -> bool:
         if _SECTION_KW.match(line):
             return True
+        # Roster headings: "For each household member:", "REPEAT FOR EACH CHILD"
+        if _REPEAT_HEADING.match(line.strip()) and not line.endswith("?"):
+            return True
         letters = [c for c in line if c.isalpha()]
         if len(letters) >= 3 and all(c.isupper() for c in letters) and not line.endswith("?"):
             return True
@@ -181,11 +196,17 @@ class QuestionnaireParser:
     def _clean_section(self, line: str) -> str:
         cleaned = re.sub(r"^\s*(section|module|part|chapter)\b[\s:.\-]*", "", line,
                          flags=re.IGNORECASE).strip()
+        # Strip roster phrasing: "For each household member:" -> "Household Member"
+        cleaned = re.sub(r"^\s*(for\s+each|repeat\s+for(?:\s+each)?|per\s+each)\b[\s:,-]*",
+                         "", cleaned, flags=re.IGNORECASE).strip().rstrip(":")
         # Strip a leading enumerator: "A:", "1.", "II)", etc.
         cleaned = re.sub(r"^[0-9A-Za-z]{1,3}[\.\):]\s*", "", cleaned).strip()
-        return (cleaned or line).title() if cleaned.isupper() or cleaned == "" else cleaned
+        return (cleaned or line).title() if cleaned.isupper() or cleaned == "" \
+            else (cleaned.title() if cleaned.islower() else cleaned)
 
     def _is_question(self, line: str) -> bool:
+        if _FORCED_QUESTION.match(line):
+            return True
         if line.endswith("?"):
             return True
         if _QUESTION_NUM.match(line):

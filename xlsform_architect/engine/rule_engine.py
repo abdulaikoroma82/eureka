@@ -70,17 +70,32 @@ class RuleEngine:
         # Seed the standard shared choice lists (yes_no).
         self._seed_standard_lists(questionnaire)
 
-        # Pass 1: names + types + choice lists.
+        # Pass 1: names + types + choice lists.  Structural rows (explicit
+        # begin/end group/repeat markers) pass through untouched.
         for q in questionnaire.questions:
+            if q.is_structural:
+                if q.name:
+                    self.namer.register(q.name)
+                else:
+                    q.name = self.namer.generate(q.label or q.raw_label or "grp")
+                continue
             self._name(q)
             self._resolve_list_name(q, questionnaire)
             self.classifier.classify(q, list_name=q.list_name or None)
             self._materialise_choices(q, questionnaire)
             self._default_label(q)
 
+        # Pass 1b: share identical choice lists (e.g. repeated Likert scales).
+        self._deduplicate_choice_lists(questionnaire)
+
+        # Pass 1c: add "please specify" follow-ups after Other options.
+        self._inject_other_specify(questionnaire)
+
         # Pass 2: logic (needs neighbouring names) + constraints.
         for idx, q in enumerate(questionnaire.questions):
-            previous = questionnaire.questions[idx - 1] if idx > 0 else None
+            if q.is_structural:
+                continue
+            previous = self._previous_real(questionnaire.questions, idx)
             self.logic.resolve(q, previous=previous, known=questionnaire.questions)
             self.constraints.apply(q)
 
@@ -91,6 +106,15 @@ class RuleEngine:
                 questionnaire.questions.append(calc)
 
         return questionnaire, self._collect_notes(questionnaire)
+
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _previous_real(questions: List[Question], idx: int) -> Optional[Question]:
+        """The nearest preceding non-structural question, if any."""
+        for j in range(idx - 1, -1, -1):
+            if not questions[j].is_structural:
+                return questions[j]
+        return None
 
     # ------------------------------------------------------------------
     def _name(self, q: Question) -> None:
@@ -185,6 +209,79 @@ class RuleEngine:
         neg = {t.lower() for t in cfg.get("negative_tokens", [])}
         norm = {c.strip().lower() for c in choices}
         return bool(norm & pos) and bool(norm & neg)
+
+    # ------------------------------------------------------------------
+    def _deduplicate_choice_lists(self, qn: Questionnaire) -> None:
+        """Merge auto-generated lists with identical options into one.
+
+        Repeated scales (e.g. the same Likert options on many questions)
+        otherwise produce one list per question, bloating the choices sheet.
+        Only auto-generated lists (``*_opts``) are merged; explicitly named
+        lists are respected as deliberate.
+        """
+        by_content: dict = {}
+        remap: dict = {}
+        for list_name, cl in qn.choice_lists.items():
+            key = tuple((c.name, c.label) for c in cl.choices)
+            if not key:
+                continue
+            if key in by_content and list_name.endswith("_opts"):
+                remap[list_name] = by_content[key]
+            else:
+                by_content.setdefault(key, list_name)
+
+        if not remap:
+            return
+        for q in qn.questions:
+            if not q.references_choices:
+                continue
+            parts = q.xlsform_type.split()
+            current = parts[1] if len(parts) >= 2 else q.list_name
+            if current in remap:
+                shared = remap[current]
+                q.xlsform_type = f"{parts[0]} {shared}"
+                q.list_name = shared
+                q.add_assumption(
+                    f"Options identical to list '{shared}'; shared it instead "
+                    f"of duplicating.")
+        for old in remap:
+            qn.choice_lists.pop(old, None)
+
+    # ------------------------------------------------------------------
+    def _inject_other_specify(self, qn: Questionnaire) -> None:
+        """Add a text follow-up after selects that offer an Other option."""
+        insertions: List[tuple] = []
+        for idx, q in enumerate(qn.questions):
+            if not q.is_select:
+                continue
+            cl = qn.choice_lists.get(q.list_name or "")
+            if cl is None and q.xlsform_type.split()[1:]:
+                cl = qn.choice_lists.get(q.xlsform_type.split()[1])
+            if cl is None:
+                continue
+            other = next((c for c in cl.choices
+                          if c.name == "other" or
+                          c.label.strip().lower().startswith("other")), None)
+            if other is None:
+                continue
+            # Skip if a follow-up already exists.
+            follow_name = f"{q.name}_other"
+            if any(x.name == follow_name for x in qn.questions):
+                continue
+            follow = Question(
+                raw_label=f"Please specify other ({q.label or q.raw_label})",
+                name=self.namer.generate("", preferred=follow_name),
+                xlsform_type="text",
+                label="Please specify other",
+                relevant=f"selected(${{{q.name}}}, '{other.name}')",
+                section=q.section, section_type=q.section_type)
+            follow.add_assumption(
+                f"'Other' option detected on '{q.name}'; added a specify "
+                f"follow-up shown only when Other is selected.")
+            insertions.append((idx + 1, follow))
+
+        for offset, (idx, follow) in enumerate(insertions):
+            qn.questions.insert(idx + offset, follow)
 
     @staticmethod
     def _collect_notes(qn: Questionnaire) -> List[str]:

@@ -44,7 +44,7 @@ class LogicValidator:
     def validate(self, questionnaire: Questionnaire) -> List[Finding]:
         findings: List[Finding] = []
         questions = [q for q in questionnaire.questions
-                    if q.base_type not in ("begin group", "end group")]
+                    if not q.is_structural]
 
         names = [q.name for q in questions if q.name]
         name_set: Set[str] = set(names)
