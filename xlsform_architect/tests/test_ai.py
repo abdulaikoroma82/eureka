@@ -15,12 +15,14 @@ import pytest
 from xlsform_architect.ai.client import AIError, DeepSeekClient
 from xlsform_architect.ai.config import AI_FEATURES, AIConfig
 from xlsform_architect.ai.constraint_reviewer import AICrossFieldConstraintReviewer
+from xlsform_architect.ai.finding_explainer import AIFindingExplainer
 from xlsform_architect.ai.pipeline import AIPipeline
 from xlsform_architect.ai.quality_reviewer import AIQualityReviewer
 from xlsform_architect.ai.skip_logic import AISkipLogicResolver
 from xlsform_architect.ai.translator import AITranslator
 from xlsform_architect.ai.type_classifier import AITypeClassifier
 from xlsform_architect.models import Choice, ChoiceList, FormSettings, Question, Questionnaire
+from xlsform_architect.validation.report_generator import Finding, ValidationReport
 
 
 def _client(reply: dict) -> DeepSeekClient:
@@ -103,6 +105,44 @@ def test_translator_noop_with_no_languages():
     qn = Questionnaire(questions=[Question(name="a", label="A", xlsform_type="text")])
     notes = AITranslator(_client({})).translate(qn, [])
     assert notes == []
+
+
+def test_translator_co_share_never_overwrites_user_supplied_translation():
+    """A user-supplied translation is authoritative; AI must fill gaps only,
+    never overwrite it - the co-share contract."""
+    qn = Questionnaire(questions=[
+        Question(name="a", label="Age", xlsform_type="integer",
+                 extra={"label::French (fr)": "Âge (déjà traduit)"}),
+        Question(name="b", label="Name", xlsform_type="text"),
+    ])
+    client = _client({"1": "Nom"})  # only ONE item should be sent (the gap)
+    notes = AITranslator(client).translate(qn, [("French", "fr")])
+    assert qn.questions[0].extra["label::French (fr)"] == "Âge (déjà traduit)"
+    assert qn.questions[1].extra["label::French (fr)"] == "Nom"
+    assert any("1/1" in n and "already supplied" in n for n in notes)
+
+
+def test_translator_skips_api_call_when_nothing_missing():
+    qn = Questionnaire(questions=[
+        Question(name="a", label="Age", xlsform_type="integer",
+                 extra={"label::French (fr)": "Âge"})])
+    calls = []
+    client = DeepSeekClient(api_key="k")
+    client.complete_json = lambda *a, **kw: calls.append(1) or {}
+    notes = AITranslator(client).translate(qn, [("French", "fr")])
+    assert calls == []          # no API call made at all
+    assert any("nothing to do" in n for n in notes)
+
+
+def test_translator_per_language_independence():
+    """Missing in French but already supplied in Spanish - independent."""
+    qn = Questionnaire(questions=[
+        Question(name="a", label="Age", xlsform_type="integer",
+                 extra={"label::Spanish (es)": "Edad"})])
+    client = _client({"1": "Âge"})
+    AITranslator(client).translate(qn, [("French", "fr"), ("Spanish", "es")])
+    assert qn.questions[0].extra["label::French (fr)"] == "Âge"
+    assert qn.questions[0].extra["label::Spanish (es)"] == "Edad"  # untouched
 
 
 # --- AISkipLogicResolver -----------------------------------------------------
@@ -367,6 +407,80 @@ def test_cross_constraint_degrades_gracefully_on_error():
     assert qn.questions[1].constraint == ""
 
 
+# --- AIFindingExplainer -----------------------------------------------------------
+def test_explainer_adds_explanation_without_changing_the_finding():
+    report = ValidationReport(findings=[
+        Finding("error", "logic", "Select question 's' uses undefined list 'nolist'.", "s")])
+    reply = {"explanations": [{"index": 0,
+                               "explanation": "This question needs answer options defined."}]}
+    notes = AIFindingExplainer(_client(reply)).explain(report)
+    f = report.findings[0]
+    assert f.explanation == "This question needs answer options defined."
+    # The fact itself is untouched - rules remain sole authority.
+    assert f.level == "error" and f.category == "logic"
+    assert f.message == "Select question 's' uses undefined list 'nolist'."
+    assert any("1/1" in n for n in notes)
+
+
+def test_explainer_skips_info_level_and_ai_review_category():
+    report = ValidationReport(findings=[
+        Finding("info", "deployment", "Deep validation passed."),
+        Finding("warning", "ai_review", "Already has its own explanation."),
+        Finding("warning", "structure", "Form title is empty."),
+    ])
+    captured = {}
+    client = DeepSeekClient(api_key="k")
+
+    def fake(system, user, **kw):
+        captured["user"] = user
+        return {"explanations": [{"index": 2, "explanation": "Give the form a name."}]}
+    client.complete_json = fake
+
+    AIFindingExplainer(client).explain(report)
+    assert report.findings[0].explanation == ""
+    assert report.findings[1].explanation == ""
+    assert report.findings[2].explanation == "Give the form a name."
+    # Only the one eligible finding was sent to the model.
+    assert '"index": 2' in captured["user"] or '"index":2' in captured["user"].replace(" ", "")
+
+
+def test_explainer_noop_when_nothing_eligible():
+    report = ValidationReport(findings=[Finding("info", "deployment", "All good.")])
+    notes = AIFindingExplainer(_client({"explanations": []})).explain(report)
+    assert notes == []
+
+
+def test_explainer_does_not_reexplain_already_explained_finding():
+    report = ValidationReport(findings=[
+        Finding("error", "logic", "Broken.", explanation="Already explained.")])
+    notes = AIFindingExplainer(_client({"explanations": []})).explain(report)
+    assert notes == []
+    assert report.findings[0].explanation == "Already explained."
+
+
+def test_explainer_degrades_gracefully_on_error():
+    report = ValidationReport(findings=[Finding("error", "logic", "Broken.")])
+    notes = AIFindingExplainer(_failing_client()).explain(report)
+    assert any("Skipped" in n for n in notes)
+    assert report.findings[0].explanation == ""
+
+
+# --- AIQualityReviewer naming/label clarity (advisory-only) ------------------------
+def test_reviewer_can_flag_naming_clarity_as_advisory_only():
+    qn = Questionnaire(questions=[
+        Question(name="q7x", label="q7x", xlsform_type="text")])
+    reply = {"findings": [{"question_name": "q7x",
+                           "issue": "Variable name and label give no indication of content",
+                           "explanation": "Consider a more descriptive name."}]}
+    findings = AIQualityReviewer(_client(reply)).review(qn)
+    assert len(findings) == 1
+    assert findings[0].category == "ai_review"
+    assert findings[0].level == "warning"       # advisory, never blocks
+    # Crucially: the reviewer only RETURNS a finding, it never mutates name/label.
+    assert qn.questions[0].name == "q7x"
+    assert qn.questions[0].label == "q7x"
+
+
 # --- AIPipeline orchestration --------------------------------------------------
 def test_pipeline_noop_when_disabled():
     qn = Questionnaire(questions=[Question(name="a", xlsform_type="integer")])
@@ -407,6 +521,22 @@ def test_pipeline_runs_cross_constraints_feature():
     assert qn.questions[1].constraint == ". >= ${start_date}"
 
 
+def test_pipeline_explain_findings_runs_as_separate_post_validation_stage():
+    report = ValidationReport(findings=[Finding("error", "structure", "No questions.")])
+    reply = {"explanations": [{"index": 0, "explanation": "Add at least one question."}]}
+    config = AIConfig(enabled=True, features=["explain_findings"])
+    AIPipeline(client=_client(reply)).explain_findings(report, config)
+    assert report.findings[0].explanation == "Add at least one question."
+
+
+def test_pipeline_explain_findings_noop_when_not_requested():
+    report = ValidationReport(findings=[Finding("error", "structure", "No questions.")])
+    config = AIConfig(enabled=True, features=["translate"])  # explain not requested
+    notes = AIPipeline(client=_client({"explanations": []})).explain_findings(report, config)
+    assert notes == []
+    assert report.findings[0].explanation == ""
+
+
 def test_pipeline_unavailable_client_is_treated_as_no_key():
     qn = Questionnaire(questions=[Question(name="a", xlsform_type="integer")])
     config = AIConfig(enabled=True, features=["review"])
@@ -445,3 +575,23 @@ def test_workflow_with_ai_enabled_applies_translation():
     import openpyxl
     ws = openpyxl.load_workbook(io.BytesIO(result.xlsform_bytes))["survey"]
     assert "label::French (fr)" in [c.value for c in ws[1]]
+
+
+def test_workflow_explains_findings_after_validation():
+    """End-to-end: an actual validation error produced by the deterministic
+    validator gets an AI explanation attached, proving the post-validation
+    stage is really wired into Workflow._run (not just unit-testable in
+    isolation)."""
+    from xlsform_architect.app.workflow import Workflow
+
+    reply = {"explanations": [{"index": 0,
+                               "explanation": "Give your select question a list of answers."}]}
+    config = AIConfig(enabled=True, features=["explain_findings"])
+    result = Workflow(ai_client=_client(reply)).run_from_dict(
+        {"settings": {"form_title": "T", "form_id": "t"},
+         "survey": [{"question": "Pick one", "type": "select_one nolist"}]},
+        ai_config=config, write_outputs=False)
+
+    assert not result.is_valid  # the deterministic error is real and still blocks
+    explained = [f for f in result.report.findings if f.explanation]
+    assert explained and "answers" in explained[0].explanation

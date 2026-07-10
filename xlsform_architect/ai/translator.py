@@ -8,13 +8,22 @@ identified in the capability review that is *inherently* unsolvable
 deterministically - the tool can pass translations through if you supply
 them, but it cannot invent them without a language model.
 
+This is a genuine co-share, not a pure AI takeover: **any translation you
+already supplied (via JSON, the design grid, or an imported XLSForm's
+``label::<Language>`` columns) is authoritative and is never touched.** AI
+only fills in the labels you did *not* already translate, per language. A
+question you fully translated yourself costs nothing to skip; a form where
+you covered half the labels only pays for the other half.
+
 Design
 ------
-One API call per target language, batching every label and choice label in
-the form together, to keep cost and latency low regardless of form size.
-The model is asked for a JSON object mapping a numeric key back to the
-translation, so the response can be matched to source strings positionally
-without relying on the model preserving exact source text.
+One API call per target language, batching only the *missing* labels and
+choice labels for that language, so cost and latency track what's actually
+needed rather than the form's total size. If nothing is missing for a
+language, no call is made at all. The model is asked for a JSON object
+mapping a numeric key back to the translation, so the response can be
+matched to source strings positionally without relying on the model
+preserving exact source text.
 
 Inputs
 ------
@@ -24,9 +33,11 @@ A compiled :class:`~xlsform_architect.models.Questionnaire` and a list of
 Outputs
 -------
 The questionnaire, mutated in place: ``label::<Language> (<code>)`` entries
-are added to each question's and choice's ``extra`` dict (the exporter
-already emits any such passthrough column dynamically).  Returns the list of
-notes describing what was translated or why a language was skipped.
+are added to each question's and choice's ``extra`` dict ONLY where that key
+was not already present (the exporter already emits any such passthrough
+column dynamically). Returns the list of notes describing what was
+translated, what was left as-is because you supplied it, or why a language
+was skipped.
 
 Example
 -------
@@ -52,7 +63,10 @@ _SYSTEM_PROMPT = (
 
 
 class AITranslator:
-    """Generate translation columns for a questionnaire via DeepSeek."""
+    """Generate translation columns for a questionnaire via DeepSeek.
+
+    Never overwrites a translation already present - only fills gaps.
+    """
 
     def __init__(self, client: DeepSeekClient) -> None:
         self.client = client
@@ -60,17 +74,28 @@ class AITranslator:
     # ------------------------------------------------------------------
     def translate(self, questionnaire: Questionnaire,
                   languages: List[Tuple[str, str]]) -> List[str]:
-        """Add ``label::<Language> (<code>)`` translations for each language."""
+        """Fill in missing ``label::<Language> (<code>)`` translations."""
         notes: List[str] = []
         if not languages:
             return notes
 
-        items, targets = self._collect_items(questionnaire)
-        if not items:
+        all_targets = self._collect_targets(questionnaire)
+        if not all_targets:
             return notes
 
         for name, code in languages:
             column = f"label::{name} ({code})"
+            missing = [(text, target) for text, target in all_targets
+                      if column not in target.extra]
+            already = len(all_targets) - len(missing)
+
+            if not missing:
+                notes.append(f"[AI translation] {name} ({code}): all "
+                            f"{len(all_targets)} label(s) already supplied; "
+                            f"nothing to do.")
+                continue
+
+            items = [text for text, _ in missing]
             try:
                 translations = self._translate_batch(items, name)
             except AIError as exc:
@@ -78,37 +103,37 @@ class AITranslator:
                 continue
 
             applied = 0
-            for idx, target in enumerate(targets):
+            for idx, (_, target) in enumerate(missing):
                 value = translations.get(str(idx + 1))
                 if value:
                     target.extra[column] = value
                     applied += 1
-            notes.append(f"[AI translation] Added {applied}/{len(items)} "
-                        f"labels in {name} ({code}).")
+
+            kept_note = (f" ({already} already supplied and left as-is)"
+                        if already else "")
+            notes.append(f"[AI translation] Added {applied}/{len(missing)} "
+                        f"missing label(s) in {name} ({code}){kept_note}.")
         return notes
 
     # ------------------------------------------------------------------
-    def _collect_items(self, qn: Questionnaire):
-        """Flatten every translatable label into a positional list.
+    def _collect_targets(self, qn: Questionnaire):
+        """Flatten every translatable label into a (text, target) list.
 
-        Returns (texts, targets) where targets[i] is the Question or Choice
-        object whose ``extra`` dict should receive texts[i]'s translation.
+        ``target`` is the Question or Choice object whose ``extra`` dict
+        should receive the translation.
         """
-        texts: List[str] = []
-        targets = []
+        out = []
         for q in qn.questions:
             if q.is_structural:
                 continue
             label = (q.label or q.raw_label or "").strip()
             if label:
-                texts.append(label)
-                targets.append(q)
+                out.append((label, q))
         for cl in qn.choice_lists.values():
             for choice in cl.choices:
                 if choice.label:
-                    texts.append(choice.label)
-                    targets.append(choice)
-        return texts, targets
+                    out.append((choice.label, choice))
+        return out
 
     def _translate_batch(self, items: List[str], language_name: str) -> dict:
         numbered = "\n".join(f"{i + 1}. {text}" for i, text in enumerate(items))

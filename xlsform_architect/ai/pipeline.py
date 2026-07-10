@@ -2,8 +2,10 @@
 
 Purpose
 -------
-Run the enabled AI-assisted features, in a fixed order, over an already
-rule-engine-compiled questionnaire:
+Run the enabled AI-assisted features over a compiled questionnaire, in two
+stages that mirror the two moments AI can usefully contribute:
+
+**Stage 1 - :meth:`run`, before export/validation:**
 
     1. Type-classification fallback (may change a question's type, so it
        runs first - everything downstream should see the corrected type)
@@ -11,13 +13,21 @@ rule-engine-compiled questionnaire:
     3. Cross-field constraint suggestions (adds ``constraint`` conditions
        spanning two questions - a job the deterministic constraint engine
        structurally cannot do, since it only ever looks at one question)
-    4. Translation (labels are final by now, so translations are accurate)
-    5. Quality review (reads the fully-settled form last)
+    4. Translation (labels are final by now, so translations are accurate;
+       never overwrites a translation you already supplied)
+    5. Quality review (reads the fully-settled form last; advisory findings
+       only, never mutates the questionnaire)
+
+**Stage 2 - :meth:`explain_findings`, after validation:** adds a plain-
+English ``explanation`` to the deterministic validator's own findings. This
+necessarily runs after :class:`~xlsform_architect.validation.validator.
+Validator` has produced its authoritative result, since it explains findings
+that don't exist until validation runs; it never changes what was found.
 
 This is the single integration point :class:`~xlsform_architect.app.
-workflow.Workflow` calls; it is a no-op with zero network activity whenever
-:class:`~xlsform_architect.ai.config.AIConfig` is disabled or no client is
-available, so the deterministic pipeline's behaviour is completely
+workflow.Workflow` calls; both stages are a no-op with zero network activity
+whenever :class:`~xlsform_architect.ai.config.AIConfig` is disabled or no
+client is available, so the deterministic pipeline's behaviour is completely
 unaffected by this module's existence.
 
 Inputs
@@ -46,10 +56,11 @@ from __future__ import annotations
 from typing import List, Optional, Tuple
 
 from ..models import Questionnaire
-from ..validation.report_generator import Finding
+from ..validation.report_generator import Finding, ValidationReport
 from .client import DeepSeekClient
 from .config import AIConfig
 from .constraint_reviewer import AICrossFieldConstraintReviewer
+from .finding_explainer import AIFindingExplainer
 from .quality_reviewer import AIQualityReviewer
 from .skip_logic import AISkipLogicResolver
 from .translator import AITranslator
@@ -95,3 +106,18 @@ class AIPipeline:
             findings.extend(AIQualityReviewer(self.client).review(questionnaire))
 
         return questionnaire, notes, findings
+
+    # ------------------------------------------------------------------
+    def explain_findings(self, report: ValidationReport,
+                         config: AIConfig) -> List[str]:
+        """Add plain-English explanations to already-computed findings.
+
+        Must be called after validation has produced *report*. A no-op
+        under the same conditions as :meth:`run` (disabled, or no usable
+        client).
+        """
+        if not config.wants("explain_findings"):
+            return []
+        if self.client is None or not self.client.available:
+            return []          # already reported once by run(); avoid noise
+        return AIFindingExplainer(self.client).explain(report)

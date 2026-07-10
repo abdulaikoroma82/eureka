@@ -168,12 +168,19 @@ computer — nothing is sent anywhere. There is also an **optional** AI
 add-on that can help with a few things a plain checklist-style tool can't
 do:
 
-- **Translate** your form's questions into other languages.
+- **Translate** your form's questions into other languages. If you've
+  already written some translations yourself, those are always kept —
+  AI only fills in the ones you didn't get to.
 - **Untangle tricky skip instructions** — e.g. "if no, skip to question 20" —
   into the proper format automatically.
+- **Suggest rules that compare two questions** — e.g. "the end date must be
+  after the start date" — something a simple checklist can't figure out on
+  its own since it only ever looks at one question at a time.
 - **Suggest a better answer type** for a question that was hard to classify.
 - **Give the finished form a second read-through** for anything that looks
-  off, in plain English.
+  off, including confusing question names, in plain English.
+- **Explain any issues found** in a sentence or two, so you don't need to
+  guess what a technical validation message means.
 
 This is completely optional and **off unless you turn it on**. To use it:
 

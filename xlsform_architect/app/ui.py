@@ -73,8 +73,9 @@ _AI_FEATURE_LABELS = {
     "classify": "Improve type detection (reclassify ambiguous questions)",
     "skip_logic": "Resolve skip-to-question jumps and unparseable conditions",
     "cross_constraints": "Suggest cross-field constraints (e.g. end date after start date)",
-    "translate": "Generate translations",
-    "review": "AI quality review (a second pair of eyes)",
+    "translate": "Generate translations (only fills gaps you haven't already supplied)",
+    "review": "AI quality review (a second pair of eyes, incl. naming clarity)",
+    "explain_findings": "Explain validation findings in plain English",
 }
 
 
@@ -353,6 +354,8 @@ def _render_result(result, target: str) -> None:
             icon = "🤖" if f.category == "ai_review" else _LEVEL_ICONS.get(f.level, "🔵")
             loc = f" — `{f.location}`" if f.location else ""
             st.markdown(f"{icon} **{f.category}**{loc}: {f.message}")
+            if f.explanation:
+                st.caption(f"💬 {f.explanation}")
 
     with tabs[3]:
         _render_platform_guide(target)
