@@ -17,7 +17,7 @@ This produces `dist\xlsform-architect.exe`. Copy it anywhere — it needs **no
 Python** on the target machine:
 
 ```bat
-xlsform-architect.exe survey.docx --category imam --output C:\forms
+xlsform-architect.exe survey.docx --target kobo --output C:\forms
 ```
 
 The one-click `packaging\build_windows.bat` does all of the above.
@@ -49,5 +49,9 @@ python run_ui.py
 ### Notes
 * The knowledge YAML files, XLSForm template and examples are bundled as data
   files in the CLI spec (`datas`), so program rules travel with the executable.
-* No Claude / OpenAI / cloud service is contacted at any point — the tool runs
-  entirely offline.
+* The core pipeline runs entirely offline — no cloud service is contacted
+  unless you explicitly enable the optional AI-assist layer (`--ai`, requires
+  a `DEEPSEEK_API_KEY`). It is off by default; see the "AI-assisted features"
+  section of the main README.
+* The AI client uses only the Python standard library, so no extra
+  PyInstaller hidden-import is needed for it.

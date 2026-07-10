@@ -423,7 +423,9 @@ pytest
 
 The suite (`xlsform_architect/tests/`) covers the naming, classification,
 logic, constraint and calculation engines, the builders/exporter, the
-validators, every parser and the end-to-end workflow.
+validators, every parser, the end-to-end workflow, and the optional AI layer
+(fully mocked at the network boundary — no API key or internet connection is
+needed to run the suite).
 
 ---
 
@@ -445,7 +447,11 @@ target). The Streamlit UI ships as a small virtual-environment launcher.
 
 The system was built in the planned iterations: (1) JSON → XLSForm, (2) validation
 engine, (3) Excel/CSV parser, (4) Word/PDF parser, (5) rule engine, (6)
-standard XLSForm knowledge pack, (7) Streamlit interface, (8) Windows packaging.
+standard XLSForm knowledge pack, (7) Streamlit interface, (8) Windows packaging,
+(9) multi-platform standards (SurveyCTO/ODK/Kobo/Ona/CommCare) and a pyxform
+deep-validation pass, (10) capability-gap closure (matrix questions, repeat
+groups, compound logic, "Other, specify", cascading selects, translations),
+(11) the optional AI-assist layer and its rules/AI co-sharing design.
 
 ## License
 

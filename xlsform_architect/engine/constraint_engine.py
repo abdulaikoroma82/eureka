@@ -8,10 +8,14 @@ base.
 
 Examples
 --------
-* age (months)  -> ``. >= 0 and . <= 60``
+* age (months)  -> ``. >= 0 and . <= 1200``
+* age           -> ``. >= 0 and . <= 120``
 * percentage    -> ``. >= 0 and . <= 100``
-* weight        -> ``. > 0 and . <= 200``
 * date          -> ``. <= today()``
+
+These are the domain-neutral templates bundled in ``xlsform_rules.yaml``;
+domain-specific ranges (e.g. a particular weight range) can be added there
+without touching this code - see "The rule pack" in the README.
 
 Inputs
 ------
@@ -26,9 +30,9 @@ The question with ``constraint`` / ``constraint_message`` populated in place
 Example
 -------
 >>> from xlsform_architect.models import Question
->>> q = Question(raw_label="Child weight in kg", xlsform_type="decimal")
+>>> q = Question(raw_label="Respondent age", xlsform_type="integer")
 >>> ConstraintEngine().apply(q).constraint
-'. > 0 and . <= 200'
+'. >= 0 and . <= 120'
 """
 
 from __future__ import annotations
