@@ -15,6 +15,9 @@ particular survey domain.
 > comes from deterministic **parsers, rule engines, templates and validators**.
 > It runs entirely offline on a laptop or an internal server.
 
+> 🟢 **New to this / non-technical?** Start with the plain-language
+> [Getting Started guide](docs/GETTING_STARTED.md) — no coding needed.
+
 ---
 
 ## Why it exists
