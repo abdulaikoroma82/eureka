@@ -1,0 +1,21 @@
+{
+  "settings": {
+    "form_title": "IMAM OTP Admission & Follow-up",
+    "form_id": "imam_otp",
+    "version": "2026070101"
+  },
+  "category": "imam",
+  "survey": [
+    {"question": "Health facility name", "section": "Identification", "required": true},
+    {"question": "Is the child currently enrolled in OTP?", "choices": ["Yes", "No"], "required": true, "section": "Identification"},
+    {"question": "Admission date", "logic": "ask if yes", "section": "Identification"},
+    {"question": "Child date of birth", "section": "Anthropometry"},
+    {"question": "Child sex", "type": "select_one", "choices": ["Male", "Female"], "section": "Anthropometry"},
+    {"question": "Child weight in kg", "section": "Anthropometry"},
+    {"question": "Child height in cm", "section": "Anthropometry"},
+    {"question": "MUAC (cm)", "section": "Anthropometry"},
+    {"question": "Bilateral oedema", "type": "select_one", "choices": ["Absent", "Grade +", "Grade ++", "Grade +++"], "section": "Anthropometry"},
+    {"question": "Record GPS location", "section": "Anthropometry"},
+    {"question": "Take a photo of the MUAC tape reading", "section": "Anthropometry"}
+  ]
+}

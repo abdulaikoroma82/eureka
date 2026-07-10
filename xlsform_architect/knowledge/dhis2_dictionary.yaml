@@ -1,0 +1,41 @@
+# =============================================================================
+# DHIS2 data element dictionary
+# =============================================================================
+# Maps internal variable names to DHIS2 data element UIDs / names so exported
+# data can be aggregated into a national HMIS.  Used by the data-dictionary
+# generator to annotate variables with their DHIS2 target.
+# =============================================================================
+
+data_elements:
+  child_sex:
+    dhis2_name: "Child sex"
+    uid: "SEX_DE_0001"
+    value_type: "TEXT"
+  muac:
+    dhis2_name: "MUAC (cm)"
+    uid: "MUAC_DE_0002"
+    value_type: "NUMBER"
+  oedema:
+    dhis2_name: "Bilateral oedema"
+    uid: "OED_DE_0003"
+    value_type: "TEXT"
+  admission_type:
+    dhis2_name: "IMAM admission type"
+    uid: "ADM_DE_0004"
+    value_type: "TEXT"
+  discharge_outcome:
+    dhis2_name: "IMAM discharge outcome"
+    uid: "DIS_DE_0005"
+    value_type: "TEXT"
+  mms_received:
+    dhis2_name: "ANC MMS received"
+    uid: "MMS_DE_0006"
+    value_type: "BOOLEAN"
+  vas_received:
+    dhis2_name: "Vitamin A supplementation coverage"
+    uid: "VAS_DE_0007"
+    value_type: "BOOLEAN"
+  dewormed:
+    dhis2_name: "Deworming coverage"
+    uid: "DEW_DE_0008"
+    value_type: "BOOLEAN"

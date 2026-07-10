@@ -1,0 +1,108 @@
+"""XLSForm exporter (part of Module 4).
+
+Purpose
+-------
+Write the three XLSForm sheets (survey / choices / settings) to a real
+``.xlsx`` workbook using openpyxl.  Also exposes an in-memory bytes export
+for the Streamlit download button.
+
+Inputs
+------
+A compiled :class:`~xlsform_architect.models.Questionnaire`.
+
+Outputs
+-------
+An ``.xlsx`` file on disk (``export``) or a ``bytes`` object
+(``export_bytes``).
+
+Example
+-------
+>>> from xlsform_architect.models import Questionnaire, Question, FormSettings
+>>> qn = Questionnaire(settings=FormSettings(form_title="Demo"),
+...                    questions=[Question(name="age", xlsform_type="integer", label="Age")])
+>>> path = XLSFormExporter().export(qn, "/tmp/demo.xlsx")  # doctest: +SKIP
+"""
+
+from __future__ import annotations
+
+import io
+from pathlib import Path
+from typing import Dict, List, Union
+
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill
+from openpyxl.utils import get_column_letter
+
+from ..app.config import CHOICES_COLUMNS, SETTINGS_COLUMNS, SURVEY_COLUMNS
+from ..models import Questionnaire
+from .choices_builder import ChoicesBuilder
+from .settings_builder import SettingsBuilder
+from .survey_builder import SurveyBuilder
+
+_HEADER_FILL = PatternFill(start_color="FF1F4E78", end_color="FF1F4E78", fill_type="solid")
+_HEADER_FONT = Font(bold=True, color="FFFFFFFF")
+
+
+class XLSFormExporter:
+    """Serialise a questionnaire to an XLSForm workbook."""
+
+    def __init__(self) -> None:
+        self.survey_builder = SurveyBuilder()
+        self.choices_builder = ChoicesBuilder()
+        self.settings_builder = SettingsBuilder()
+
+    # ------------------------------------------------------------------
+    def build_workbook(self, questionnaire: Questionnaire) -> Workbook:
+        wb = Workbook()
+
+        survey_rows = self.survey_builder.build(questionnaire)
+        choices_rows = self.choices_builder.build(questionnaire)
+        settings_rows = self.settings_builder.build(questionnaire)
+
+        ws_survey = wb.active
+        ws_survey.title = "survey"
+        self._write_sheet(ws_survey, SURVEY_COLUMNS, survey_rows)
+
+        ws_choices = wb.create_sheet("choices")
+        self._write_sheet(ws_choices, CHOICES_COLUMNS, choices_rows)
+
+        ws_settings = wb.create_sheet("settings")
+        self._write_sheet(ws_settings, SETTINGS_COLUMNS, settings_rows)
+
+        return wb
+
+    def export(self, questionnaire: Questionnaire, path: Union[str, Path]) -> Path:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        wb = self.build_workbook(questionnaire)
+        wb.save(str(path))
+        return path
+
+    def export_bytes(self, questionnaire: Questionnaire) -> bytes:
+        wb = self.build_workbook(questionnaire)
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        return buffer.getvalue()
+
+    # ------------------------------------------------------------------
+    def _write_sheet(self, ws, columns: List[str], rows: List[Dict[str, str]]) -> None:
+        # Header row.
+        for col_idx, name in enumerate(columns, start=1):
+            cell = ws.cell(row=1, column=col_idx, value=name)
+            cell.fill = _HEADER_FILL
+            cell.font = _HEADER_FONT
+        # Data rows.
+        for r_idx, row in enumerate(rows, start=2):
+            for c_idx, col in enumerate(columns, start=1):
+                value = row.get(col, "")
+                ws.cell(row=r_idx, column=c_idx, value=value if value != "" else None)
+        self._autosize(ws, columns, rows)
+        ws.freeze_panes = "A2"
+
+    @staticmethod
+    def _autosize(ws, columns: List[str], rows: List[Dict[str, str]]) -> None:
+        for c_idx, col in enumerate(columns, start=1):
+            width = len(col)
+            for row in rows:
+                width = max(width, len(str(row.get(col, ""))))
+            ws.column_dimensions[get_column_letter(c_idx)].width = min(max(width + 2, 10), 60)

@@ -1,0 +1,8 @@
+question,type,choices,required,section,logic
+Household head name,,,yes,Roster,
+Household size (number of members),,,yes,Roster,
+Does the household have improved water source?,,Yes|No,,WASH,
+Main source of drinking water,,Piped|Borehole|Well|Surface water,,WASH,if yes
+Household has a functional latrine?,,Yes|No,,WASH,
+Number of children under 5 years,,,,Nutrition,
+Record GPS location of the household,,,,Nutrition,

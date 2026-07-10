@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xlsform-architect"
+version = "1.0.0"
+description = "Deterministic, rule-based questionnaire-to-XLSForm compiler (Kobo / SurveyCTO / ODK)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "XLSForm Architect" }]
+keywords = ["xlsform", "odk", "kobotoolbox", "surveycto", "questionnaire", "m&e", "nutrition"]
+
+dependencies = [
+    "openpyxl>=3.1",
+    "pandas>=2.0",
+    "python-docx>=1.1",
+    "PyMuPDF>=1.24",
+    "lxml>=5.0",
+    "PyYAML>=6.0",
+    "streamlit>=1.33",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pyinstaller>=6.0"]
+
+[project.scripts]
+xlsform-architect = "xlsform_architect.app.main:main"
+
+[tool.setuptools.packages.find]
+include = ["xlsform_architect*"]
+
+[tool.setuptools.package-data]
+xlsform_architect = ["knowledge/*.yaml", "templates/*.xlsx", "examples/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["xlsform_architect/tests"]
+addopts = "-q"
