@@ -1,0 +1,121 @@
+# =============================================================================
+# XLSForm Architect - Core classification & compilation rules
+# =============================================================================
+# This file drives the deterministic engine.  Editing it changes behaviour
+# WITHOUT touching Python code (Module 8 requirement).
+#
+# Sections:
+#   type_keywords     -> keyword -> xlsform type detection (Module 2)
+#   yes_no            -> canonical yes/no list + detection tokens
+#   constraints       -> semantic constraint templates (Module 6)
+#   logic_tokens      -> natural-language logic vocabulary (Module 5)
+#   naming            -> variable naming rules (Module 3)
+# =============================================================================
+
+# --- Module 2: Question classification --------------------------------------
+# Ordered, first-match-wins list.  Each rule matches when ANY keyword appears
+# in the (lower-cased) question label AND the guard conditions hold.
+type_keywords:
+  - type: geopoint
+    keywords: ["gps", "geopoint", "coordinates", "gps location", "record location", "lat/long", "latitude and longitude"]
+  - type: image
+    keywords: ["photo", "photograph", "picture", "image", "take a photo", "upload a photo"]
+  - type: audio
+    keywords: ["audio recording", "voice recording", "record audio"]
+  - type: video
+    keywords: ["video recording", "record video"]
+  - type: date
+    keywords: ["date of", "date", "admission date", "birth date", "date of birth", "dob", "when did", "day of"]
+  - type: time
+    keywords: ["time of", "what time", "time (hh"]
+  - type: datetime
+    keywords: ["date and time", "datetime", "timestamp"]
+  - type: decimal
+    keywords: ["weight", "height", "muac", "mid-upper arm", "temperature", "amount", "dosage",
+               "haemoglobin", "hemoglobin", "bmi", "kg", "cm", "litre", "liters"]
+  - type: integer
+    keywords: ["age", "how many", "number of", "count", "how old", "quantity", "months",
+               "years", "household size", "number", "no. of", "parity", "gravida"]
+  - type: barcode
+    keywords: ["barcode", "qr code", "scan code"]
+  - type: text
+    keywords: ["name of", "specify", "describe", "comment", "remark", "other (specify)", "explain", "notes"]
+
+# --- Yes/No detection (Module 2) --------------------------------------------
+yes_no:
+  list_name: yes_no
+  # If the extracted choices match this set (order/case-insensitive) the
+  # question is a boolean and uses the shared yes_no list.
+  positive_tokens: ["yes", "y", "true", "1"]
+  negative_tokens: ["no", "n", "false", "0"]
+  choices:
+    - name: "1"
+      label: "Yes"
+    - name: "0"
+      label: "No"
+
+# --- Module 6: Semantic constraint templates --------------------------------
+# Applied by matching the question label keywords.  ``.`` is the XLSForm
+# self-reference for the current answer.
+constraints:
+  - match: ["age in months", "age (months)", "age months"]
+    applies_to: ["integer", "decimal"]
+    constraint: ". >= 0 and . <= 60"
+    message: "Age in months must be between 0 and 60."
+  - match: ["age in years", "age (years)", "age years", "how old", "age"]
+    applies_to: ["integer", "decimal"]
+    constraint: ". >= 0 and . <= 120"
+    message: "Age must be between 0 and 120."
+  - match: ["muac", "mid-upper arm"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 5 and . <= 30"
+    message: "MUAC (cm) must be between 5 and 30."
+  - match: ["weight"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". > 0 and . <= 200"
+    message: "Weight (kg) must be greater than 0 and at most 200."
+  - match: ["height", "length"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". > 0 and . <= 250"
+    message: "Height (cm) must be greater than 0 and at most 250."
+  - match: ["temperature"]
+    applies_to: ["decimal"]
+    constraint: ". >= 30 and . <= 45"
+    message: "Temperature (Celsius) must be between 30 and 45."
+  - match: ["percent", "percentage", "%", "coverage", "proportion"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 0 and . <= 100"
+    message: "Percentage must be between 0 and 100."
+  - match: ["haemoglobin", "hemoglobin", "hb "]
+    applies_to: ["decimal"]
+    constraint: ". >= 2 and . <= 25"
+    message: "Haemoglobin (g/dL) must be between 2 and 25."
+
+# Generic per-type constraints applied when no semantic match is found.
+type_constraints:
+  date:
+    constraint: ". <= today()"
+    message: "Date cannot be in the future."
+
+# --- Module 5: Natural-language logic vocabulary ----------------------------
+logic_tokens:
+  affirmative: ["yes", "if yes", "y"]
+  negative: ["no", "if no", "n"]
+  under: ["under", "less than", "below", "younger than", "<"]
+  over: ["over", "more than", "above", "older than", ">"]
+  equals: ["is", "equals", "equal to", "=="]
+
+# --- Module 3: Variable naming ----------------------------------------------
+naming:
+  max_length: 40           # ODK/XLSForm safe identifier length
+  # Words removed to keep names concise and meaningful.
+  stopwords: ["the", "a", "an", "of", "is", "are", "to", "in", "on", "for",
+              "please", "what", "which", "did", "do", "does", "was", "were",
+              "how", "your", "you", "this", "that", "record", "enter",
+              "currently", "have", "has", "been", "with", "and", "or", "at"]
+  # Domain abbreviations applied AFTER tokenisation to shorten names.
+  abbreviations:
+    number: num
+    identifier: id
+    percentage: pct
+    received: recv

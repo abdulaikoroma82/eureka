@@ -1,0 +1,50 @@
+# =============================================================================
+# Nutrition & M&E knowledge pack
+# =============================================================================
+# General nutrition indicators shared across programme areas.  Program-
+# specific packs (imam_rules, mms_rules) extend these.
+#
+# Anthropometry thresholds follow WHO / national CMAM guidance.  Adjust the
+# numbers here to match your country protocol WITHOUT editing code.
+# =============================================================================
+
+muac:
+  unit: cm
+  # Colour-band classification for children 6-59 months.
+  thresholds:
+    sam: { max: 11.5, label: "Severe Acute Malnutrition (SAM)", code: sam }
+    mam: { min: 11.5, max: 12.5, label: "Moderate Acute Malnutrition (MAM)", code: mam }
+    normal: { min: 12.5, label: "Normal", code: normal }
+  # Generated calculate expression (Module 7). ${muac} is the source field.
+  classification_expression: >
+    if(${muac} < 11.5, 'sam',
+      if(${muac} < 12.5, 'mam', 'normal'))
+
+bmi:
+  # weight (kg) / height(m)^2 ; height captured in cm -> divide by 100.
+  expression: "${weight} div ((${height} div 100) * (${height} div 100))"
+  classification:
+    underweight: { max: 18.5 }
+    normal: { min: 18.5, max: 25 }
+    overweight: { min: 25, max: 30 }
+    obese: { min: 30 }
+
+age:
+  # Age in months from date of birth for the calculation engine.
+  months_from_dob_expression: "int((today() - ${dob}) div 30.4375)"
+  years_from_dob_expression: "int((today() - ${dob}) div 365.25)"
+
+# Common reusable choice lists for nutrition surveys.
+choice_lists:
+  sex:
+    - { name: "1", label: "Male" }
+    - { name: "2", label: "Female" }
+  oedema:
+    - { name: "0", label: "No oedema (absent)" }
+    - { name: "1", label: "Grade + (mild)" }
+    - { name: "2", label: "Grade ++ (moderate)" }
+    - { name: "3", label: "Grade +++ (severe)" }
+  yes_no_dk:
+    - { name: "1", label: "Yes" }
+    - { name: "0", label: "No" }
+    - { name: "99", label: "Don't know" }

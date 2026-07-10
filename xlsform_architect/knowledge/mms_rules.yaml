@@ -1,0 +1,45 @@
+# =============================================================================
+# MMS (Multiple Micronutrient Supplementation) & VAS+D knowledge pack
+# =============================================================================
+# Antenatal MMS distribution indicators and Vitamin A Supplementation +
+# Deworming (VAS+D) campaign indicators.
+# =============================================================================
+
+mms:
+  label: "Multiple Micronutrient Supplementation"
+  # Standard antenatal supply: one tablet per day.
+  tablets_per_day: 1
+  recommended_min_tablets: 180
+  indicators:
+    - name: mms_received
+      label: "Received MMS this visit"
+      dhis2: "ANC_MMS_RECEIVED"
+    - name: mms_counselled
+      label: "Counselled on MMS adherence"
+  choice_lists:
+    mms_source:
+      - { name: "facility", label: "Health facility" }
+      - { name: "chw", label: "Community health worker" }
+      - { name: "campaign", label: "Campaign / outreach" }
+
+vas_d:
+  label: "Vitamin A Supplementation + Deworming"
+  vitamin_a:
+    dose_6_11_months_iu: 100000
+    dose_12_59_months_iu: 200000
+  deworming:
+    drug: albendazole
+    dose_12_23_months_mg: 200
+    dose_24_59_months_mg: 400
+  indicators:
+    - name: vas_received
+      label: "Received Vitamin A"
+      dhis2: "VAS_COVERAGE"
+    - name: dewormed
+      label: "Received deworming tablet"
+      dhis2: "DEWORMING_COVERAGE"
+  choice_lists:
+    vas_dose:
+      - { name: "100000", label: "100,000 IU (6-11 months)" }
+      - { name: "200000", label: "200,000 IU (12-59 months)" }
+      - { name: "none", label: "Not given" }

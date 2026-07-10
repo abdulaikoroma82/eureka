@@ -1,0 +1,9 @@
+# XLSForm Architect - runtime dependencies
+# Python 3.11+ (3.12+ recommended)
+openpyxl>=3.1
+pandas>=2.0
+python-docx>=1.1
+PyMuPDF>=1.24
+lxml>=5.0
+PyYAML>=6.0
+streamlit>=1.33
