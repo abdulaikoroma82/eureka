@@ -41,6 +41,7 @@ from typing import Optional
 
 from ..engine.knowledge_base import KnowledgeBase
 from ..models import Questionnaire
+from .expression_validator import ExpressionValidator
 from .logic_validator import LogicValidator
 from .platform_validator import PlatformValidator
 from .pyxform_validator import PyxformValidator
@@ -59,6 +60,7 @@ class Validator:
         self.kb = knowledge or KnowledgeBase.load()
         self.structure = StructureValidator()
         self.logic = LogicValidator()
+        self.expression = ExpressionValidator()
         self.xlsform = XLSFormValidator()
         self.platform = PlatformValidator(self.kb)
         self.pyxform = PyxformValidator()
@@ -70,6 +72,7 @@ class Validator:
         report = ValidationReport(target=target or "")
         report.findings.extend(self.structure.validate(questionnaire))
         report.findings.extend(self.logic.validate(questionnaire))
+        report.findings.extend(self.expression.validate(questionnaire))
         report.findings.extend(self.xlsform.validate(questionnaire))
 
         # Standards of the chosen platform.

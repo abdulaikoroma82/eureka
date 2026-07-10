@@ -107,6 +107,9 @@ class Question:
     #: "group" (default) or "repeat" - how the section is emitted.
     section_type: str = "group"
     instruction: str = ""
+    #: The question's number in the source document ("3" from "3. ..." or
+    #: "Q3:"), captured so logic like "if question 3 is yes" can resolve it.
+    source_number: str = ""
 
     # --- resolved XLSForm fields ---------------------------------------
     name: str = ""

@@ -47,8 +47,18 @@ from typing import List, Optional
 from ..models import Question, Questionnaire
 
 # --- line classification patterns ------------------------------------------
-_QUESTION_NUM = re.compile(r"^\s*(?:Q\s*)?\d+[\.\)]\s+", re.IGNORECASE)
-_OPTION_BULLET = re.compile(r"^\s*(?:[-*•·o]|\[\s*\]|\(\s*\)|[a-zA-Z][\.\)]|\d+[\.\)])\s+(.*)$")
+# Question numbering: "3.", "3)", "3:", "Q3.", "Q.3:", "Q3 " - the number is
+# captured so logic like "if question 3 is yes" can reference it later.
+_QUESTION_NUM = re.compile(r"^\s*(?:Q\s*\.?\s*)?(\d{1,3})\s*[\.\):]\s+", re.IGNORECASE)
+_OPTION_BULLET = re.compile(
+    r"^\s*(?:[-*•·o‣▪]|[☐❏□▢◻○◯]|\[\s*\]|\(\s*\)|[a-zA-Z][\.\)]|\d+[\.\)])\s+(.*)$")
+# Coded answer options: "1 = Yes", "97 = Refused". Preserved as
+# "code=Label" strings; the rule engine materialises the code as the choice
+# name and the right-hand side as the label.
+_CODED_OPTION = re.compile(r"^\s*([A-Za-z0-9_]{1,10})\s*=\s*(.{1,80})$")
+# Required markers survey designers commonly use: a trailing asterisk or an
+# explicit "(required)" tag on the question text.
+_REQUIRED_MARK = re.compile(r"\s*(\*+|\(\s*required\s*\))\s*$", re.IGNORECASE)
 _SECTION_KW = re.compile(r"^\s*(section|module|part|chapter)\b", re.IGNORECASE)
 _INSTRUCTION_KW = re.compile(r"^\s*(instruction|note|enumerator|interviewer)\s*[:\-]", re.IGNORECASE)
 _SKIP_KW = re.compile(r"^\s*\(?\s*if\b", re.IGNORECASE)
@@ -131,21 +141,38 @@ class QuestionnaireParser:
                     current.logic = (current.logic + " " + line).strip() if current.logic else line
                 continue
 
-            # 4. Bulleted / lettered option line.
+            # 4. Bulleted / lettered option line.  A *numbered* marker is
+            #    ambiguous ("2. No" vs "2. Respondent age") - disambiguate.
             opt = self._as_option(line)
             if opt is not None and current is not None and self._looks_like_option(opt, current):
-                # A bulleted "Male / Female" is two options.
-                if re.search(r"\s/\s", opt):
-                    current.raw_choices.extend([p.strip() for p in opt.split("/") if p.strip()])
+                num = re.match(r"^\s*(\d+)[\.\)]\s+", line)
+                if num and self._numbered_line_is_question(num.group(1), opt, current):
+                    pass                       # fall through to question steps
                 else:
-                    current.raw_choices.append(opt)
-                continue
+                    if num:
+                        current._numbered_opts = getattr(
+                            current, "_numbered_opts", 0) + 1
+                    # A bulleted "Male / Female" is two options.
+                    if re.search(r"\s/\s", opt):
+                        current.raw_choices.extend(
+                            [p.strip() for p in opt.split("/") if p.strip()])
+                    else:
+                        current.raw_choices.append(opt)
+                    continue
 
             # 5. Single-line slash-separated options, e.g. "Yes / No" or
             #    "Low / Medium / High".
             if current is not None and self._is_inline_options(line):
                 current.raw_choices.extend(
                     [p.strip() for p in line.split("/") if p.strip()])
+                continue
+
+            # 5b. Coded answer options: "1 = Yes", "97 = Refused". Kept as
+            #     "code=Label" so the code becomes the stored choice name.
+            coded = _CODED_OPTION.match(line)
+            if coded is not None and current is not None:
+                current.raw_choices.append(
+                    f"{coded.group(1)}={coded.group(2).strip()}")
                 continue
 
             # 6. A new question.
@@ -173,8 +200,19 @@ class QuestionnaireParser:
     def _new_question(self, line: str, section: str,
                       section_type: str = "group") -> Question:
         line = _FORCED_QUESTION.sub("", line)
+        num_match = _QUESTION_NUM.match(line)
         label = _QUESTION_NUM.sub("", line).strip()
-        q = Question(raw_label=label, section=section, section_type=section_type)
+
+        # Required markers: a trailing asterisk or "(required)".
+        required = False
+        req = _REQUIRED_MARK.search(label)
+        if req:
+            required = True
+            label = _REQUIRED_MARK.sub("", label).strip()
+
+        q = Question(raw_label=label, section=section, section_type=section_type,
+                     required=required,
+                     source_number=num_match.group(1) if num_match else "")
         m = _TYPE_HINT.search(label)
         if m:
             q.xlsform_type = m.group(0).strip("[]").strip()
@@ -221,6 +259,28 @@ class QuestionnaireParser:
         e.g. "Record GPS location", "Take a photo", "Enter the total amount".
         """
         return bool(_IMPERATIVE.match(line))
+
+    def _numbered_line_is_question(self, number: str, text: str,
+                                   current: Question) -> bool:
+        """Decide whether "N. text" under an open question is a new numbered
+        question or a numbered answer option.
+
+        Question signals win outright: a question mark, a topic keyword, or
+        imperative phrasing. Otherwise a number that continues the option
+        sequence ("1. Yes" then "2. No") is an option, and a number that
+        continues the *question* sequence with a multi-word text is a
+        question. Single non-topic words ("No") always stay options.
+        """
+        if text.endswith("?") or self._looks_like_topic(text) \
+                or self._is_imperative(text):
+            return True
+        n = int(number)
+        if n == getattr(current, "_numbered_opts", 0) + 1:
+            return False
+        last = current.source_number
+        if last.isdigit() and n == int(last) + 1 and len(text.split()) >= 2:
+            return True
+        return False
 
     def _is_inline_options(self, line: str) -> bool:
         """True for a short line of 2-4 slash-separated answer options.

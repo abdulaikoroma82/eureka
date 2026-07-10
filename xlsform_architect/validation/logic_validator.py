@@ -93,4 +93,59 @@ class LogicValidator:
                                             list_name))
                 seen_c.add(ch.name)
 
+        # --- compared choice values actually exist ----------------------
+        findings.extend(self._check_choice_values(questionnaire, questions))
+
+        return findings
+
+    # ------------------------------------------------------------------
+    #: ${field}='value' comparisons and selected(${field}, 'value') calls.
+    _EQ_VALUE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}\s*(?:!=|=)\s*'([^']*)'")
+    _SELECTED_VALUE = re.compile(
+        r"selected\(\s*\$\{([A-Za-z_][A-Za-z0-9_]*)\}\s*,\s*'([^']*)'\s*\)")
+
+    def _check_choice_values(self, questionnaire: Questionnaire,
+                             questions: list) -> List[Finding]:
+        """Flag comparisons against values a select question can never hold.
+
+        Catches the silent skip-logic killer: ``${sex}='malee'`` (typo) or
+        ``${enrolled}='yes'`` when the list stores 1/0. The condition is
+        syntactically valid and deploys fine - it just never fires.
+        """
+        findings: List[Finding] = []
+
+        # Map each select/rank question to its choice-name set.
+        value_sets = {}
+        for q in questions:
+            if not q.references_choices:
+                continue
+            parts = q.xlsform_type.split()
+            list_name = parts[1] if len(parts) >= 2 else q.list_name
+            cl = questionnaire.choice_lists.get(list_name)
+            if cl and cl.choices:
+                value_sets[q.name] = {c.name for c in cl.choices}
+
+        seen: Set[tuple] = set()
+        for q in questions:
+            for expr in (q.relevant, q.constraint, q.calculation,
+                         getattr(q, "choice_filter", "")):
+                if not expr:
+                    continue
+                matches = (self._EQ_VALUE.findall(expr)
+                          + self._SELECTED_VALUE.findall(expr))
+                for field, value in matches:
+                    if field not in value_sets or not value:
+                        continue
+                    if value in value_sets[field]:
+                        continue
+                    key = (q.name, field, value)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    options = ", ".join(sorted(value_sets[field])[:8])
+                    findings.append(Finding(
+                        "warning", "logic",
+                        f"'{q.name}' compares ${{{field}}} to '{value}', but "
+                        f"that list's stored values are: {options}. The "
+                        f"condition can never be true as written.", q.name))
         return findings

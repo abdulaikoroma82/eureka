@@ -248,7 +248,14 @@ def _render_landing() -> None:
               &nbsp;&nbsp;`Male`  \\
               &nbsp;&nbsp;`Female`
             - **Write skip rules in plain English** — `If yes, record the date.`
-              Compound rules work too: `if yes and age over 18`.
+              Compound and rich rules work too: `if yes and age over 18`,
+              `unless married`, `if age between 18 and 65`, and numbered
+              references like `If question 4 is married`.
+            - **Number your questions** (`1.`, `Q2:`, `3)`) — numbering is
+              captured, so skip rules can reference questions by number.
+            - **Coded answer options are kept**: `1 = Single` stores code `1`
+              with label "Single".
+            - **Mark required questions** with a trailing `*` or `(required)`.
             - **Use CAPITALISED headings** (or lines starting with "Section")
               to group questions into sections.
             - **Rosters**: a heading like `FOR EACH HOUSEHOLD MEMBER` turns the

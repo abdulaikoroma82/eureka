@@ -165,9 +165,17 @@ class RuleEngine:
             return
         used: set = set()
         for opt in q.raw_choices:
-            name = self._unique_choice_name(self._choice_name(opt), used)
+            # "code=Label" options (from the parser's coded-option pattern)
+            # keep the author's code as the stored choice name.
+            coded = re.match(r"^([A-Za-z0-9_]{1,10})=(.+)$", str(opt))
+            if coded:
+                name = self._unique_choice_name(coded.group(1), used)
+                label = coded.group(2).strip()
+            else:
+                name = self._unique_choice_name(self._choice_name(opt), used)
+                label = str(opt).strip()
             used.add(name)
-            cl.choices.append(Choice(name=name, label=str(opt).strip()))
+            cl.choices.append(Choice(name=name, label=label))
 
     def _seed_standard_lists(self, qn: Questionnaire) -> None:
         # Always ensure the shared, standard yes_no list exists.
