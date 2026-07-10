@@ -108,9 +108,12 @@ class LogicEngine:
     def _compile(self, logic: str, previous: Optional[Question],
                  known: List[Question]) -> str:
         """Compile *logic*, handling compound and/or conditions."""
+        # Protect the "and" inside "between A and B" from the compound split.
+        protected = re.sub(rf"\b(between\s+{_NUM})\s+and\s+({_NUM})",
+                           r"\1 ~AND~ \3", logic, flags=re.IGNORECASE)
         # Split into atoms on standalone and/or (case-insensitive), keeping
         # the connectives so they can be re-joined in order.
-        parts = re.split(r"\s+\b(and|or)\b\s+", logic, flags=re.IGNORECASE)
+        parts = re.split(r"\s+\b(and|or)\b\s+", protected, flags=re.IGNORECASE)
         if len(parts) > 1:
             exprs: List[str] = []
             for i in range(0, len(parts), 2):
@@ -123,12 +126,39 @@ class LogicEngine:
                 connective = parts[i].lower()
                 joined += f" {connective} {exprs[(i + 1) // 2]}"
             return joined
-        return self._compile_atom(logic, previous, known)
+        return self._compile_atom(protected, previous, known)
 
     # ------------------------------------------------------------------
+    #: Leading connective words stripped from every atom before matching.
+    _ATOM_PREFIX = re.compile(
+        r"^\s*(?:ask\s+)?(?:only\s+if|if|when|where|provided(?:\s+that)?)\s+",
+        re.IGNORECASE)
+    _UNLESS = re.compile(r"^\s*(?:ask\s+)?unless\s+", re.IGNORECASE)
+    _NOT_PREFIX = re.compile(r"^\s*not\s+", re.IGNORECASE)
+    #: "question 3" / "Q3" references to a numbered source question.
+    _QREF = re.compile(r"^(?:question|q)\s*\.?\s*(\d{1,3})$", re.IGNORECASE)
+
     def _compile_atom(self, atom: str, previous: Optional[Question],
                       known: List[Question]) -> str:
         atom = atom.strip().strip(".,;")
+
+        # --- "unless X" -> not(X) ---------------------------------------
+        m = self._UNLESS.match(atom)
+        if m:
+            inner = self._compile_atom(atom[m.end():], previous, known)
+            return f"not({inner})" if inner else ""
+
+        # Strip a leading if/only if/when/where connective.
+        atom = self._ATOM_PREFIX.sub("", atom).strip()
+
+        # --- "not X" -> not(X) --------------------------------------------
+        m = self._NOT_PREFIX.match(atom)
+        if m:
+            remainder = atom[m.end():]
+            # "not yes"/"not no" reads naturally as the opposite bare answer.
+            inner = self._compile_atom(remainder, previous, known)
+            return f"not({inner})" if inner else ""
+
         low = atom.lower()
 
         # --- bare yes / no ------------------------------------------------
@@ -143,17 +173,111 @@ class LogicEngine:
                          else self._falsy_value(target))
                 return f"${{{target.name}}}={value}"
 
+        # --- "X between A and B" (the ~AND~ placeholder from _compile) ---
+        between = self._compile_between(low, known)
+        if between:
+            return between
+
         # --- numeric comparison ("age is at least 18", "under 5 years") --
         cmp_expr = self._compile_comparison(low, known)
         if cmp_expr:
             return cmp_expr
+
+        # --- "X is not value" -> != ---------------------------------------
+        neq = self._compile_inequality(atom, known)
+        if neq:
+            return neq
 
         # --- "X = value" / "X is value" ----------------------------------
         eq = self._compile_equality(atom, known)
         if eq:
             return eq
 
+        # --- bare choice value: "if married" -------------------------------
+        shorthand = self._compile_choice_shorthand(low, known)
+        if shorthand:
+            return shorthand
+
         return ""
+
+    # ------------------------------------------------------------------
+    def _compile_between(self, low: str, known: List[Question]) -> str:
+        # The ~AND~ placeholder was inserted pre-lowercasing; match either case.
+        m = re.search(rf"(.*?)\s*(?:is\s+)?between\s+{_NUM}\s+~and~\s+{_NUM}"
+                      rf"\s*(years?|months?)?\s*$", low, re.IGNORECASE)
+        if not m:
+            return ""
+        subject = m.group(1).strip()
+        lo, hi = float(m.group(2)), float(m.group(3))
+        q = self._resolve_subject(subject, known)
+        if q is None:
+            return ""
+        var = q.name
+        unit = (m.group(4) or "").rstrip("s")
+        if unit == "year" and "month" in var:
+            lo, hi = lo * 12, hi * 12
+        return (f"${{{var}}}>={self._fmt(lo)} and "
+                f"${{{var}}}<={self._fmt(hi)}")
+
+    def _compile_inequality(self, atom: str, known: List[Question]) -> str:
+        m = re.search(r"(.+?)\s+(?:is\s+not|!=|is\s+different\s+from|"
+                      r"does\s+not\s+equal)\s+(.+)", atom, re.IGNORECASE)
+        if not m:
+            return ""
+        eq = self._compile_equality(f"{m.group(1)} is {m.group(2)}", known)
+        if not eq:
+            return ""
+        # Flip the operator the equality compiler produced.
+        if eq.startswith("selected("):
+            return f"not({eq})"
+        return eq.replace("=", "!=", 1)
+
+    def _compile_choice_shorthand(self, low: str, known: List[Question]) -> str:
+        """Resolve a bare option mention: "if married" -> ${marital}='married'.
+
+        Only fires when exactly ONE select question offers the value, so an
+        ambiguous mention stays honestly uncompiled.
+        """
+        slug = low.strip().replace(" ", "_")
+        if not slug or not re.fullmatch(r"[a-z0-9_]{2,40}", slug):
+            return ""
+        holders = []
+        for q in known:
+            if not q.references_choices or not q.name:
+                continue
+            for choice in q.raw_choices:
+                cslug = str(choice).strip().lower().replace(" ", "_")
+                if cslug == slug or cslug == f"{slug}={slug}":
+                    holders.append((q, slug))
+                    break
+                # coded options ("m=Married") match on the label
+                if "=" in str(choice):
+                    code, _, label = str(choice).partition("=")
+                    if label.strip().lower().replace(" ", "_") == slug:
+                        holders.append((q, code.strip().lower()))
+                        break
+        if len(holders) != 1:
+            return ""
+        q, value = holders[0]
+        if q.base_type == "select_multiple":
+            return f"selected(${{{q.name}}}, '{value}')"
+        return f"${{{q.name}}}='{value}'"
+
+    def _resolve_subject(self, subject: str,
+                         known: List[Question]) -> Optional[Question]:
+        """Find the question a subject phrase refers to.
+
+        Handles "question 3"/"Q3" numbered references (via the source
+        number captured by the parser) before falling back to keyword match.
+        """
+        m = self._QREF.match(subject.strip())
+        if m:
+            number = m.group(1)
+            for q in known:
+                if q.source_number == number:
+                    return q
+            return None
+        return self._find_question(known, subject.lower().split() or ["age"])
 
     # ------------------------------------------------------------------
     def _compile_comparison(self, low: str, known: List[Question]) -> str:
@@ -166,7 +290,7 @@ class LogicEngine:
             value = float(m.group(2))
             unit = (m.group(3) or "").rstrip("s")
 
-            q = self._find_question(known, subject.split() or ["age"])
+            q = self._resolve_subject(subject, known)
             if q is None and ("year" in low or "month" in low or "age" in low):
                 q = self._find_question(known, ["age", "months", "years"])
             if q is None:
@@ -184,8 +308,15 @@ class LogicEngine:
         if not m:
             return ""
         subject = m.group(1).strip()
-        value = m.group(2).strip().strip(".,;").strip("'\"")
-        q = self._find_question(known, subject.lower().split())
+        value = m.group(2).strip()
+        # Trim instruction continuations: "yes, ask question 3" -> "yes",
+        # "married then continue" -> "married".
+        value = re.split(r",|\bthen\b|\bask\b|\bgo\s+to\b|\bcontinue\b",
+                         value, 1)[0].strip()
+        value = value.strip(".,;").strip("'\"")
+        if not value:
+            return ""
+        q = self._resolve_subject(subject, known)
         if q is None:
             return ""
         var = q.name
@@ -198,9 +329,25 @@ class LogicEngine:
                 return f"${{{var}}}='1'"
             if value.lower() in ("no", "false"):
                 return f"${{{var}}}='0'"
+        # Coded options ("2=Married") store the code, not the label - map
+        # the human wording back to the stored value.
+        stored = self._choice_value_for(q, value_slug)
         if q.base_type == "select_multiple":
-            return f"selected(${{{var}}}, '{value_slug}')"
-        return f"${{{var}}}='{value_slug}'"
+            return f"selected(${{{var}}}, '{stored}')"
+        return f"${{{var}}}='{stored}'"
+
+    @staticmethod
+    def _choice_value_for(q: Question, value_slug: str) -> str:
+        """The stored choice name a human-written value refers to."""
+        for choice in q.raw_choices:
+            text = str(choice)
+            if "=" in text:
+                code, _, label = text.partition("=")
+                if label.strip().lower().replace(" ", "_") == value_slug:
+                    return code.strip()
+            elif text.strip().lower().replace(" ", "_") == value_slug:
+                return value_slug
+        return value_slug
 
     # ------------------------------------------------------------------
     @staticmethod
@@ -252,8 +399,16 @@ class LogicEngine:
 
     @staticmethod
     def _is_bare(text: str, tokens: List[str]) -> bool:
-        """True when *text* is essentially just an (if-)yes/no token."""
+        """True when *text* is essentially just an (if-)yes/no token.
+
+        Also recognises common answer-phrasings: "the answer is yes",
+        "response is no", "they answer yes", "answered yes".
+        """
         stripped = re.sub(r"^\s*(if|ask if|only if|when)\s+", "", text).strip()
+        stripped = re.sub(r"^(?:the\s+)?(?:answer|response)\s+is\s+", "",
+                          stripped).strip()
+        stripped = re.sub(r"^they\s+(?:say|answer(?:ed)?)\s+", "", stripped).strip()
+        stripped = re.sub(r"^answered\s+", "", stripped).strip()
         return stripped in tokens or text.strip() in tokens
 
     @staticmethod

@@ -46,7 +46,8 @@ type_keywords:
                "liters", "currency", "percentage", "percent", "score"]
   - type: integer
     keywords: ["age", "how many", "number of", "count", "how old", "quantity",
-               "years", "months", "number", "no. of", "total", "size", "how much"]
+               "years", "months", "which year", "year", "number", "no. of",
+               "total", "size", "how much"]
   - type: barcode
     keywords: ["barcode", "qr code", "scan code"]
   - type: text
@@ -82,6 +83,36 @@ constraints:
     applies_to: ["decimal", "integer"]
     constraint: ". >= 0 and . <= 100"
     message: "Percentage must be between 0 and 100."
+  - match: ["hours per day"]
+    applies_to: ["integer", "decimal"]
+    constraint: ". >= 0 and . <= 24"
+    message: "Hours per day must be between 0 and 24."
+  - match: ["days per week"]
+    applies_to: ["integer", "decimal"]
+    constraint: ". >= 0 and . <= 7"
+    message: "Days per week must be between 0 and 7."
+  - match: ["which year", "year of", "year"]
+    applies_to: ["integer"]
+    constraint: ". >= 1900 and . <= 2100"
+    message: "Year must be between 1900 and 2100."
+  - match: ["which month", "month of", "month"]
+    applies_to: ["integer"]
+    constraint: ". >= 1 and . <= 12"
+    message: "Month must be between 1 and 12."
+  - match: ["phone", "telephone", "mobile number"]
+    applies_to: ["text"]
+    constraint: "regex(., '^\\+?[0-9() \\-]{7,17}$')"
+    message: "Enter a valid phone number (digits, +, -, () and spaces only)."
+  - match: ["email"]
+    applies_to: ["text"]
+    constraint: "regex(., '^[^@ ]+@[^@ ]+\\.[^@ ]+$')"
+    message: "Enter a valid email address."
+  # Counts can never be negative. Placed last so more specific ranges
+  # (age, percentage, hours...) win first.
+  - match: ["how many", "number of", "count of", "quantity of"]
+    applies_to: ["integer", "decimal"]
+    constraint: ". >= 0"
+    message: "This value cannot be negative."
 
 # Generic per-type constraints applied when no semantic match is found.
 type_constraints:

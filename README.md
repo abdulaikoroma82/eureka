@@ -196,7 +196,7 @@ choice list, relevance, constraint and any derived calculations.
 | --- | --- | --- |
 | **Classifier** (M2) | Assigns XLSForm types | `Yes/No → select_one yes_no`, `age → integer`, `amount → decimal`, `GPS → geopoint`, `photo → image` |
 | **Variable namer** (M3) | Safe, unique names | `"Preferred contact method" → preferred_contact_method` |
-| **Logic engine** (M5) | Natural language → expressions, incl. compound conditions | `"if yes" → ${prev}='1'`, `"if yes and age over 18" → ${prev}='1' and ${age}>18`, `"at least 5" → >=5`; multi-selects use `selected(...)` |
+| **Logic engine** (M5) | Natural language → expressions: compound conditions, negation, ranges, numbered references, choice shorthand | `"if yes and age over 18"`, `"unless married" → not(...)`, `"between 18 and 65" → >=18 and <=65`, `"if question 4 is married"` (resolves the source numbering, incl. coded options → stored codes), bare `"if married"` when unambiguous; multi-selects use `selected(...)` |
 | **Constraint engine** (M6) | Validation ranges | `age → . >= 0 and . <= 120`, `% → . >= 0 and . <= 100`, `date → . <= today()` |
 | **Calculation engine** (M7) | Derived fields | age in years from a date of birth |
 
@@ -380,7 +380,15 @@ The validator runs in layers:
 * **Structure** — survey/choices/settings present, every question typed and
   named, and `begin/end group` & `begin/end repeat` markers balanced.
 * **Logic** — no duplicate names, no broken `${…}` references, no missing/empty
-  choice lists.
+  choice lists, and **no dead comparisons**: `${sex}='femalee'` (a typo) or a
+  value the referenced list can never hold is flagged, because it would
+  deploy fine and simply never fire.
+* **Expression syntax** — every `relevant` / `constraint` / `calculation` /
+  `choice_filter` expression is parsed for structural validity: unbalanced
+  parentheses or quotes, doubled or dangling operators (`. >< 5`), missing
+  commas in function calls, malformed `${…}` references, and unknown XPath
+  function names. This covers ground pyxform defers to the (Java-based) ODK
+  Validate step, which this tool deliberately does not bundle.
 * **Deployment** — valid ODK/XML identifiers, no reserved words, recognised
   types and appearances.
 * **Platform** — the chosen target's own standards (types, naming, settings)
@@ -394,8 +402,10 @@ The validator runs in layers:
   turned off with `Validator(deep=False)`.
 
 > The one thing this does **not** do is run ODK Validate (the Java step that
-> checks full XForm runtime semantics). Every platform still runs its own
-> validation when you upload — treat that as the final authoritative check.
+> checks full XForm runtime semantics). The expression-syntax layer above now
+> covers the most common class of what Validate catches (malformed
+> expressions), but every platform still runs its own validation when you
+> upload — treat that as the final authoritative check.
 
 Results are written to `QA_Report.pdf` in the output package.
 

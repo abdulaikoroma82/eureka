@@ -135,8 +135,14 @@ results if your document follows a few simple habits:
   Male
   Female
   ```
-- **Write skip rules in plain English** right after a question —
-  `If yes, ask for the date.`
+- **Write skip rules in plain English** right after the question they apply
+  to — `If yes, ask for the date.` Richer rules work too: `If age between
+  18 and 65`, `Unless married`, `If question 4 is married`.
+- **Number your questions** (`1.`, `Q2:`, `3)`) — then skip rules can refer
+  to questions by number, which is the most reliable way to write them.
+- **Answer codes are kept** — writing options as `1 = Single` stores the
+  code `1` in your data with the label "Single".
+- **Mark required questions** with a trailing `*` or `(required)`.
 - **Use headings for sections** — a line in CAPITALS, or starting with
   "Section", becomes a group in the form.
 
