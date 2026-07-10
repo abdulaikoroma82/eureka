@@ -4,17 +4,25 @@ Purpose
 -------
 Tie the whole pipeline together end-to-end:
 
-    parse -> compile (rule engine) -> validate -> export XLSForm
-          -> build the supporting artefacts (data dictionary, assumption log,
-             logic map, validation report, version history)
+    parse -> compile (rule engine) -> [optional AI enrichment] -> validate
+          -> export XLSForm -> build the supporting artefacts (data
+             dictionary, assumption log, logic map, validation report,
+             version history)
 
 This is the single entry point used by both the CLI (``main.py``) and the
 Streamlit UI, so behaviour is identical across interfaces.
+
+The optional AI enrichment step (translation, skip-logic inversion, type
+reclassification, quality review) only runs when an
+:class:`~xlsform_architect.ai.config.AIConfig` with ``enabled=True`` is
+passed in AND a DeepSeek API key is configured; otherwise this workflow's
+behaviour is unchanged from the fully deterministic pipeline.
 
 Inputs
 ------
 * A file path OR a raw :class:`Questionnaire` OR a JSON-style ``dict``.
 * Optional overrides: form title/id/version, survey category, output dir.
+* Optional ``ai_config`` / ``ai_client`` for the AI enrichment step.
 
 Outputs
 -------
@@ -37,6 +45,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Union
 
+from ..ai.client import DeepSeekClient
+from ..ai.config import AIConfig
+from ..ai.pipeline import AIPipeline
 from ..engine.knowledge_base import KnowledgeBase
 from ..engine.rule_engine import RuleEngine
 from ..models import Questionnaire
@@ -47,11 +58,14 @@ from ..xlsform.exporter import XLSFormExporter
 from .artifacts import ArtifactBuilder
 from .config import CONFIG
 
-# Step labels surfaced to the UI (Module 10 processing steps).
+# Step labels surfaced to the UI (Module 10 processing steps).  The AI step
+# always fires (so the UI can show it) but completes instantly as a no-op
+# when AI is disabled or unconfigured - see AIPipeline.run.
 STEP_LABELS = [
     "Reading questionnaire",
     "Identifying questions",
     "Applying rules",
+    "Applying AI enrichment",
     "Building XLSForm",
     "Validating output",
 ]
@@ -70,6 +84,8 @@ class WorkflowResult:
     xlsform_bytes: bytes = b""
     #: Deployment platform the run targeted ("" = generic XLSForm).
     target: str = ""
+    #: True if any AI feature actually ran (key configured and enabled).
+    ai_ran: bool = False
 
     @property
     def is_valid(self) -> bool:
@@ -79,13 +95,17 @@ class WorkflowResult:
 class Workflow:
     """End-to-end orchestration controller."""
 
-    def __init__(self, knowledge: Optional[KnowledgeBase] = None) -> None:
+    def __init__(self, knowledge: Optional[KnowledgeBase] = None,
+                 ai_client: Optional[DeepSeekClient] = None) -> None:
         self.kb = knowledge or KnowledgeBase.load()
         self.engine = RuleEngine(self.kb)
         self.validator = Validator()
         self.exporter = XLSFormExporter()
         self.reporter = ReportGenerator()
         self.artifacts = ArtifactBuilder(self.kb)
+        #: Optional AI client. If None, callers may still pass one per-run
+        #: via ``ai_client=`` on run_from_file/run_from_dict/run.
+        self.ai_client = ai_client
 
     # ------------------------------------------------------------------
     # Entry points
@@ -119,6 +139,8 @@ class Workflow:
              output_dir: Optional[Union[str, Path]] = None,
              write_outputs: bool = True,
              source_name: str = "questionnaire",
+             ai_config: Optional[AIConfig] = None,
+             ai_client: Optional[DeepSeekClient] = None,
              progress: Optional[ProgressCallback] = None) -> WorkflowResult:
 
         # Apply overrides.
@@ -139,19 +161,31 @@ class Workflow:
         questionnaire, notes = self.engine.compile(questionnaire)
         self._emit(progress, STEP_LABELS[2], "done")
 
-        # --- build XLSForm (in the target platform's dialect) -----------
+        # --- optional AI enrichment (no-op unless explicitly enabled) ---
         self._emit(progress, STEP_LABELS[3], "running")
-        xls_bytes = self.exporter.export_bytes(questionnaire, target=target)
+        ai_config = ai_config or AIConfig.disabled()
+        client = ai_client if ai_client is not None else self.ai_client
+        questionnaire, ai_notes, ai_findings = AIPipeline(client).run(
+            questionnaire, ai_config)
+        notes.extend(ai_notes)
         self._emit(progress, STEP_LABELS[3], "done")
 
-        # --- validate (generic + the chosen platform's standards) -------
+        # --- build XLSForm (in the target platform's dialect) -----------
         self._emit(progress, STEP_LABELS[4], "running")
-        report = self.validator.validate(questionnaire, target=target)
+        xls_bytes = self.exporter.export_bytes(questionnaire, target=target)
         self._emit(progress, STEP_LABELS[4], "done")
+
+        # --- validate (generic + the chosen platform's standards) -------
+        self._emit(progress, STEP_LABELS[5], "running")
+        report = self.validator.validate(questionnaire, target=target)
+        report.findings.extend(ai_findings)
+        self._emit(progress, STEP_LABELS[5], "done")
 
         result = WorkflowResult(questionnaire=questionnaire, report=report,
                                 assumptions=notes, xlsform_bytes=xls_bytes,
-                                target=target or "")
+                                target=target or "",
+                                ai_ran=bool(client and client.available
+                                           and ai_config.any_feature_enabled))
 
         if write_outputs:
             out_dir = Path(output_dir) if output_dir else CONFIG.output_dir
