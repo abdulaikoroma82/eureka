@@ -42,7 +42,7 @@ class StructureValidator:
         findings: List[Finding] = []
 
         real_questions = [q for q in questionnaire.questions
-                          if q.base_type not in ("begin group", "end group")]
+                          if not q.is_structural]
         if not real_questions:
             findings.append(Finding("error", "structure",
                                     "The survey sheet has no questions."))

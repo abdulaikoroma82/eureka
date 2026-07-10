@@ -77,12 +77,17 @@ class XLSFormExporter:
         choices_rows = self.choices_builder.build(questionnaire)
         settings_rows = self.settings_builder.build(questionnaire)
 
+        # Base columns plus any passthrough columns (translations, media,
+        # cascading-select filters) found in the questionnaire.
+        survey_cols = SURVEY_COLUMNS + self.survey_builder.extra_columns(questionnaire)
+        choices_cols = CHOICES_COLUMNS + self.choices_builder.extra_columns(questionnaire)
+
         ws_survey = wb.active
         ws_survey.title = "survey"
-        self._write_sheet(ws_survey, SURVEY_COLUMNS, survey_rows, dialect)
+        self._write_sheet(ws_survey, survey_cols, survey_rows, dialect)
 
         ws_choices = wb.create_sheet("choices")
-        self._write_sheet(ws_choices, CHOICES_COLUMNS, choices_rows)
+        self._write_sheet(ws_choices, choices_cols, choices_rows)
 
         ws_settings = wb.create_sheet("settings")
         self._write_sheet(ws_settings, SETTINGS_COLUMNS, settings_rows)

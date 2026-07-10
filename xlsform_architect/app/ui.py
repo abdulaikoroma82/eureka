@@ -168,8 +168,16 @@ def _render_landing() -> None:
               &nbsp;&nbsp;`Male`  \\
               &nbsp;&nbsp;`Female`
             - **Write skip rules in plain English** — `If yes, record the date.`
+              Compound rules work too: `if yes and age over 18`.
             - **Use CAPITALISED headings** (or lines starting with "Section")
               to group questions into sections.
+            - **Rosters**: a heading like `FOR EACH HOUSEHOLD MEMBER` turns the
+              questions under it into a repeat group.
+            - **Rating grids** (a Word table with one row per item and the
+              scale across the top) become one question per row, sharing a
+              single choice list.
+            - An **"Other (specify)"** option automatically gets a text
+              follow-up shown only when Other is selected.
             - Every automatic decision is listed in the **assumption log**, so
               nothing happens silently.
             """)
@@ -184,8 +192,7 @@ def _render_result(result, target: str) -> None:
     label = _platform_label(target)
 
     real = [q for q in qn.questions
-            if q.base_type not in ("begin group", "end group",
-                                   "begin repeat", "end repeat")]
+            if not q.is_structural]
 
     if not real:
         st.error("No questions could be extracted from this file. "

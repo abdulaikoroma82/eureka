@@ -83,15 +83,16 @@ class DocxParser:
                 yield ("table", Table(child, document))
 
     def _table_lines(self, table) -> List[str]:
+        rows = self._table_cells(table)
+        if not rows:
+            return []
+        grid = self._grid_lines(rows)
+        if grid is not None:
+            return grid
+
         lines: List[str] = []
-        for row in table.rows:
-            cells = [c.text.strip() for c in row.cells]
-            # De-duplicate merged cells that repeat text.
-            deduped: List[str] = []
-            for c in cells:
-                if not deduped or deduped[-1] != c:
-                    deduped.append(c)
-            cells = [c for c in deduped if c]
+        for cells in rows:
+            cells = [c for c in cells if c]
             if not cells:
                 continue
             if len(cells) == 1:
@@ -101,4 +102,52 @@ class DocxParser:
                 lines.append(cells[0])
                 for opt in cells[1:]:
                     lines.append(f"- {opt}")
+        return lines
+
+    # ------------------------------------------------------------------
+    def _table_cells(self, table) -> List[List[str]]:
+        """Table content as rows of de-duplicated (merged-cell) text."""
+        out: List[List[str]] = []
+        for row in table.rows:
+            cells = [c.text.strip() for c in row.cells]
+            deduped: List[str] = []
+            for c in cells:
+                if not deduped or deduped[-1] != c:
+                    deduped.append(c)
+            out.append(deduped)
+        return out
+
+    def _grid_lines(self, rows: List[List[str]]) -> "List[str] | None":
+        """Detect a matrix/grid question table and flatten it.
+
+        A grid has a header row whose cells (after the first) are the shared
+        answer scale, and body rows whose first cell is a sub-question while
+        the remaining cells are empty or tick marks.  Each sub-question
+        becomes its own select question with the shared options; identical
+        option sets are merged into one list downstream.
+        """
+        if len(rows) < 3 or len(rows[0]) < 3:
+            return None
+        header = rows[0]
+        options = [c for c in header[1:] if c]
+        # Scale labels are short phrases; require at least two.
+        if len(options) < 2 or any(len(o) > 40 for o in options):
+            return None
+
+        body = rows[1:]
+        marks = {"", "x", "✓", "✔", "yes", "1", "•", "o"}
+        for row in body:
+            if not row or not row[0]:
+                return None                      # sub-question cell required
+            if any(c.lower() not in marks for c in row[1:] if c is not None):
+                return None                      # data cells must be empty/ticks
+
+        lines: List[str] = []
+        for row in body:
+            # "Q:: " is the parsers' internal forced-question sentinel: it
+            # guarantees the text parser starts a new question here even
+            # without a trailing question mark.
+            lines.append(f"Q:: {row[0]}")
+            for opt in options:
+                lines.append(f"- {opt}")
         return lines

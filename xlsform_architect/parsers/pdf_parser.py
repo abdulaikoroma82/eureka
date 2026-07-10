@@ -25,6 +25,7 @@ Example
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import List, Union
 
@@ -53,15 +54,42 @@ class PdfParser:
         if not path.exists():
             raise FileNotFoundError(f"PDF file not found: {path}")
 
-        lines: List[str] = []
+        pages: List[List[str]] = []
         doc = fitz.open(str(path))
         try:
             for page in doc:
                 text = page.get_text("text")
-                for raw in text.splitlines():
-                    stripped = raw.strip()
-                    if stripped:
-                        lines.append(stripped)
+                pages.append([raw.strip() for raw in text.splitlines()
+                              if raw.strip()])
         finally:
             doc.close()
+        return self._filter_noise(pages)
+
+    # ------------------------------------------------------------------
+    _PAGE_NUM = re.compile(r"^(page\s+)?\d+(\s*(of|/)\s*\d+)?$", re.IGNORECASE)
+
+    def _filter_noise(self, pages: List[List[str]]) -> List[str]:
+        """Drop page numbers and repeated running headers/footers.
+
+        A line that appears on 3+ pages (or on most pages of a short
+        document) is a running header/footer, not questionnaire content.
+        """
+        from collections import Counter
+
+        counts: Counter = Counter()
+        for page in pages:
+            for line in set(page):
+                counts[line] += 1
+
+        n_pages = len(pages)
+        repeat_threshold = max(3, (n_pages // 2) + 1) if n_pages > 1 else 10**9
+
+        lines: List[str] = []
+        for page in pages:
+            for line in page:
+                if self._PAGE_NUM.match(line):
+                    continue
+                if n_pages > 1 and counts[line] >= repeat_threshold:
+                    continue
+                lines.append(line)
         return lines

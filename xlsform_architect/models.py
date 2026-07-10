@@ -35,6 +35,10 @@ from typing import Any, Dict, List, Optional
 # ---------------------------------------------------------------------------
 # Choices
 # ---------------------------------------------------------------------------
+#: Structural row types that open/close groups and repeats.
+STRUCTURAL_TYPES = ("begin group", "end group", "begin repeat", "end repeat")
+
+
 @dataclass
 class Choice:
     """A single answer option within a choice list.
@@ -45,13 +49,20 @@ class Choice:
         Machine value written to the ``choices`` sheet ``name`` column.
     label:
         Human readable text shown to the enumerator.
+    extra:
+        Additional passthrough columns for the choices sheet, e.g.
+        translations (``label::French (fr)``) or cascading-select filter
+        columns (``state``, ``county``).
     """
 
     name: str
     label: str
+    extra: Dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, str]:
-        return {"name": self.name, "label": self.label}
+        out = {"name": self.name, "label": self.label}
+        out.update(self.extra)
+        return out
 
 
 @dataclass
@@ -93,6 +104,8 @@ class Question:
     logic: str = ""
     #: Section / group the question belongs to.
     section: str = ""
+    #: "group" (default) or "repeat" - how the section is emitted.
+    section_type: str = "group"
     instruction: str = ""
 
     # --- resolved XLSForm fields ---------------------------------------
@@ -107,6 +120,11 @@ class Question:
     calculation: str = ""
     default: str = ""
     appearance: str = ""
+    #: Cascading-select filter expression (XLSForm ``choice_filter`` column).
+    choice_filter: str = ""
+    #: Additional passthrough columns for the survey sheet, e.g. translations
+    #: (``label::French (fr)``) or media columns (``media::image``).
+    extra: Dict[str, str] = field(default_factory=dict)
 
     #: Populated for select questions: the list they reference.
     list_name: str = ""
@@ -154,6 +172,11 @@ class Question:
     def is_calculate(self) -> bool:
         return self.base_type == "calculate"
 
+    @property
+    def is_structural(self) -> bool:
+        """True for begin/end group/repeat marker rows."""
+        return self.base_type in STRUCTURAL_TYPES
+
     def add_assumption(self, message: str) -> None:
         if message and message not in self.assumptions:
             self.assumptions.append(message)
@@ -196,14 +219,23 @@ class Question:
             "constraint_message": "constraint_message",
             "calculation": "calculation",
             "section": "section",
+            "section_type": "section_type",
             "instruction": "instruction",
             "default": "default",
             "appearance": "appearance",
+            "choice_filter": "choice_filter",
             "list_name": "list_name",
         }
         for key, attr in recognised.items():
             if key in data and data[key] is not None:
                 setattr(q, attr, data[key])
+        # ``"repeat": true`` marks the question's section as a repeat group.
+        if data.get("repeat"):
+            q.section_type = "repeat"
+        # Translation / media passthrough columns, e.g. "label::French (fr)".
+        for key, value in data.items():
+            if "::" in key and value is not None:
+                q.extra[key] = str(value)
         return q
 
 
@@ -276,8 +308,11 @@ class Questionnaire:
             raw = list_data.get("choices", list_data) if isinstance(list_data, dict) else list_data
             for ch in raw:
                 if isinstance(ch, dict):
+                    extra = {k: str(v) for k, v in ch.items()
+                             if k not in ("name", "label") and v is not None}
                     cl.choices.append(Choice(name=str(ch.get("name", "")),
-                                             label=str(ch.get("label", ch.get("name", "")))))
+                                             label=str(ch.get("label", ch.get("name", ""))),
+                                             extra=extra))
                 else:
                     cl.choices.append(Choice(name=str(ch), label=str(ch)))
             q.add_choice_list(cl)

@@ -45,7 +45,7 @@ SUPPORTED_INPUT_EXTENSIONS: List[str] = [".json", ".csv", ".xlsx", ".xls",
 SURVEY_COLUMNS: List[str] = [
     "type", "name", "label", "hint", "required",
     "relevant", "constraint", "constraint_message", "calculation",
-    "appearance", "default",
+    "choice_filter", "appearance", "default",
 ]
 CHOICES_COLUMNS: List[str] = ["list_name", "name", "label"]
 SETTINGS_COLUMNS: List[str] = ["form_title", "form_id", "version", "default_language", "style"]
