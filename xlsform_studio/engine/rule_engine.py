@@ -99,11 +99,17 @@ class RuleEngine:
             self.logic.resolve(q, previous=previous, known=questionnaire.questions)
             self.constraints.apply(q)
 
-        # Pass 3: derived calculations.
+        # Pass 3: derived calculations. Each is inserted directly after the
+        # last question it references (not appended at the end) so a
+        # calculation over a repeat variable stays inside that repeat.
         if add_calculations:
             for calc in self.calculator.build(questionnaire):
                 self.namer.register(calc.name)
-                questionnaire.questions.append(calc)
+                refs = set(re.findall(r"\$\{(\w+)\}", calc.calculation))
+                insert_at = max(
+                    (i + 1 for i, q in enumerate(questionnaire.questions)
+                     if q.name in refs), default=len(questionnaire.questions))
+                questionnaire.questions.insert(insert_at, calc)
 
         return questionnaire, self._collect_notes(questionnaire)
 

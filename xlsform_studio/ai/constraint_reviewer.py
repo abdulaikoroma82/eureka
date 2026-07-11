@@ -154,19 +154,28 @@ class AICrossFieldConstraintReviewer:
             if target.constraint:
                 # Combine: keep the deterministic engine's (usually
                 # single-field) rule intact and add the cross-field one.
+                # Record both parts in the assumption so the verification
+                # checklist can quote exactly what was original vs added.
+                original = target.constraint
                 target.constraint = f"({target.constraint}) and ({expr})"
                 target.constraint_message = (
                     f"{target.constraint_message} {message}".strip()
                     if message else target.constraint_message)
                 verb = "Combined"
+                target.add_assumption(
+                    f"AI-suggested cross-field constraint "
+                    f"({rationale or 'no rationale given'}). "
+                    f"Original: `{original}`. AI addition: `{expr}`. "
+                    f"Please review before deployment.")
             else:
                 target.constraint = expr
                 target.constraint_message = message or target.constraint_message
                 verb = "Applied"
-
-            target.add_assumption(
-                f"AI-suggested cross-field constraint ({rationale or 'no rationale given'}). "
-                f"Please review before deployment.")
+                target.add_assumption(
+                    f"AI-suggested cross-field constraint "
+                    f"({rationale or 'no rationale given'}). "
+                    f"AI addition: `{expr}`. "
+                    f"Please review before deployment.")
             notes.append(f"[AI cross-field constraints] {verb} suggested "
                         f"constraint on '{name}': `{expr}` - please review.")
         return notes

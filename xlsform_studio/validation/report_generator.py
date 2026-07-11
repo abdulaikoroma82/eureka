@@ -179,11 +179,13 @@ class ReportGenerator:
                 lines.append(f"| {platform.upper()} | {'Yes' if ok else 'No'} |")
             lines.append("")
 
-        # Findings grouped by level (advisory AI review findings get their
-        # own section below, so they are never mistaken for rule checks).
+        # Findings grouped by level. Three categories get their own named
+        # sections below instead (AI review, path analysis, choice quality),
+        # so they are never mistaken for the general rule checks.
+        _own_section = ("ai_review", "path_analysis", "choice_quality")
         for level in ("error", "warning", "info"):
             group = [f for f in report.findings
-                     if f.level == level and f.category != "ai_review"]
+                     if f.level == level and f.category not in _own_section]
             if not group:
                 continue
             lines.append(f"## {level.capitalize()}s ({len(group)})")
@@ -191,6 +193,41 @@ class ReportGenerator:
             for f in group:
                 loc = f" [`{f.location}`]" if f.location else ""
                 lines.append(f"- **{f.category}**{loc}: {f.message}")
+                if f.explanation:
+                    lines.append(f"  - _{f.explanation}_")
+            lines.append("")
+
+        path_group = [f for f in report.findings
+                      if f.category == "path_analysis"]
+        if path_group:
+            lines.append(f"## Path Analysis ({len(path_group)})")
+            lines.append("")
+            lines.append("_Static analysis of every possible route through "
+                         "the form's skip logic: does each expression's "
+                         "reference actually hold a value on the paths "
+                         "where it runs?_")
+            lines.append("")
+            for f in sorted(path_group,
+                            key=lambda f: _LEVEL_ORDER.get(f.level, 9)):
+                loc = f" [`{f.location}`]" if f.location else ""
+                lines.append(f"- **{f.level}**{loc}: {f.message}")
+                if f.explanation:
+                    lines.append(f"  - _{f.explanation}_")
+            lines.append("")
+
+        choice_group = [f for f in report.findings
+                        if f.category == "choice_quality"]
+        if choice_group:
+            lines.append(f"## Choice List Quality ({len(choice_group)})")
+            lines.append("")
+            lines.append("_Deterministic semantic checks on every choice "
+                         "list: scale completeness, logical ordering, "
+                         "Other/specify pairing, and value coding._")
+            lines.append("")
+            for f in sorted(choice_group,
+                            key=lambda f: _LEVEL_ORDER.get(f.level, 9)):
+                loc = f" [`{f.location}`]" if f.location else ""
+                lines.append(f"- **{f.level}**{loc}: {f.message}")
                 if f.explanation:
                     lines.append(f"  - _{f.explanation}_")
             lines.append("")

@@ -85,6 +85,11 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Comma-separated domain rule packs to merge on "
                              "top of the neutral rules (e.g. "
                              "'nutrition,health'); see knowledge/packs/")
+    parser.add_argument("--no-path-analysis", action="store_true",
+                        help="Skip the static path analysis (enumerating "
+                             "enumerator paths through the skip logic to "
+                             "verify every expression's references hold a "
+                             "value where they run); on by default")
     parser.add_argument("--diff-against", metavar="OLD_FILE",
                         help="Also compare against a previous questionnaire "
                              "version (any supported format); writes "
@@ -209,6 +214,7 @@ def main(argv=None) -> int:
         target=args.target,
         output_dir=args.output,
         ai_config=ai_config,
+        path_analysis=not args.no_path_analysis,
         progress=None if args.quiet else _progress,
     )
 

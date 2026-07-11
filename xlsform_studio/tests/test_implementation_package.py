@@ -36,6 +36,9 @@ def _form() -> Questionnaire:
                      constraint=". >= 0 and . <= 120",
                      constraint_message="Age must be 0-120.",
                      relevant="${water_sources}!=''"),
+            Question(name="water_sources_other", label="Please specify other",
+                     xlsform_type="text", section="WASH",
+                     relevant="selected(${water_sources}, 'other')"),
         ],
         choice_lists={"ws": ChoiceList("ws", [
             Choice("piped", "Piped water"), Choice("well", "Well"),

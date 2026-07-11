@@ -442,6 +442,29 @@ The validator runs in layers:
   commas in function calls, malformed `${…}` references, and unknown XPath
   function names. This covers ground pyxform defers to the (Java-based) ODK
   Validate step, which this tool deliberately does not bundle.
+* **Choice-list quality** — deterministic semantic checks on every list:
+  recognised ordinal scales (Likert, satisfaction, frequency, quality)
+  missing intermediate categories; options with a logical order (days,
+  months, sizes, numeric ranges) listed out of order; an "Other" option
+  with no specify follow-up question (an error — those answers are
+  unrecoverable); non-sequential or outlier value coding (1, 2, 3, 99)
+  flagged for confirmation. Reported under **Choice List Quality** in the
+  QA report.
+* **Static path analysis** — enumerates the possible enumerator paths
+  implied by the form's `relevant` conditions (branching on referenced
+  `select_one` answers, three-valued logic for conditions it can't
+  decide) and verifies that every `calculation` / `constraint` /
+  `choice_filter` reference actually holds a value on the paths where the
+  expression runs. Catches: expressions over variables that are
+  *definitely empty* on some path (skipped group/repeat — an error that
+  every static check misses but the device won't), questions unreachable
+  under contradictory conditions, references into a repeat from outside
+  it (repeat variables are scoped), required questions whose `relevant`
+  can skip them, and near-dead questions reachable on under 5% of paths.
+  Beyond 10,000 paths it switches to a conservative approximation (noted
+  in the report) that may over-warn but cannot miss the errors. Reported
+  under **Path Analysis** in the QA report; disable with
+  `--no-path-analysis`.
 * **Deployment** — valid ODK/XML identifiers, no reserved words, recognised
   types and appearances.
 * **Platform** — the chosen target's own standards (types, naming, settings)
@@ -478,7 +501,14 @@ Each run writes a timestamped folder under `output/` containing:
    (translation completeness per language, media file manifest, device
    fit for long choice lists)
 4. `assumption_log.md` — every deterministic decision made
-5. `logic_map.md` — relevance / constraint / calculation relationships,
+5. `assumptions_to_verify.md` — the same decisions reorganised into a
+   prioritized review checklist: **Critical** (logic resolutions,
+   constraint bounds, ambiguous classifications, AI-applied changes —
+   each with a checkbox and a concrete "what to verify" action),
+   **Advisory** (translations, merges, unapplied AI suggestions), and
+   **Informational** (routine bookkeeping) — clear the critical items
+   before deployment
+6. `logic_map.md` — relevance / constraint / calculation relationships,
    including an ASCII skip-pattern flowchart:
 
    ```text
@@ -486,24 +516,24 @@ Each run writes a timestamped folder under `output/` containing:
    ├── Yes → years_lived
    └── otherwise → respondent_age
    ```
-6. `logic_flow.dot` — the same flowchart as a Graphviz graph (only written
+7. `logic_flow.dot` — the same flowchart as a Graphviz graph (only written
    when the form has skip logic); the app's **Logic map** tab renders it
    interactively, with answer codes shown as their labels
-7. `enumerator_guide.md` — a field-ready, question-by-question reference:
+8. `enumerator_guide.md` — a field-ready, question-by-question reference:
    how to record each answer, the options, skip rules in plain words
    ("Ask only when resident = Yes"), and valid-answer rules
-8. `*_variable_specification.xlsx` — the data dictionary plus provenance:
+9. `*_variable_specification.xlsx` — the data dictionary plus provenance:
    every engine assumption logged per variable, for data managers
-9. `collection_plan.md` — a data-collection plan skeleton: instrument
+10. `collection_plan.md` — a data-collection plan skeleton: instrument
    overview, time per section, interviews-per-enumerator planning figure,
    device requirements (GPS/camera/media files), languages, and a
    checklist of what to complete manually
-10. `*_survey_instrument.docx` — a printable paper questionnaire: sections
+11. `*_survey_instrument.docx` — a printable paper questionnaire: sections
     as headings, numbered questions, tick-boxes for options, answer lines,
     and skip rules in plain words — a paper backup and a review copy for
     non-technical stakeholders
-11. `version_history.json` — append-only audit trail across runs
-12. `change_report.md` — only with `--diff-against OLD_FILE`: what changed
+12. `version_history.json` — append-only audit trail across runs
+13. `change_report.md` — only with `--diff-against OLD_FILE`: what changed
    versus a previous questionnaire version (added/removed/renamed
    variables, logic/constraint changes, choice-list edits), with breaking
    changes for longitudinal analysis flagged explicitly

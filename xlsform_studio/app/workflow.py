@@ -62,6 +62,7 @@ from ..xlsform.exporter import XLSFormExporter
 from .artifacts import ArtifactBuilder
 from .config import CONFIG
 from .logic_flow import LogicFlowBuilder
+from .verification_checklist import VerificationChecklistBuilder
 
 # Step labels surfaced to the UI (Module 10 processing steps).  The AI step
 # always fires (so the UI can show it) but completes instantly as a no-op
@@ -159,6 +160,7 @@ class Workflow:
              source_name: str = "questionnaire",
              ai_config: Optional[AIConfig] = None,
              ai_client: Optional[DeepSeekClient] = None,
+             path_analysis: bool = True,
              progress: Optional[ProgressCallback] = None) -> WorkflowResult:
 
         # Apply overrides.
@@ -198,7 +200,8 @@ class Workflow:
 
         # --- validate (generic + the chosen platform's standards) -------
         self._emit(progress, STEP_LABELS[5], "running")
-        report = self.validator.validate(questionnaire, target=target)
+        report = self.validator.validate(questionnaire, target=target,
+                                         path_analysis=path_analysis)
         report.findings.extend(ai_findings)
         # AI may add a plain-English explanation to the findings above -
         # this must run AFTER validation produces them; it never changes
@@ -304,11 +307,15 @@ class Workflow:
         outputs["validation_report"] = self.reporter.to_pdf(
             report, qn, folder / "QA_Report.pdf", quality=quality,
             duration=duration)
-        # 4. Assumption log.
+        # 4. Assumption log + its prioritized verification checklist (the
+        #    checklist reorganises the same entries by review priority; the
+        #    log remains the complete ordered record).
         assumption_path = folder / "assumption_log.md"
         assumption_path.write_text(
             self.artifacts.assumption_log_markdown(qn, notes), encoding="utf-8")
         outputs["assumption_log"] = assumption_path
+        outputs["assumptions_to_verify"] = VerificationChecklistBuilder().write(
+            qn, notes, folder / "assumptions_to_verify.md")
         # 5. Logic map (+ the skip-pattern flowchart as Graphviz DOT, when
         #    the form has any skip logic to draw).
         logic_path = folder / "logic_map.md"

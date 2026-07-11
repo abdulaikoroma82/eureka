@@ -60,10 +60,18 @@ class CalculationEngine:
         if dob and "age_years" not in existing:
             expr = self.calc_exprs.get("age_years_from_dob",
                                        "int((today() - ${dob}) div 365.25)")
-            calcs.append(self._calc(
+            calc = self._calc(
                 "age_years", "Age in years (calculated)",
                 expr.replace("${dob}", f"${{{dob}}}"),
-                "Age in years derived from date of birth."))
+                "Age in years derived from date of birth.")
+            # Live in the same section (and repeat, if any) as the source:
+            # a calculation outside a repeat cannot see variables inside it.
+            source = next((q for q in questionnaire.questions
+                           if q.name == dob), None)
+            if source is not None:
+                calc.section = source.section
+                calc.section_type = source.section_type
+            calcs.append(calc)
 
         return calcs
 

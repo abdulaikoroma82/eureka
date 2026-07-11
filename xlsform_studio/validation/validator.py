@@ -43,9 +43,11 @@ from typing import Optional
 
 from ..engine.knowledge_base import KnowledgeBase
 from ..models import Questionnaire
+from .choice_auditor import ChoiceAuditor
 from .consistency_validator import ConsistencyValidator
 from .expression_validator import ExpressionValidator
 from .logic_validator import LogicValidator
+from .path_analyzer import PathAnalyzer
 from .platform_validator import PlatformValidator
 from .pyxform_validator import PyxformValidator
 from .readiness_validator import ReadinessValidator
@@ -58,9 +60,13 @@ class Validator:
     """Aggregate all validators."""
 
     def __init__(self, deep: bool = True,
-                 knowledge: Optional[KnowledgeBase] = None) -> None:
+                 knowledge: Optional[KnowledgeBase] = None,
+                 path_analysis: bool = True) -> None:
         #: When True (default), also run the pyxform deep check if installed.
         self.deep = deep
+        #: When True (default), run static path analysis (--no-path-analysis
+        #: on the CLI disables it).
+        self.path_analysis = path_analysis
         self.kb = knowledge or KnowledgeBase.load()
         self.structure = StructureValidator()
         self.logic = LogicValidator()
@@ -70,11 +76,15 @@ class Validator:
         self.xlsform = XLSFormValidator()
         self.platform = PlatformValidator(self.kb)
         self.pyxform = PyxformValidator()
+        self.paths = PathAnalyzer()
+        self.choices = ChoiceAuditor()
 
     def validate(self, questionnaire: Questionnaire,
                  target: Optional[str] = None,
-                 deep: Optional[bool] = None) -> ValidationReport:
+                 deep: Optional[bool] = None,
+                 path_analysis: Optional[bool] = None) -> ValidationReport:
         run_deep = self.deep if deep is None else deep
+        run_paths = self.path_analysis if path_analysis is None else path_analysis
         report = ValidationReport(target=target or "")
         report.findings.extend(self.structure.validate(questionnaire))
         report.findings.extend(self.logic.validate(questionnaire))
@@ -82,6 +92,9 @@ class Validator:
         report.findings.extend(self.consistency.validate(questionnaire))
         report.findings.extend(self.readiness.validate(questionnaire))
         report.findings.extend(self.xlsform.validate(questionnaire))
+        report.findings.extend(self.choices.validate(questionnaire))
+        if run_paths:
+            report.findings.extend(self.paths.validate(questionnaire))
 
         # Standards of the chosen platform.
         if target:
