@@ -25,6 +25,15 @@ mapping a numeric key back to the translation, so the response can be
 matched to source strings positionally without relying on the model
 preserving exact source text.
 
+A local **translation cache** (``.translation_cache.json``, timestamped
+entries keyed by language + source text) sits in front of the API: a label
+translated in a previous run is served from disk, so regenerating a form -
+the everyday workflow - costs nothing for text that hasn't changed, and the
+API is called only for genuinely new labels. Cached use is logged in the
+notes. The cache is best-effort: any read/write problem is ignored and the
+feature falls back to plain API calls (fail-open, like everything in this
+layer). Pass ``cache_path=None`` to disable it.
+
 Inputs
 ------
 A compiled :class:`~xlsform_architect.models.Questionnaire` and a list of
@@ -48,10 +57,16 @@ Example
 
 from __future__ import annotations
 
-from typing import List, Tuple
+import datetime as _dt
+import json
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union
 
 from ..models import Questionnaire
 from .client import AIError, DeepSeekClient
+
+#: Default on-disk cache location (current working directory).
+DEFAULT_CACHE_PATH = Path(".translation_cache.json")
 
 _SYSTEM_PROMPT = (
     "You are a professional survey translator. Translate short questionnaire "
@@ -68,8 +83,13 @@ class AITranslator:
     Never overwrites a translation already present - only fills gaps.
     """
 
-    def __init__(self, client: DeepSeekClient) -> None:
+    def __init__(self, client: DeepSeekClient,
+                 cache_path: Optional[Union[str, Path]] = None) -> None:
         self.client = client
+        #: None disables caching (the default for direct construction, so
+        #: creating a translator never touches the filesystem by surprise);
+        #: the AI pipeline passes the path configured on AIConfig.
+        self.cache_path = Path(cache_path) if cache_path else None
 
     # ------------------------------------------------------------------
     def translate(self, questionnaire: Questionnaire,
@@ -83,6 +103,9 @@ class AITranslator:
         if not all_targets:
             return notes
 
+        cache = self._load_cache()
+        cache_dirty = False
+
         for name, code in languages:
             column = f"label::{name} ({code})"
             missing = [(text, target) for text, target in all_targets
@@ -95,7 +118,24 @@ class AITranslator:
                             f"nothing to do.")
                 continue
 
-            items = [text for text, _ in missing]
+            # Serve previously-translated labels from the cache first.
+            cached_count = 0
+            uncached = []
+            for text, target in missing:
+                hit = cache.get(self._cache_key(code, text))
+                if hit and hit.get("translation"):
+                    target.extra[column] = hit["translation"]
+                    cached_count += 1
+                else:
+                    uncached.append((text, target))
+            if cached_count:
+                notes.append(f"[AI translation] {name} ({code}): "
+                            f"{cached_count} label(s) served from the local "
+                            f"translation cache (no API cost).")
+            if not uncached:
+                continue
+
+            items = [text for text, _ in uncached]
             try:
                 translations = self._translate_batch(items, name)
             except AIError as exc:
@@ -103,17 +143,50 @@ class AITranslator:
                 continue
 
             applied = 0
-            for idx, (_, target) in enumerate(missing):
+            stamp = _dt.datetime.now().isoformat(timespec="seconds")
+            for idx, (text, target) in enumerate(uncached):
                 value = translations.get(str(idx + 1))
                 if value:
                     target.extra[column] = value
+                    cache[self._cache_key(code, text)] = {
+                        "translation": value, "timestamp": stamp}
+                    cache_dirty = True
                     applied += 1
 
             kept_note = (f" ({already} already supplied and left as-is)"
                         if already else "")
-            notes.append(f"[AI translation] Added {applied}/{len(missing)} "
+            notes.append(f"[AI translation] Added {applied}/{len(uncached)} "
                         f"missing label(s) in {name} ({code}){kept_note}.")
+
+        if cache_dirty:
+            self._save_cache(cache)
         return notes
+
+    # ------------------------------------------------------------------
+    # Cache (best-effort; every failure falls back to plain API calls)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _cache_key(code: str, text: str) -> str:
+        return f"{code}␟{text}"        # unit separator; safe in JSON keys
+
+    def _load_cache(self) -> Dict[str, dict]:
+        if self.cache_path is None:
+            return {}
+        try:
+            data = json.loads(self.cache_path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
+    def _save_cache(self, cache: Dict[str, dict]) -> None:
+        if self.cache_path is None:
+            return
+        try:
+            self.cache_path.write_text(
+                json.dumps(cache, ensure_ascii=False, indent=1),
+                encoding="utf-8")
+        except OSError:
+            pass                              # cache is an optimisation only
 
     # ------------------------------------------------------------------
     def _collect_targets(self, qn: Questionnaire):

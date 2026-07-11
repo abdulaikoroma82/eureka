@@ -10,12 +10,25 @@ stages that mirror the two moments AI can usefully contribute:
     1. Type-classification fallback (may change a question's type, so it
        runs first - everything downstream should see the corrected type)
     2. Skip/condition logic fallback (adds ``relevant`` conditions)
-    3. Cross-field constraint suggestions (adds ``constraint`` conditions
+    3. Domain-aware constraint synthesis (adds single-field ``constraint``
+       bounds to questions the deterministic engine left unconstrained,
+       guided by the user's optional survey-context description; runs
+       before the cross-field pass so cross-field additions can combine
+       on top of these)
+    4. Cross-field constraint suggestions (adds ``constraint`` conditions
        spanning two questions - a job the deterministic constraint engine
        structurally cannot do, since it only ever looks at one question)
-    4. Translation (labels are final by now, so translations are accurate;
-       never overwrites a translation you already supplied)
-    5. Quality review (reads the fully-settled form last; advisory findings
+    5. Translation (labels are final by now, so translations are accurate;
+       never overwrites a translation you already supplied; previously-
+       translated labels are served from a local cache)
+    6. Advisory suggestion features - question grouping, question
+       rewording, choice-list ordering, variable-name suggestions. These
+       NEVER mutate the questionnaire: each produces
+       :class:`~xlsform_architect.ai.suggestions.AISuggestion` objects
+       (collected on :attr:`suggestions`) for a human to accept or reject;
+       accepted ones are applied by :func:`~xlsform_architect.ai.
+       suggestions.apply_suggestions`.
+    7. Quality review (reads the fully-settled form last; advisory findings
        only, never mutates the questionnaire)
 
 **Stage 2 - :meth:`explain_findings`, after validation:** adds a plain-
@@ -57,12 +70,18 @@ from typing import List, Optional, Tuple
 
 from ..models import Questionnaire
 from ..validation.report_generator import Finding, ValidationReport
+from .choice_ordering import AIChoiceOrderingSuggester
 from .client import DeepSeekClient
 from .config import AIConfig
 from .constraint_reviewer import AICrossFieldConstraintReviewer
+from .domain_constraints import AIDomainConstraintSynthesizer
 from .finding_explainer import AIFindingExplainer
+from .grouping import AIGroupingSuggester
+from .naming import AINamingSuggester
 from .quality_reviewer import AIQualityReviewer
+from .rewording import AIRewordingSuggester
 from .skip_logic import AISkipLogicResolver
+from .suggestions import AISuggestion
 from .translator import AITranslator
 from .type_classifier import AITypeClassifier
 
@@ -72,12 +91,17 @@ class AIPipeline:
 
     def __init__(self, client: Optional[DeepSeekClient]) -> None:
         self.client = client
+        #: Advisory suggestions collected by the most recent :meth:`run`
+        #: (grouping, rewording, choice ordering, naming). Never applied
+        #: automatically - see :mod:`xlsform_architect.ai.suggestions`.
+        self.suggestions: List[AISuggestion] = []
 
     # ------------------------------------------------------------------
     def run(self, questionnaire: Questionnaire,
             config: AIConfig) -> Tuple[Questionnaire, List[str], List[Finding]]:
         notes: List[str] = []
         findings: List[Finding] = []
+        self.suggestions = []
 
         if not config.any_feature_enabled:
             return questionnaire, notes, findings
@@ -94,18 +118,44 @@ class AIPipeline:
         if config.wants("skip_logic"):
             notes.extend(AISkipLogicResolver(self.client).resolve(questionnaire))
 
+        if config.wants("domain_constraints"):
+            notes.extend(AIDomainConstraintSynthesizer(self.client)
+                        .suggest(questionnaire, config.survey_context))
+
         if config.wants("cross_constraints"):
             notes.extend(AICrossFieldConstraintReviewer(self.client)
                         .suggest(questionnaire))
 
         if config.wants("translate") and config.translate_languages:
-            notes.extend(AITranslator(self.client).translate(
-                questionnaire, config.translate_languages))
+            notes.extend(AITranslator(
+                self.client,
+                cache_path=config.translation_cache_path or None,
+            ).translate(questionnaire, config.translate_languages))
+
+        # Advisory suggestion features: collect, never apply.
+        if config.wants("group"):
+            self._collect(notes, AIGroupingSuggester(self.client)
+                          .suggest(questionnaire))
+        if config.wants("rewrite"):
+            self._collect(notes, AIRewordingSuggester(self.client)
+                          .suggest(questionnaire))
+        if config.wants("order"):
+            self._collect(notes, AIChoiceOrderingSuggester(self.client)
+                          .suggest(questionnaire))
+        if config.wants("naming"):
+            self._collect(notes, AINamingSuggester(self.client)
+                          .suggest(questionnaire))
 
         if config.wants("review"):
-            findings.extend(AIQualityReviewer(self.client).review(questionnaire))
+            findings.extend(AIQualityReviewer(self.client).review(
+                questionnaire, config.survey_context))
 
         return questionnaire, notes, findings
+
+    def _collect(self, notes: List[str], result) -> None:
+        feature_notes, suggestions = result
+        notes.extend(feature_notes)
+        self.suggestions.extend(suggestions)
 
     # ------------------------------------------------------------------
     def explain_findings(self, report: ValidationReport,

@@ -24,3 +24,6 @@ xlsform_architect/output/*
 # OS
 .DS_Store
 Thumbs.db
+
+# Local AI translation cache (regenerated on demand)
+.translation_cache.json

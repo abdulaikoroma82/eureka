@@ -72,10 +72,15 @@ _COMMON_LANGUAGES = [
 _AI_FEATURE_LABELS = {
     "classify": "Improve type detection (reclassify ambiguous questions)",
     "skip_logic": "Resolve skip-to-question jumps and unparseable conditions",
+    "domain_constraints": "Suggest realistic value bounds for unconstrained questions",
     "cross_constraints": "Suggest cross-field constraints (e.g. end date after start date)",
     "translate": "Generate translations (only fills gaps you haven't already supplied)",
-    "review": "AI quality review (a second pair of eyes, incl. naming clarity)",
+    "review": "AI quality review (semantics, naming clarity, respondent experience)",
     "explain_findings": "Explain validation findings in plain English",
+    "group": "Suggest logical question sections (accept/reject after generating)",
+    "rewrite": "Suggest clearer question wording (accept/reject after generating)",
+    "order": "Suggest logical choice-list ordering (accept/reject after generating)",
+    "naming": "Suggest clearer variable names (accept/reject after generating)",
 }
 
 
@@ -178,6 +183,16 @@ def _ai_sidebar():
                 if st.checkbox(label, value=True, key=f"ai_feat_{key}"):
                     features.append(key)
 
+        survey_context = ""
+        if enabled and ({"domain_constraints", "review"} & set(features)):
+            survey_context = st.text_input(
+                "What is this survey about? (optional)",
+                placeholder="e.g. child nutrition survey in rural districts",
+                help="Grounds the AI's value-bound and review suggestions in "
+                     "your survey's actual domain — a 'temperature' means "
+                     "something different in a health survey than a weather "
+                     "one.")
+
         languages = []
         if enabled and "translate" in features:
             chosen = st.multiselect(
@@ -195,7 +210,8 @@ def _ai_sidebar():
                 st.caption("Pick at least one language, or translation will be skipped.")
 
         config = AIConfig(enabled=enabled, features=features,
-                          translate_languages=languages)
+                          translate_languages=languages,
+                          survey_context=survey_context)
         client = DeepSeekClient(api_key=api_key) if enabled else None
         return config, client
 
@@ -319,6 +335,8 @@ def _render_result(result, target: str) -> None:
                    "changes (marked in the assumption log and findings below) "
                    "before deploying.")
 
+    _render_ai_suggestions(result, target)
+
     # --- downloads ---------------------------------------------------------
     st.markdown("##### Downloads")
     fid = qn.settings.form_id or "form"
@@ -373,6 +391,57 @@ def _render_result(result, target: str) -> None:
 
     with tabs[5]:
         st.markdown(ArtifactBuilder(_kb()).logic_map_markdown(qn))
+
+
+def _render_ai_suggestions(result, target: str) -> None:
+    """Accept/reject panel for advisory AI suggestions.
+
+    Nothing here is applied until the user ticks a suggestion and clicks
+    apply — the form the download buttons serve is always the current,
+    human-approved state.
+    """
+    pending = [s for s in result.ai_suggestions if not s.applied]
+    if not pending:
+        return
+
+    kind_names = {"grouping": "Section grouping", "rewording": "Wording",
+                  "split": "Split question", "choice_order": "Choice order",
+                  "naming": "Variable name"}
+    with st.expander(f"🤖 AI suggestions ({len(pending)}) — review and "
+                     f"accept to apply", expanded=True):
+        st.caption("Advisory only: none of these changed your form. Tick "
+                   "the ones you want, then apply — the XLSForm is rebuilt "
+                   "and re-validated with your accepted changes.")
+        accepted_keys = []
+        for i, sug in enumerate(pending):
+            kind = kind_names.get(sug.kind, sug.kind)
+            where = f" — `{sug.target}`" if sug.target else ""
+            st.markdown(f"**{kind}**{where}")
+            c1, c2 = st.columns(2)
+            c1.markdown(f"*Current:*\n\n{sug.original}")
+            c2.markdown(f"*Suggested:*\n\n{sug.suggested}")
+            caption_bits = [b for b in (
+                sug.reason,
+                f"confidence: {sug.confidence}" if sug.confidence else "")
+                if b]
+            if caption_bits:
+                st.caption("💬 " + " · ".join(caption_bits))
+            if sug.appliable:
+                if st.checkbox("Accept", key=f"ai_sug_accept_{i}"):
+                    accepted_keys.append(i)
+            else:
+                st.caption("↩️ Apply this one by editing the source "
+                           "document (splitting a question changes the "
+                           "data model, so the tool won't do it for you).")
+            st.divider()
+
+        if st.button(f"✅ Apply {len(accepted_keys)} accepted suggestion(s) "
+                     f"and rebuild", disabled=not accepted_keys,
+                     use_container_width=True):
+            accepted = [pending[i] for i in accepted_keys]
+            Workflow(knowledge=_kb()).apply_ai_suggestions(result, accepted)
+            st.session_state["last_result"] = result
+            st.rerun()
 
 
 def _render_platform_guide(target: str) -> None:

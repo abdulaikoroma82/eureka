@@ -24,8 +24,29 @@ from dataclasses import dataclass, field
 from typing import List, Tuple
 
 #: All AI sub-features, by key. Used to validate CLI/UI input.
-AI_FEATURES = ("translate", "skip_logic", "cross_constraints", "classify",
-              "review", "explain_findings")
+#: The first group mutates the form (each change validated + logged); the
+#: second group ("group", "rewrite", "order", "naming") is advisory-only -
+#: it produces accept/reject suggestions and never changes the form itself.
+AI_FEATURES = ("translate", "skip_logic", "domain_constraints",
+              "cross_constraints", "classify", "review", "explain_findings",
+              "group", "rewrite", "order", "naming")
+
+#: Accepted alternative spellings for feature keys (CLI convenience).
+FEATURE_ALIASES = {
+    "logic_fallback": "skip_logic",
+    "explain": "explain_findings",
+    "cross": "cross_constraints",
+}
+
+
+def normalize_features(features) -> list:
+    """Map alias spellings onto canonical feature keys, preserving order."""
+    out = []
+    for f in features:
+        canonical = FEATURE_ALIASES.get(f, f)
+        if canonical not in out:
+            out.append(canonical)
+    return out
 
 
 @dataclass
@@ -36,6 +57,14 @@ class AIConfig:
     features: List[str] = field(default_factory=lambda: list(AI_FEATURES))
     #: (language name, ISO 639-1 code) pairs, e.g. [("French", "fr")].
     translate_languages: List[Tuple[str, str]] = field(default_factory=list)
+    #: Optional free-text description of the survey's domain and setting
+    #: (e.g. "child nutrition survey in rural Sierra Leone"). Used by the
+    #: domain-constraint and quality-review features to ground suggestions.
+    survey_context: str = ""
+    #: Where the translator caches finished translations between runs so a
+    #: regenerated form doesn't re-pay for unchanged labels. Empty string
+    #: disables caching.
+    translation_cache_path: str = ".translation_cache.json"
 
     @property
     def any_feature_enabled(self) -> bool:

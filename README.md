@@ -130,6 +130,12 @@ xlsform-architect design.csv --target kobo
 python -m xlsform_architect.app.main survey.docx --ai
 python -m xlsform_architect.app.main survey.docx --ai \
     --ai-features translate,review --ai-languages "French:fr,Spanish:es"
+# ground AI suggestions in your survey's domain
+python -m xlsform_architect.app.main survey.docx --ai \
+    --ai-context "child nutrition survey in rural districts"
+# or use the standalone shortcuts (each implies --ai with that feature)
+python -m xlsform_architect.app.main survey.docx --ai-review --ai-explain \
+    --ai-group --ai-rewrite --ai-order --ai-name --ai-cross
 ```
 
 The process exits non-zero if validation finds blocking errors, so it slots
@@ -261,12 +267,24 @@ explicitly enable it **and** provide an API key.
 
 | Feature | What it does | Why it can't be deterministic |
 | --- | --- | --- |
-| **Translation** | Generates `label::French (fr)`-style columns from your English labels — **only for labels you haven't already translated yourself** | Translation is language generation, not pattern matching |
-| **Logic fallback** | Resolves both "skip to question 20" jumps *and* complex conditions the compiler's pattern matching couldn't parse, into a proper `relevant` expression | Both require understanding the whole form's structure or unanticipated phrasing — genuine reasoning, not lookup |
+| **Translation** | Generates `label::French (fr)`-style columns from your English labels — **only for labels you haven't already translated yourself**; finished translations are cached locally (`.translation_cache.json`) so regenerating a form doesn't re-pay for unchanged text | Translation is language generation, not pattern matching |
+| **Logic fallback** | Resolves both "skip to question 20" jumps *and* complex conditions the compiler's pattern matching couldn't parse, into a proper `relevant` expression, each tagged with the model's own confidence (high/medium) | Both require understanding the whole form's structure or unanticipated phrasing — genuine reasoning, not lookup |
+| **Domain constraints** | Proposes realistic single-field bounds for numeric/date/text questions the rule templates left unconstrained, grounded in your optional survey description (`--ai-context`) — a "temperature" means something different in a health survey than a weather one | The bundled templates are deliberately domain-neutral; realistic domain bounds require knowing what the value *means* |
 | **Cross-field constraints** | Suggests constraints that depend on another question, e.g. "end date must be on/after start date" — **combined with `and`** if the field already has a rule-authored constraint | The constraint engine only ever looks at one question at a time — it structurally cannot see the relationship between two |
 | **Type-classification fallback** | Reclassifies a question that keyword rules defaulted to `text`, when the phrasing wasn't anticipated | Keyword lists always have blind spots; a model classifies by meaning |
-| **AI quality review** | A holistic second pass flagging things structural checks can't see — e.g. a constraint that contradicts its own label, or a name/label so unclear it would confuse someone reading the exported data (advisory only — never renames anything) | Requires reasoning across multiple fields' relationship to each other |
+| **AI quality review** | A holistic second pass flagging things structural checks can't see — semantic contradictions, unclear names, and respondent-experience traps (ambiguous phrasing, contradictory option lists, redundant questions, incoherent skip chains); advisory only | Requires reasoning across multiple fields' relationship to each other |
 | **Explain findings** | Adds a one-sentence plain-English explanation to the validator's own findings, after validation runs | Rules own every fact (level, category, message); AI only makes them easier to read |
+| **Question grouping** *(suggestion-only)* | Proposes logical sections for a form whose source document didn't provide them | "Water source" and "latrine type" belonging together is a semantic judgement |
+| **Question rewording** *(suggestion-only)* | Flags ambiguous, double-barreled, leading or jargon-heavy questions and suggests clearer wording (or a split, which you apply in the source document) | Whether a sentence is leading is a language judgement |
+| **Choice-list ordering** *(suggestion-only)* | Proposes a more logical option order — common answers first, themes adjacent, "Other"/"Refused" last | "Farming" belonging next to "Fishing" isn't a sortable property |
+| **Variable-name suggestions** *(suggestion-only)* | Offers a more natural name where the deterministic one reads awkwardly; accepting a rename also rewrites every `${...}` reference to it | Judging what an analyst will find readable is a language call |
+
+The four **suggestion-only** features never touch the form by themselves:
+each produces an original-vs-suggested pair you accept or reject (in the
+app's *AI suggestions* panel, which rebuilds and re-validates the workbook
+with your accepted changes; on the CLI they are printed for manual review).
+Every acceptance is re-validated at apply time and logged to the assumption
+log.
 
 ### Where rules and AI genuinely co-share the same output
 
@@ -288,18 +306,22 @@ authority:
 ### What stays deterministic on purpose
 
 Not everything that *could* be done with AI *should* be. Two things were
-deliberately left alone even though a model could technically improve them
-slightly:
+deliberately kept out of AI's hands even though a model could technically
+improve them slightly:
 
-* **Variable naming.** AI could produce marginally more natural names, but
-  naming needs to be free, instant, and — critically — **stable**: the same
-  question must always produce the same variable name across re-runs, or
-  version history and diffs become meaningless. Determinism is the better
-  tool here, not a compromise.
-* **Single-field constraints and all structural/type/deployment validation.**
-  These are enumerable, must be exactly right, and run on every question in
-  every form — exactly what rule engines are for. AI only ever supplements
-  this with the *cross-field* case it structurally cannot cover (above).
+* **Variable naming.** Naming needs to be free, instant, and — critically —
+  **stable**: the same question must always produce the same variable name
+  across re-runs, or version history and diffs become meaningless. The
+  deterministic name is therefore always the one in use; the optional
+  `naming` feature only ever *stores a suggestion* for you to accept, and
+  an accepted rename deterministically rewrites every `${...}` reference so
+  nothing dangles.
+* **Standard single-field constraints and all structural/type/deployment
+  validation.** These are enumerable, must be exactly right, and run on
+  every question in every form — exactly what rule engines are for. AI only
+  supplements them where rules structurally cannot reach: the *cross-field*
+  case, and *domain-specific* bounds for questions the domain-neutral
+  templates deliberately leave unconstrained.
 
 If a cross-field AI suggestion targets a question that already has a
 constraint (very common — a date field usually already got a generic "not in

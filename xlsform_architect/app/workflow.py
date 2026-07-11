@@ -48,6 +48,7 @@ from typing import Callable, Dict, List, Optional, Union
 from ..ai.client import DeepSeekClient
 from ..ai.config import AIConfig
 from ..ai.pipeline import AIPipeline
+from ..ai.suggestions import AISuggestion, apply_suggestions
 from ..engine.knowledge_base import KnowledgeBase
 from ..engine.rule_engine import RuleEngine
 from ..models import Questionnaire
@@ -86,6 +87,9 @@ class WorkflowResult:
     target: str = ""
     #: True if any AI feature actually ran (key configured and enabled).
     ai_ran: bool = False
+    #: Advisory AI suggestions (grouping, rewording, choice ordering,
+    #: naming) awaiting human accept/reject - never applied automatically.
+    ai_suggestions: List[AISuggestion] = field(default_factory=list)
 
     @property
     def is_valid(self) -> bool:
@@ -190,12 +194,46 @@ class Workflow:
                                 assumptions=notes, xlsform_bytes=xls_bytes,
                                 target=target or "",
                                 ai_ran=bool(client and client.available
-                                           and ai_config.any_feature_enabled))
+                                           and ai_config.any_feature_enabled),
+                                ai_suggestions=list(ai_pipeline.suggestions))
 
         if write_outputs:
             out_dir = Path(output_dir) if output_dir else CONFIG.output_dir
             result.outputs = self._write_all(questionnaire, report, notes,
                                               out_dir, source_name, target)
+        return result
+
+    # ------------------------------------------------------------------
+    def apply_ai_suggestions(self, result: WorkflowResult,
+                             accepted: List[AISuggestion],
+                             output_dir: Optional[Union[str, Path]] = None,
+                             write_outputs: bool = False,
+                             source_name: str = "questionnaire"
+                             ) -> WorkflowResult:
+        """Apply human-accepted AI suggestions, then re-export + re-validate.
+
+        Each suggestion is re-validated at apply time (see
+        :func:`~xlsform_architect.ai.suggestions.apply_suggestions`);
+        anything stale or invalid is rejected with a note rather than
+        half-applied. Advisory ``ai_review`` findings from the original run
+        are carried over unchanged - re-validation only refreshes the
+        deterministic findings.
+        """
+        qn = result.questionnaire
+        result.assumptions.extend(apply_suggestions(qn, accepted))
+
+        result.xlsform_bytes = self.exporter.export_bytes(
+            qn, target=result.target or None)
+        preserved = [f for f in result.report.findings
+                     if f.category == "ai_review"]
+        result.report = self.validator.validate(qn, target=result.target or None)
+        result.report.findings.extend(preserved)
+
+        if write_outputs:
+            out_dir = Path(output_dir) if output_dir else CONFIG.output_dir
+            result.outputs = self._write_all(qn, result.report,
+                                              result.assumptions, out_dir,
+                                              source_name, result.target or None)
         return result
 
     # ------------------------------------------------------------------

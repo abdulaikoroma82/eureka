@@ -82,10 +82,12 @@ _SYSTEM_PROMPT = (
     "For every instruction, propose a 'relevant' expression (XPath-like, "
     "referencing other fields as ${field_name}) using only field names that "
     "appear in the provided survey. Only propose a change when you are "
-    "confident; omit anything ambiguous. "
+    "confident; omit anything ambiguous. Rate each proposal's confidence "
+    "as 'high' (the instruction has exactly one sensible reading) or "
+    "'medium' (a reasonable reading, but a human should double-check). "
     "Respond ONLY with a json object of the form "
     "{\"suggestions\": [{\"question_name\": \"...\", \"relevant\": \"...\", "
-    "\"rationale\": \"...\"}]}.")
+    "\"confidence\": \"high\", \"rationale\": \"...\"}]}.")
 
 
 class AISkipLogicResolver:
@@ -163,6 +165,8 @@ class AISkipLogicResolver:
             name = sug.get("question_name", "")
             expr = (sug.get("relevant") or "").strip()
             rationale = sug.get("rationale", "")
+            confidence = str(sug.get("confidence") or "").strip().lower()
+            conf_tag = f", confidence: {confidence}" if confidence else ""
 
             target = by_name.get(name)
             if target is None:
@@ -186,8 +190,9 @@ class AISkipLogicResolver:
 
             target.relevant = expr
             target.add_assumption(
-                f"AI-suggested relevant condition ({rationale or 'no rationale given'}). "
+                f"AI-suggested relevant condition "
+                f"({rationale or 'no rationale given'}{conf_tag}). "
                 f"Please review before deployment.")
             notes.append(f"[AI logic] Applied suggested relevant on "
-                        f"'{name}': `{expr}` - please review.")
+                        f"'{name}': `{expr}`{conf_tag} - please review.")
         return notes

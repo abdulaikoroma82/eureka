@@ -133,9 +133,11 @@ class ReportGenerator:
                 lines.append(f"| {platform.upper()} | {'Yes' if ok else 'No'} |")
             lines.append("")
 
-        # Findings grouped by level.
+        # Findings grouped by level (advisory AI review findings get their
+        # own section below, so they are never mistaken for rule checks).
         for level in ("error", "warning", "info"):
-            group = [f for f in report.findings if f.level == level]
+            group = [f for f in report.findings
+                     if f.level == level and f.category != "ai_review"]
             if not group:
                 continue
             lines.append(f"## {level.capitalize()}s ({len(group)})")
@@ -143,6 +145,21 @@ class ReportGenerator:
             for f in group:
                 loc = f" [`{f.location}`]" if f.location else ""
                 lines.append(f"- **{f.category}**{loc}: {f.message}")
+                if f.explanation:
+                    lines.append(f"  - _{f.explanation}_")
+            lines.append("")
+
+        ai_group = [f for f in report.findings if f.category == "ai_review"]
+        if ai_group:
+            lines.append(f"## AI review findings ({len(ai_group)})")
+            lines.append("")
+            lines.append("_Advisory only - flagged by the optional AI "
+                         "quality review for a human to consider; these "
+                         "never block deployment._")
+            lines.append("")
+            for f in ai_group:
+                loc = f" [`{f.location}`]" if f.location else ""
+                lines.append(f"- **{f.level}**{loc}: {f.message}")
                 if f.explanation:
                     lines.append(f"  - _{f.explanation}_")
             lines.append("")

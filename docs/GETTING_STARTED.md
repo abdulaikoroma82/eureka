@@ -176,17 +176,29 @@ do:
 
 - **Translate** your form's questions into other languages. If you've
   already written some translations yourself, those are always kept —
-  AI only fills in the ones you didn't get to.
+  AI only fills in the ones you didn't get to. Finished translations are
+  remembered between runs, so regenerating a form doesn't cost again for
+  text that hasn't changed.
 - **Untangle tricky skip instructions** — e.g. "if no, skip to question 20" —
   into the proper format automatically.
+- **Suggest sensible value limits** for questions the standard checks left
+  open — tell it what your survey is about (e.g. "child nutrition survey")
+  and it proposes realistic bounds for measurements, counts and dates.
 - **Suggest rules that compare two questions** — e.g. "the end date must be
   after the start date" — something a simple checklist can't figure out on
   its own since it only ever looks at one question at a time.
 - **Suggest a better answer type** for a question that was hard to classify.
 - **Give the finished form a second read-through** for anything that looks
-  off, including confusing question names, in plain English.
+  off — contradictions, confusing names, and questions respondents might
+  misread — in plain English.
 - **Explain any issues found** in a sentence or two, so you don't need to
   guess what a technical validation message means.
+- **Offer take-it-or-leave-it improvements** you review after generating:
+  logical sections for an unstructured form, clearer wording for confusing
+  questions, a more sensible order for long answer lists, and tidier
+  variable names. These never change your form by themselves — each is
+  shown side-by-side with the original, and only what you accept is
+  applied (the form is then rebuilt and re-checked automatically).
 
 This is completely optional and **off unless you turn it on**. To use it:
 

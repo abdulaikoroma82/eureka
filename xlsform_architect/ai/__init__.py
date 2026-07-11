@@ -15,14 +15,20 @@ point, and the individual feature modules for what each one does:
   co-share on the same output)
 * :mod:`skip_logic` - resolve "skip to question N" jumps and other
   unparseable conditional logic
+* :mod:`domain_constraints` - propose domain-aware single-field bounds
+  (grounded in an optional survey-context description) for questions the
+  deterministic constraint engine left unconstrained; never touches a
+  question that already has a constraint
 * :mod:`constraint_reviewer` - suggest cross-field validation constraints
   (e.g. end date after start date) that a single-question constraint engine
   cannot express; combines with an existing single-field constraint rather
   than discarding it - another rules/AI co-share
 * :mod:`type_classifier` - reclassify keyword-fallback "text" questions
 * :mod:`quality_reviewer` - holistic review of the compiled form: semantic
-  contradictions plus advisory-only naming/label clarity commentary (never
-  renames anything - the rule engine keeps sole ownership of names)
+  contradictions, advisory-only naming/label clarity commentary (never
+  renames anything - the rule engine keeps sole ownership of names), and
+  respondent-experience checks (ambiguous phrasing, contradictory option
+  lists, redundant questions, incoherent skip chains)
 * :mod:`finding_explainer` - adds a plain-English explanation to the
   deterministic validator's own findings, after validation runs; a strict
   co-share where rules own every fact and AI only makes them easier to read

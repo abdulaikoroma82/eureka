@@ -4,7 +4,7 @@ Purpose
 -------
 A final, holistic read of the compiled form that catches problems
 structural/logic validators cannot see because they only ever check one rule
-at a time. Two kinds of issue, both advisory-only:
+at a time. Three kinds of issue, all advisory-only:
 
 * **Semantic contradictions** - e.g. a constraint that contradicts its own
   label (age constraint 0-120 on a field labelled "age in months"), a
@@ -16,6 +16,13 @@ at a time. Two kinds of issue, both advisory-only:
   owns the actual ``name`` and ``label`` values (naming must stay
   deterministic and stable - see the README) - this pass never renames
   anything, it only surfaces a suggestion for a human to act on.
+* **Respondent experience** - problems that surface in the field rather
+  than in the data: a question phrased so ambiguously respondents will
+  interpret it differently; a select_multiple whose options are mutually
+  exclusive; answer-option styles that flip between questions (Yes/No here,
+  True/False there); two questions asking essentially the same thing; a
+  skip chain whose combined conditions make a question unreachable or
+  nonsensical for the people who will actually see it.
 
 Design
 ------
@@ -34,7 +41,10 @@ findings for a human to read.
 
 Inputs
 ------
-A compiled :class:`~xlsform_architect.models.Questionnaire`.
+A compiled :class:`~xlsform_architect.models.Questionnaire`, plus an
+optional free-text ``survey_context`` describing the survey's domain and
+setting, which grounds the review (what counts as a sensible option list or
+a plausible bound depends on what the survey is about).
 
 Outputs
 -------
@@ -59,7 +69,7 @@ _SYSTEM_PROMPT = (
     "You are a meticulous XLSForm quality reviewer. You are given a compiled "
     "survey as json: each question's name, label, type, constraint, "
     "constraint_message, relevant condition, calculation and choice list. "
-    "Look for two kinds of issue, both ADVISORY ONLY - you are never asked "
+    "Look for three kinds of issue, all ADVISORY ONLY - you are never asked "
     "to change anything, only to flag it for a human to review: "
     "(1) SEMANTIC problems simple rule checks would miss, such as a "
     "constraint or type that contradicts what the label is asking for; a "
@@ -71,6 +81,14 @@ _SYSTEM_PROMPT = (
     "ambiguous, or inconsistently abbreviated that someone reading the "
     "exported data later would struggle to understand it. Only flag names "
     "that are genuinely confusing, not just short. "
+    "(3) RESPONDENT EXPERIENCE - problems that surface during interviews "
+    "rather than in the data: a question phrased so ambiguously that "
+    "respondents will interpret it differently; a select_multiple whose "
+    "options are mutually exclusive; answer-option styles that switch "
+    "between questions asking the same kind of thing (e.g. Yes/No on one, "
+    "True/False on another); two questions that ask essentially the same "
+    "thing; a chain of relevant conditions that makes a question "
+    "unreachable or nonsensical for the respondents who would see it. "
     "Do NOT repeat purely structural issues like missing names or duplicate "
     "names - assume those are already checked elsewhere. Only report "
     "genuine, explainable concerns; if the form looks fine, return an empty "
@@ -86,15 +104,19 @@ class AIQualityReviewer:
         self.client = client
 
     # ------------------------------------------------------------------
-    def review(self, questionnaire: Questionnaire) -> List[Finding]:
+    def review(self, questionnaire: Questionnaire,
+               survey_context: str = "") -> List[Finding]:
         rows = self._survey_summary(questionnaire)
         if not rows:
             return []
 
+        user_prompt = ""
+        if survey_context.strip():
+            user_prompt += f"Survey context: {survey_context.strip()}\n"
+        user_prompt += "Survey (json):\n" + json.dumps(rows, ensure_ascii=False)
         try:
             response = self.client.complete_json(
-                _SYSTEM_PROMPT,
-                "Survey (json):\n" + json.dumps(rows, ensure_ascii=False),
+                _SYSTEM_PROMPT, user_prompt,
                 max_tokens=max(1500, len(rows) * 60))
         except AIError as exc:
             return [Finding("info", "ai_review",

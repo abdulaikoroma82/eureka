@@ -38,7 +38,7 @@ import sys
 from pathlib import Path
 
 from ..ai.client import DeepSeekClient
-from ..ai.config import AI_FEATURES, AIConfig
+from ..ai.config import AI_FEATURES, AIConfig, normalize_features
 from .config import CONFIG, DEPLOYMENT_TARGETS
 from .workflow import Workflow
 
@@ -89,6 +89,25 @@ def build_parser() -> argparse.ArgumentParser:
                     help="Comma-separated Name:code pairs for translation, "
                          "e.g. 'French:fr,Spanish:es' (requires --ai-features "
                          "to include 'translate')")
+    ai.add_argument("--ai-context", default="",
+                    help="Free-text description of the survey's domain, e.g. "
+                         "'child nutrition survey in rural districts'; grounds "
+                         "the 'domain_constraints' and 'review' features")
+    # Standalone shortcuts: each enables AI with just that feature (they
+    # combine with each other, and with --ai/--ai-features if also given).
+    for flag, feature, text in (
+            ("--ai-group", "group", "suggest logical question sections"),
+            ("--ai-rewrite", "rewrite", "suggest clearer question wording"),
+            ("--ai-order", "order", "suggest logical choice-list ordering"),
+            ("--ai-cross", "cross_constraints",
+             "suggest cross-field constraints"),
+            ("--ai-review", "review", "run the AI quality review"),
+            ("--ai-explain", "explain_findings",
+             "explain validation findings in plain English"),
+            ("--ai-name", "naming", "suggest clearer variable names")):
+        ai.add_argument(flag, dest=f"ai_flag_{feature}", action="store_true",
+                        help=f"Shortcut: {text} (implies --ai with this "
+                             f"feature)")
     return parser
 
 
@@ -122,19 +141,27 @@ def main(argv=None) -> int:
 
     ai_config = AIConfig.disabled()
     ai_client = None
-    if args.ai:
-        features = [f.strip() for f in args.ai_features.split(",") if f.strip()]
+    flag_features = [f for f in AI_FEATURES
+                     if getattr(args, f"ai_flag_{f}", False)]
+    if args.ai or flag_features:
+        if args.ai:
+            features = normalize_features(
+                f.strip() for f in args.ai_features.split(",") if f.strip())
+        else:
+            features = []          # only the standalone flags were given
+        features.extend(f for f in flag_features if f not in features)
         unknown = set(features) - set(AI_FEATURES)
         if unknown:
             print(f"error: unknown --ai-features: {', '.join(sorted(unknown))} "
                  f"(choose from: {', '.join(AI_FEATURES)})", file=sys.stderr)
             return 2
         ai_config = AIConfig(enabled=True, features=features,
-                             translate_languages=_parse_languages(args.ai_languages))
+                             translate_languages=_parse_languages(args.ai_languages),
+                             survey_context=args.ai_context)
         ai_client = DeepSeekClient()
         if not ai_client.available:
-            print("warning: --ai was requested but DEEPSEEK_API_KEY is not "
-                 "set; continuing without AI enrichment.", file=sys.stderr)
+            print("warning: AI enrichment was requested but DEEPSEEK_API_KEY "
+                 "is not set; continuing without it.", file=sys.stderr)
 
     workflow = Workflow(knowledge=knowledge, ai_client=ai_client)
     print(f"Processing: {input_path}")
@@ -157,7 +184,7 @@ def main(argv=None) -> int:
     if result.target:
         print(f"Target:  {result.target.upper()} "
               f"(platform standards applied; dialect columns written)")
-    if args.ai:
+    if ai_config.enabled:
         print(f"AI:      {'ran (' + ', '.join(ai_config.features) + ')' if result.ai_ran else 'requested but did not run (no API key)'}")
     print(f"Questions compiled: "
           f"{len([q for q in result.questionnaire.questions if not q.is_structural])}")
@@ -169,6 +196,18 @@ def main(argv=None) -> int:
         print(f"   - {f.level.upper():7} {f.category}{loc}: {f.message}")
         if f.explanation:
             print(f"             → {f.explanation}")
+
+    if result.ai_suggestions:
+        print()
+        print(f"AI suggestions ({len(result.ai_suggestions)}) — advisory "
+              f"only, nothing was changed; review in the app or apply "
+              f"manually:")
+        for sug in result.ai_suggestions:
+            conf = f" (confidence: {sug.confidence})" if sug.confidence else ""
+            print(f"   - [{sug.kind}] {sug.target or 'form'}{conf}: "
+                  f"{sug.original!r} → {sug.suggested!r}")
+            if sug.reason:
+                print(f"       reason: {sug.reason}")
 
     print()
     print("Compatibility:")
