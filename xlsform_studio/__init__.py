@@ -1,10 +1,10 @@
 """XLSForm Studio.
 
-A rule-based questionnaire-to-XLSForm compiler with an optional AI layer.
-
-The package turns questionnaires (DOCX / XLSX / PDF / CSV / structured JSON)
-into deployment-ready XLSForms compatible with KoboToolbox, SurveyCTO, ODK,
-Ona and CommCare.
+An offline survey engineering platform that automatically transforms
+questionnaires (DOCX / XLSX / PDF / CSV / structured JSON) into validated,
+deployment-ready XLSForms compatible with KoboToolbox, SurveyCTO, ODK, Ona
+and CommCare. Under the hood, it works as a deterministic
+questionnaire-to-XLSForm compiler with an optional AI layer.
 
 The core pipeline is fully deterministic: parsers, rule engines, templates
 and validators, with zero network activity and zero AI dependency by

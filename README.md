@@ -1,7 +1,9 @@
 # XLSForm Studio
 
-**A standalone, rule-based compiler that turns questionnaires into
-deployment-ready XLSForms for KoboToolbox, SurveyCTO, ODK, Ona and CommCare.**
+**An offline survey engineering platform that automatically transforms
+questionnaires into validated, deployment-ready XLSForms for KoboToolbox,
+SurveyCTO, ODK, Ona and CommCare.** *(Under the hood, it works as a
+deterministic questionnaire compiler — see [Architecture](#architecture).)*
 
 XLSForm Studio lets a survey designer, M&E officer or researcher drop in a
 questionnaire of **any kind** (Word, Excel, PDF, CSV or JSON) and get back a
@@ -28,11 +30,18 @@ particular survey domain.
 
 Hand-coding XLSForms is slow and error-prone: mistyped variable names, broken
 `relevant` references, missing choice lists, inconsistent constraints. XLSForm
-Architect standardises that work and catches the errors before deployment.
+Studio standardises that work and catches the errors before deployment.
 
 ---
 
 ## Architecture
+
+Structurally, XLSForm Studio is a deterministic **compiler**: a parser turns
+a source questionnaire into an intermediate representation, a rule engine
+transforms and validates it against the XLSForm specification, and an
+exporter emits target artefacts (the XLSForm workbook plus its supporting
+documentation). The "survey engineering platform" framing in the intro is
+what that compiler is *for* — this section is how it works.
 
 ```
               User Interface  (Streamlit UI  /  CLI)

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "xlsform-studio"
 version = "1.12.0"
-description = "Deterministic, rule-based questionnaire-to-XLSForm compiler (Kobo / SurveyCTO / ODK)."
+description = "Offline survey engineering platform that transforms questionnaires into validated XLSForms (Kobo / SurveyCTO / ODK) — deterministic under the hood."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
