@@ -101,6 +101,9 @@ class WorkflowResult:
     #: Objective-coverage matrix (markdown; "" unless the AI "coverage"
     #: feature ran with objectives supplied).
     coverage_matrix: str = ""
+    #: Draft indicator matrix (markdown; "" unless the AI "indicators"
+    #: feature produced one).
+    indicator_matrix: str = ""
 
     @property
     def is_valid(self) -> bool:
@@ -217,7 +220,8 @@ class Workflow:
                                            and ai_config.any_feature_enabled),
                                 ai_suggestions=list(ai_pipeline.suggestions),
                                 quality=quality, duration=duration,
-                                coverage_matrix=ai_pipeline.coverage_matrix)
+                                coverage_matrix=ai_pipeline.coverage_matrix,
+                                indicator_matrix=ai_pipeline.indicator_matrix)
 
         if write_outputs:
             out_dir = Path(output_dir) if output_dir else CONFIG.output_dir
@@ -230,6 +234,11 @@ class Workflow:
                 matrix_path.write_text(result.coverage_matrix,
                                        encoding="utf-8")
                 result.outputs["coverage_matrix"] = matrix_path
+            if result.indicator_matrix:
+                ind_path = result.outputs["folder"] / "indicator_matrix.md"
+                ind_path.write_text(result.indicator_matrix,
+                                    encoding="utf-8")
+                result.outputs["indicator_matrix"] = ind_path
         return result
 
     # ------------------------------------------------------------------
@@ -325,6 +334,8 @@ class Workflow:
             self.artifacts.collection_plan_markdown(qn, duration=duration),
             encoding="utf-8")
         outputs["collection_plan"] = plan_path
+        outputs["survey_instrument"] = self.artifacts.write_survey_instrument_docx(
+            qn, folder / f"{base}_survey_instrument.docx", duration=duration)
         # 7. Version history (append-only, at the output-dir root).
         outputs["version_history"] = self.artifacts.append_version_history(
             out_dir / "version_history.json", qn, source_name,

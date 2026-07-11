@@ -294,6 +294,7 @@ explicitly enable it **and** provide an API key.
 | **Quality narrative** | Writes the QA report's executive summary from the deterministic Form Quality Index, duration estimate, readiness findings and finding counts — it is sent only the audited metrics, never asked to re-judge the form | Turning seven scores and a risk rating into two readable sentences is prose generation; the numbers themselves stay 100% rules |
 | **Missing-question detection** | Infers the survey's purpose and flags questions it probably needs but lacks (weight + MUAC with no height blocks weight-for-height) — advisory findings only, the tool **never adds questions** | Recognising that a set of questions implies an absent member is domain reasoning, not pattern matching |
 | **Objective coverage matrix** | You list your study objectives; it maps each to the questions that inform it and flags gaps (`coverage_matrix.md` + Quality tab). Every cited question name is verified to exist — invalid references are discarded | Judging that two questions together measure "access to safe water" is semantics; the question inventory and reference checks stay 100% rules |
+| **Indicator matrix** | Drafts an M&E reporting framework from the compiled questions: indicator, source questions (verified to exist), aggregation level, means of verification (`indicator_matrix.md`) | Which questions feed which indicator is meaning, not matching |
 | **Question grouping** *(suggestion-only)* | Proposes logical sections for a form whose source document didn't provide them | "Water source" and "latrine type" belonging together is a semantic judgement |
 | **Question rewording** *(suggestion-only)* | Flags ambiguous, double-barreled, leading or jargon-heavy questions and suggests clearer wording (or a split, which you apply in the source document) | Whether a sentence is leading is a language judgement |
 | **Choice-list ordering** *(suggestion-only)* | Proposes a more logical option order — common answers first, themes adjacent, "Other"/"Refused" last | "Farming" belonging next to "Fishing" isn't a sortable property |
@@ -488,11 +489,28 @@ Each run writes a timestamped folder under `output/` containing:
    overview, time per section, interviews-per-enumerator planning figure,
    device requirements (GPS/camera/media files), languages, and a
    checklist of what to complete manually
-10. `version_history.json` — append-only audit trail across runs
-11. `change_report.md` — only with `--diff-against OLD_FILE`: what changed
+10. `*_survey_instrument.docx` — a printable paper questionnaire: sections
+    as headings, numbered questions, tick-boxes for options, answer lines,
+    and skip rules in plain words — a paper backup and a review copy for
+    non-technical stakeholders
+11. `version_history.json` — append-only audit trail across runs
+12. `change_report.md` — only with `--diff-against OLD_FILE`: what changed
    versus a previous questionnaire version (added/removed/renamed
    variables, logic/constraint changes, choice-list edits), with breaking
    changes for longitudinal analysis flagged explicitly
+
+### Reverse engineering an existing XLSForm
+
+The pipeline runs in both directions: feed a **deployed XLSForm** (`.xlsx`
+with `survey`/`choices`/`settings` sheets — SurveyCTO's dialect headers are
+understood too) as the input, and the full documentation package above is
+regenerated from it: printable questionnaire, enumerator guide, data
+dictionary, logic map and flowchart, quality score, QA report. Useful for
+inheriting an undocumented form or producing stakeholder-readable copies.
+
+```bash
+python -m xlsform_architect.app.main deployed_form.xlsx
+```
 
 ---
 

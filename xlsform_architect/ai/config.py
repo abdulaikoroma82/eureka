@@ -30,7 +30,7 @@ from typing import List, Tuple
 AI_FEATURES = ("translate", "skip_logic", "domain_constraints",
               "cross_constraints", "classify", "review", "explain_findings",
               "narrative", "group", "rewrite", "order", "naming",
-              "instructions", "completeness", "coverage")
+              "instructions", "completeness", "coverage", "indicators")
 
 #: Accepted alternative spellings for feature keys (CLI convenience).
 FEATURE_ALIASES = {

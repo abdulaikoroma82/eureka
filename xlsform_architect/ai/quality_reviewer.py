@@ -4,7 +4,11 @@ Purpose
 -------
 A final, holistic read of the compiled form that catches problems
 structural/logic validators cannot see because they only ever check one rule
-at a time. Three kinds of issue, all advisory-only:
+at a time. Five kinds of issue, all advisory-only: semantic contradictions,
+naming/label clarity, respondent experience, enumerator experience
+(administration difficulty), and methodology/sequencing (question ordering,
+priming effects, conceptually strange skip pathways). One expert-panel
+prompt covers all five so the whole review stays a single API call:
 
 * **Semantic contradictions** - e.g. a constraint that contradicts its own
   label (age constraint 0-120 on a field labelled "age in months"), a
@@ -23,6 +27,13 @@ at a time. Three kinds of issue, all advisory-only:
   True/False there); two questions asking essentially the same thing; a
   skip chain whose combined conditions make a question unreachable or
   nonsensical for the people who will actually see it.
+* **Enumerator experience** - what makes the interview hard to administer:
+  abrupt transitions, instructions requiring on-the-spot interpretation,
+  heavy unguided probing, error-prone recording formats.
+* **Methodology & sequencing** - sensitive questions before rapport,
+  earlier questions priming later answers, conceptually strange skip
+  pathways (expected branches that don't exist), sections ordered against
+  the natural conversation flow.
 
 Design
 ------
@@ -89,6 +100,18 @@ _SYSTEM_PROMPT = (
     "True/False on another); two questions that ask essentially the same "
     "thing; a chain of relevant conditions that makes a question "
     "unreachable or nonsensical for the respondents who would see it. "
+    "(4) ENUMERATOR EXPERIENCE - what makes the interview hard to "
+    "administer: abrupt topic transitions with no bridge; instructions the "
+    "enumerator must interpret on the spot; questions requiring heavy "
+    "unguided probing; recording formats that invite mistakes under time "
+    "pressure. "
+    "(5) METHODOLOGY AND SEQUENCING - senior-methodologist concerns: "
+    "sensitive questions placed before rapport is established; earlier "
+    "questions that bias (prime) later answers; skip pathways that are "
+    "conceptually strange - a branch respondents would expect that doesn't "
+    "exist, or a pathway that lands respondents on questions that don't "
+    "apply to them; sections ordered against the natural flow of the "
+    "conversation. "
     "Do NOT repeat purely structural issues like missing names or duplicate "
     "names - assume those are already checked elsewhere. Only report "
     "genuine, explainable concerns; if the form looks fine, return an empty "

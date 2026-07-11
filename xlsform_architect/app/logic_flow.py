@@ -170,6 +170,32 @@ class LogicFlowBuilder:
         return "\n".join(lines)
 
     # ------------------------------------------------------------------
+    # Mermaid (renders natively on GitHub / GitLab / many wikis)
+    # ------------------------------------------------------------------
+    def to_mermaid(self, questionnaire: Questionnaire) -> str:
+        edges = self.edges(questionnaire)
+        if not edges:
+            return ""
+        by_name = {q.name: q for q in questionnaire.questions}
+        involved = [q for q in questionnaire.questions if not q.is_structural
+                    and q.name in ({e.source for e in edges}
+                                   | {e.target for e in edges})]
+        lines = ["flowchart TD"]
+        for q in involved:
+            label = self._mermaid_esc(self._short(q.label or q.raw_label))
+            lines.append(f'    {q.name}["{q.name}<br/>{label}"]')
+        for e in edges:
+            label = self._mermaid_esc(
+                self._branch_label(e, e.source)
+                if by_name.get(e.source) else e.condition)
+            lines.append(f'    {e.source} -->|"{label}"| {e.target}')
+        return "\n".join(lines)
+
+    @staticmethod
+    def _mermaid_esc(text: str) -> str:
+        return text.replace('"', "&quot;")
+
+    # ------------------------------------------------------------------
     # Condition prettifying
     # ------------------------------------------------------------------
     def describe_condition(self, expr: str, qn: Questionnaire) -> str:

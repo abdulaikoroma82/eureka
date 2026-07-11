@@ -138,17 +138,23 @@ class ArtifactBuilder:
             lines.append("_No conditional questions._")
         lines.append("")
 
-        flow = LogicFlowBuilder().to_ascii(questionnaire)
+        builder = LogicFlowBuilder()
+        flow = builder.to_ascii(questionnaire)
         if flow:
             lines.append("## Skip-pattern flowchart")
             lines.append("")
             lines.append("Answer values are shown as their labels; the raw "
                          "expressions above stay authoritative. A graphical "
                          "version is in `logic_flow.dot` (open with any "
-                         "Graphviz viewer) and in the app's Logic map tab.")
+                         "Graphviz viewer) and in the app's Logic map tab; "
+                         "the Mermaid block below renders on GitHub/GitLab.")
             lines.append("")
             lines.append("```text")
             lines.append(flow)
+            lines.append("```")
+            lines.append("")
+            lines.append("```mermaid")
+            lines.append(builder.to_mermaid(questionnaire))
             lines.append("```")
             lines.append("")
 
@@ -331,6 +337,87 @@ class ArtifactBuilder:
                   "- Consent script and ethics approvals",
                   "- Data quality monitoring schedule"]
         return "\n".join(lines) + "\n"
+
+    def write_survey_instrument_docx(self, questionnaire: Questionnaire,
+                                     path: Union[str, Path],
+                                     duration=None) -> Path:
+        """Printable survey instrument (DOCX) - the human questionnaire.
+
+        The inverse of parsing (Module D1): sections as headings, numbered
+        questions, tick-boxes for options, answer lines for open questions,
+        and skip rules written in plain words. Useful as a paper backup, a
+        review copy for non-technical stakeholders, or documentation of an
+        imported XLSForm.
+        """
+        import docx
+
+        from .logic_flow import LogicFlowBuilder
+
+        flow = LogicFlowBuilder()
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        s = questionnaire.settings
+
+        doc = docx.Document()
+        doc.add_heading(s.form_title or "Survey Instrument", level=0)
+        meta = doc.add_paragraph()
+        meta.add_run(f"Form id: {s.form_id}    Version: {s.version}")
+        if duration is not None:
+            meta.add_run(f"    Estimated interview: "
+                         f"~{duration.typical_minutes:.0f} minutes")
+        doc.add_paragraph(
+            "Interviewer: ______________________    Date: ____ / ____ / ______"
+            "    Respondent ID: ______________")
+
+        marks = {"select_one": "○", "select_multiple": "☐", "rank": "①"}
+        current_section = object()
+        number = 0
+        for q in questionnaire.questions:
+            if q.base_type in ("begin group", "begin repeat"):
+                title = q.label or q.raw_label or q.name
+                if title:
+                    doc.add_heading(title, level=1)
+                if q.base_type == "begin repeat":
+                    doc.add_paragraph("Repeat this block for each person/"
+                                      "item (copy extra sheets as needed).")
+                current_section = object()   # group heading supersedes
+                continue
+            if q.is_structural or q.is_calculate:
+                continue
+            if q.section != current_section:
+                current_section = q.section
+                if q.section:
+                    doc.add_heading(q.section, level=1)
+
+            number += 1
+            required = " *" if q.required else ""
+            para = doc.add_paragraph()
+            para.add_run(f"{number}. {q.label or q.raw_label}{required}"
+                         ).bold = True
+            if q.relevant:
+                note = doc.add_paragraph(
+                    "Ask only when: "
+                    + flow.describe_condition(q.relevant, questionnaire))
+                note.runs[0].italic = True
+            if q.hint:
+                hint = doc.add_paragraph(q.hint)
+                hint.runs[0].italic = True
+
+            if q.references_choices:
+                cl = questionnaire.choice_lists.get(self._question_list_name(q))
+                mark = marks.get(q.base_type, "○")
+                for choice in (cl.choices if cl else []):
+                    doc.add_paragraph(f"    {mark}  {choice.label}")
+            elif q.base_type == "note":
+                pass                          # read-aloud text; no answer
+            else:
+                doc.add_paragraph("    Answer: ______________________________")
+            if q.constraint_message:
+                rule = doc.add_paragraph(f"    ({q.constraint_message})")
+                rule.runs[0].italic = True
+
+        doc.save(str(path))
+        return path
 
     @staticmethod
     def _question_list_name(q) -> str:

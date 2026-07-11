@@ -80,6 +80,7 @@ from .domain_constraints import AIDomainConstraintSynthesizer
 from .enumerator_notes import AIEnumeratorNoteSuggester
 from .finding_explainer import AIFindingExplainer
 from .grouping import AIGroupingSuggester
+from .indicators import AIIndicatorMapper
 from .naming import AINamingSuggester
 from .quality_reviewer import AIQualityReviewer
 from .rewording import AIRewordingSuggester
@@ -101,6 +102,9 @@ class AIPipeline:
         #: Objective-coverage matrix (markdown) from the most recent
         #: :meth:`run`; "" unless the "coverage" feature produced one.
         self.coverage_matrix: str = ""
+        #: Draft indicator matrix (markdown) from the most recent
+        #: :meth:`run`; "" unless the "indicators" feature produced one.
+        self.indicator_matrix: str = ""
 
     # ------------------------------------------------------------------
     def run(self, questionnaire: Questionnaire,
@@ -109,6 +113,7 @@ class AIPipeline:
         findings: List[Finding] = []
         self.suggestions = []
         self.coverage_matrix = ""
+        self.indicator_matrix = ""
 
         if not config.any_feature_enabled:
             return questionnaire, notes, findings
@@ -166,6 +171,12 @@ class AIPipeline:
             self.coverage_matrix = matrix
             notes.extend(cov_notes)
             findings.extend(cov_findings)
+
+        if config.wants("indicators"):
+            matrix, ind_notes = AIIndicatorMapper(self.client).map(
+                questionnaire, config.survey_context)
+            self.indicator_matrix = matrix
+            notes.extend(ind_notes)
 
         if config.wants("review"):
             findings.extend(AIQualityReviewer(self.client).review(

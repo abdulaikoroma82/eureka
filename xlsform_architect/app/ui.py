@@ -86,6 +86,7 @@ _AI_FEATURE_LABELS = {
     "instructions": "Draft enumerator instructions as device hints (accept/reject after generating)",
     "completeness": "Flag questions the survey probably needs but doesn't have",
     "coverage": "Check the form covers your study objectives (coverage matrix)",
+    "indicators": "Draft an indicator matrix / reporting framework from the questions",
 }
 
 
@@ -197,8 +198,8 @@ def _ai_sidebar():
                     features.append(key)
 
         survey_context = ""
-        if enabled and ({"domain_constraints", "review",
-                         "completeness"} & set(features)):
+        if enabled and ({"domain_constraints", "review", "completeness",
+                         "indicators"} & set(features)):
             survey_context = st.text_input(
                 "What is this survey about? (optional)",
                 placeholder="e.g. child nutrition survey in rural districts",
@@ -489,6 +490,9 @@ def _render_quality(result) -> None:
     if result.coverage_matrix:
         st.divider()
         st.markdown(result.coverage_matrix)
+    if result.indicator_matrix:
+        st.divider()
+        st.markdown(result.indicator_matrix)
 
 
 def _render_ai_suggestions(result, target: str) -> None:
