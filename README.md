@@ -133,6 +133,8 @@ python -m xlsform_studio.app.main survey.docx --target surveycto
 python -m xlsform_studio.app.main survey.docx --rules ./my_rules
 # after `pip install -e .`
 xlsform-studio design.csv --target kobo
+# step through an interactive interview simulation in the terminal
+xlsform-studio survey.docx --simulate
 
 # optional AI assist (requires DEEPSEEK_API_KEY) — see the AI section below
 python -m xlsform_studio.app.main survey.docx --ai
@@ -486,6 +488,51 @@ Results are written to `QA_Report.pdf` in the output package.
 
 ---
 
+## Interview simulation
+
+Static checks tell you the form is *well-formed*; the simulator tells you it
+*behaves*. Instead of deploying to a device and tracing skip logic by hand,
+you answer the form right here and watch its logic run:
+
+* **Skips** — every `relevant` is re-evaluated against your answers so far,
+  hiding and revealing questions live (and logging what got skipped and
+  why).
+* **Constraints** — checked the moment you submit, with `.` bound to your
+  candidate answer; a violation is rejected with its `constraint_message`
+  instead of being recorded.
+* **Calculations** — `calculate` fields recompute as their inputs change,
+  shown running in a live panel.
+* **Repeats** — a roster can be instantiated as many times as you like, each
+  instance with its own answers and its own scope (nested repeats included).
+
+**In the web app:** open the **🎬 Simulate** tab after generating a form,
+answer with real widgets, and watch the live side panel (answered, skipped,
+calculations, recent activity).
+
+**In the terminal:**
+
+```bash
+xlsform-studio survey.docx --simulate
+```
+
+```text
+Are you a resident? *
+    1 = Yes
+    0 = No
+> 1
+Years lived here *
+> 999
+  ✗ 0-120 only. — not recorded; answer again.
+> 5
+  = status=local
+```
+
+The simulator is a pure, deterministic engine — the same concrete expression
+evaluator the validator trusts — so it never contacts a network and never
+changes the form; it only *runs* it.
+
+---
+
 ## Output package
 
 Each run writes a timestamped folder under `output/` containing:
@@ -561,9 +608,10 @@ pytest
 
 The suite (`xlsform_studio/tests/`) covers the naming, classification,
 logic, constraint and calculation engines, the builders/exporter, the
-validators, every parser, the end-to-end workflow, and the optional AI layer
-(fully mocked at the network boundary — no API key or internet connection is
-needed to run the suite).
+validators (including static path analysis and choice-list auditing), the
+interview simulator, every parser, the end-to-end workflow, and the optional
+AI layer (fully mocked at the network boundary — no API key or internet
+connection is needed to run the suite).
 
 ---
 

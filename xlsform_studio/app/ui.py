@@ -397,7 +397,7 @@ def _render_result(result, target: str) -> None:
     tabs = st.tabs(["📋 Form preview", "🔤 Choices",
                     f"🧪 Findings ({len(report.findings)})",
                     f"🎯 {label} guide", "🧠 Assumptions", "🗺 Logic map",
-                    "📊 Quality"])
+                    "📊 Quality", "🎬 Simulate"])
 
     with tabs[0]:
         df = pd.DataFrame(SurveyBuilder().build(qn))
@@ -453,6 +453,9 @@ def _render_result(result, target: str) -> None:
     with tabs[6]:
         _render_quality(result)
 
+    with tabs[7]:
+        _render_simulator(result)
+
 
 def _render_quality(result) -> None:
     quality, duration = result.quality, result.duration
@@ -501,6 +504,128 @@ def _render_quality(result) -> None:
     if result.indicator_matrix:
         st.divider()
         st.markdown(result.indicator_matrix)
+
+
+def _render_simulator(result) -> None:
+    """Interactive interview simulation: answer questions and watch skips,
+    constraints, calculations and repeats fire live. The interview state
+    lives in the session, keyed to the current form, so Streamlit's reruns
+    don't reset it."""
+    from .simulator import Interview
+
+    qn = result.questionnaire
+    key = (qn.settings.form_id, len(qn.questions),
+           tuple(q.name for q in qn.questions))
+    if st.session_state.get("sim_key") != key or "sim" not in st.session_state:
+        st.session_state["sim"] = Interview(qn)
+        st.session_state["sim_key"] = key
+        st.session_state.pop("sim_error", None)
+    sim = st.session_state["sim"]
+
+    st.caption("Answer the form the way an enumerator would. Skips, "
+               "constraints, calculations and repeats run in real time — "
+               "no deployment needed. Nothing here changes the form.")
+    if st.button("↻ Restart interview"):
+        sim.restart()
+        st.session_state.pop("sim_error", None)
+        st.rerun()
+
+    main, side = st.columns([3, 2])
+    with main:
+        _render_sim_step(sim)
+    with side:
+        _render_sim_state(sim.state())
+
+
+def _render_sim_step(sim) -> None:
+    step = sim.current()
+
+    if step.kind == "done":
+        st.success("✅ Interview complete — every path resolved.")
+        return
+
+    if step.path:
+        st.info(f"📍 {step.path}")
+
+    if step.kind == "repeat_prompt":
+        st.markdown(f"**Add another '{step.repeat_label}'?**  \n"
+                    f"{step.completed_instances} recorded so far.")
+        c1, c2 = st.columns(2)
+        if c1.button("➕ Add another", use_container_width=True):
+            sim.add_repeat_instance()
+            st.rerun()
+        if c2.button("✓ Done with this section", use_container_width=True):
+            sim.finish_repeat()
+            st.rerun()
+        return
+
+    q = step.question
+    with st.form("sim_question", clear_on_submit=True):
+        label = (q.label or q.name) + (" *" if q.required else "")
+        st.markdown(f"**{label}**")
+        if q.hint:
+            st.caption(q.hint)
+        value = _sim_widget(q, step.choices)
+        submitted = st.form_submit_button("Submit answer →")
+    if submitted:
+        outcome = sim.submit(value)
+        st.session_state["sim_error"] = "" if outcome.ok else outcome.error
+        st.rerun()
+    if st.session_state.get("sim_error"):
+        st.error(f"✗ {st.session_state['sim_error']} — not recorded; "
+                 f"answer again.")
+
+
+def _sim_widget(q, choices):
+    """Render the right input for the question's type; return its value as
+    the string the engine expects (choice name(s), or raw text)."""
+    base = q.base_type
+    if base == "select_one" and choices:
+        labels = ["(leave blank)"] + [c.label for c in choices]
+        names = [""] + [c.name for c in choices]
+        pick = st.radio(q.name, labels, label_visibility="collapsed")
+        return names[labels.index(pick)]
+    if base == "select_multiple" and choices:
+        by_label = {c.label: c.name for c in choices}
+        picks = st.multiselect(q.name, list(by_label), label_visibility="collapsed")
+        return " ".join(by_label[p] for p in picks)
+    if base == "date":
+        import datetime as _dt
+        d = st.date_input(q.name, value=None, label_visibility="collapsed")
+        return d.isoformat() if isinstance(d, _dt.date) else ""
+    return st.text_input(q.name, label_visibility="collapsed",
+                         placeholder="type your answer")
+
+
+def _render_sim_state(state) -> None:
+    st.markdown("##### Live state")
+    if state.done:
+        st.caption("Interview finished.")
+    st.metric("Answered", len(state.answered))
+    if state.skipped:
+        with st.expander(f"⤵ Skipped ({len(state.skipped)})", expanded=False):
+            for a in state.skipped:
+                st.markdown(f"- `{a.name}` — {a.label}")
+    live_calcs = [c for c in state.calculations if c.value]
+    if live_calcs:
+        st.markdown("**Calculations**")
+        st.dataframe(
+            pd.DataFrame([{"field": c.name, "value": c.value}
+                          for c in live_calcs]),
+            use_container_width=True, hide_index=True)
+    if state.answered:
+        with st.expander("📝 Answers so far", expanded=False):
+            st.dataframe(
+                pd.DataFrame([{"field": a.name, "answer": a.value or "(blank)",
+                               "where": a.path or "—"} for a in state.answered]),
+                use_container_width=True, hide_index=True)
+    if state.events:
+        st.markdown("**Recent activity**")
+        icons = {"answered": "✅", "skipped": "⤵", "rejected": "✗",
+                 "repeat_added": "➕", "repeat_closed": "✓"}
+        for ev in reversed(state.events[-8:]):
+            st.caption(f"{icons.get(ev.kind, '•')} {ev.label}"
+                       + (f" — {ev.detail}" if ev.detail else ""))
 
 
 def _render_ai_suggestions(result, target: str) -> None:

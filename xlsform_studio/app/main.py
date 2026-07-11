@@ -95,6 +95,11 @@ def build_parser() -> argparse.ArgumentParser:
                              "version (any supported format); writes "
                              "change_report.md into the output package and "
                              "prints a summary")
+    parser.add_argument("--simulate", action="store_true",
+                        help="After compiling, run an interactive interview "
+                             "simulation in the terminal: answer questions and "
+                             "watch skips, constraints, calculations and "
+                             "repeats fire in real time")
 
     ai = parser.add_argument_group(
         "optional AI enrichment (DeepSeek)",
@@ -299,7 +304,94 @@ def main(argv=None) -> int:
     for key, path in result.outputs.items():
         print(f"   {key:18} {path}")
 
+    if args.simulate:
+        run_simulation(result.questionnaire)
+
     return 0 if report.is_valid else 1
+
+
+def run_simulation(questionnaire, input_fn=input, out=None) -> None:
+    """Drive an interactive interview at the terminal.
+
+    ``input_fn`` / ``out`` are injectable so the loop can be scripted in a
+    test without a real TTY.
+    """
+    from ..app.simulator import Interview
+
+    def emit(text: str = "") -> None:
+        print(text, file=out)
+
+    sim = Interview(questionnaire)
+    emit()
+    emit("=" * 60)
+    emit("  Interview simulation — answers drive the live logic.")
+    emit("  Enter a value; blank = leave empty; 'q' = quit.")
+    emit("  For select_multiple, separate codes with spaces.")
+    emit("=" * 60)
+
+    while True:
+        step = sim.current()
+        if step.kind == "done":
+            emit()
+            emit("Interview complete.")
+            _print_sim_summary(sim, emit)
+            return
+
+        if step.kind == "repeat_prompt":
+            emit()
+            prompt = (f"[{step.path}] Add another '{step.repeat_label}'? "
+                      f"({step.completed_instances} so far) [y/N/q] ")
+            answer = input_fn(prompt).strip().lower()
+            if answer == "q":
+                emit("Simulation ended.")
+                return
+            if answer in ("y", "yes"):
+                sim.add_repeat_instance()
+            else:
+                sim.finish_repeat()
+            continue
+
+        q = step.question
+        emit()
+        crumb = f"[{step.path}] " if step.path else ""
+        flag = " *" if q.required else ""
+        emit(f"{crumb}{q.label or q.name}{flag}")
+        if q.hint:
+            emit(f"  ({q.hint})")
+        for c in step.choices:
+            emit(f"    {c.name} = {c.label}")
+        raw = input_fn("> ")
+        if raw.strip().lower() == "q":
+            emit("Simulation ended.")
+            return
+        result = sim.submit(raw)
+        if not result.ok:
+            emit(f"  ✗ {result.error}")
+            continue
+        # Echo what just fired: newly skipped questions and live calcs.
+        state = sim.state()
+        for ev in state.events[-6:]:
+            if ev.kind == "skipped":
+                emit(f"  → skipped '{ev.label}' ({ev.detail})")
+        calcs = [c for c in state.calculations if c.value]
+        if calcs:
+            emit("  = " + ", ".join(f"{c.name}={c.value}" for c in calcs))
+
+
+def _print_sim_summary(sim, emit) -> None:
+    state = sim.state()
+    emit()
+    emit(f"Answered {len(state.answered)}, skipped {len(state.skipped)}.")
+    if state.answered:
+        emit("Answers:")
+        for a in state.answered:
+            crumb = f"[{a.path}] " if a.path else ""
+            emit(f"   {crumb}{a.name} = {a.value or '(blank)'}")
+    calcs = [c for c in state.calculations if c.value]
+    if calcs:
+        emit("Calculations:")
+        for c in calcs:
+            emit(f"   {c.name} = {c.value}")
 
 
 if __name__ == "__main__":  # pragma: no cover
