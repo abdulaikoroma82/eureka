@@ -1,8 +1,8 @@
-# Getting Started with XLSForm Architect
+# Getting Started with XLSForm Studio
 
 A plain-language guide. **No coding knowledge needed.**
 
-XLSForm Architect turns a questionnaire (a Word, Excel, PDF, or text file) into
+XLSForm Studio turns a questionnaire (a Word, Excel, PDF, or text file) into
 a ready-to-use survey form for **KoboToolbox, SurveyCTO, ODK, Ona, or
 CommCare** — plus a set
 of supporting documents. It runs on your own computer and does **not** use any
@@ -32,7 +32,7 @@ Python is the free engine the tool runs on.
 
 ### Step 2: Get the tool onto the computer
 
-Put the project folder (the one containing the `xlsform_architect` folder and
+Put the project folder (the one containing the `xlsform_studio` folder and
 the `README.md` file) somewhere easy to find, for example your Desktop.
 
 ### Step 3: Open a command window in that folder
@@ -61,7 +61,7 @@ Type this and press Enter:
 python run_ui.py
 ```
 
-Your web browser opens automatically to the XLSForm Architect app. **That's
+Your web browser opens automatically to the XLSForm Studio app. **That's
 it — setup is done.**
 
 > **Tip for later:** to start the app again another day, you only need to
@@ -79,7 +79,7 @@ So you don't have to type anything next time, create a shortcut:
    cd /d "%~dp0"
    python run_ui.py
    ```
-3. Save it, then rename the file to **`Start XLSForm Architect.bat`**
+3. Save it, then rename the file to **`Start XLSForm Studio.bat`**
    (make sure it ends in `.bat`, not `.txt`).
 
 From now on, just **double-click that file** to launch the app.

@@ -1,4 +1,4 @@
-# XLSForm Architect - runtime dependencies
+# XLSForm Studio - runtime dependencies
 # Python 3.11+ (3.12+ recommended)
 openpyxl>=3.1
 pandas>=2.0

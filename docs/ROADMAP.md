@@ -1,4 +1,4 @@
-# XLSForm Architect — Capability Roadmap
+# XLSForm Studio — Capability Roadmap
 
 Status of every module from the capability-gap review, prioritized by
 impact versus effort. Architecture invariants that every item must
@@ -7,7 +7,7 @@ preserve: **deterministic-first** (rules are the authority), **offline-first**
 (assumption log + deterministic outputs), **YAML-driven rules**, **platform
 neutrality**.
 
-Legend: ✅ shipped · 🟡 partially shipped · ⬜ pending
+Legend: ✅ shipped · 🚫 descoped · ⬜ pending
 
 ---
 
@@ -29,7 +29,7 @@ Legend: ✅ shipped · 🟡 partially shipped · ⬜ pending
 | A13 | Semantic Constraint Suggestions | ✅ | `ai/domain_constraints.py` + `ai/constraint_reviewer.py` |
 | A15 | Survey Quality Narrative | ✅ | `ai/narrative.py` |
 | H1 | Survey Health Score | ✅ | D4 metrics + A15 narration (`narrative` feature) |
-| H3 | Smart Assumption Log | 🟡 | rules record everything; AI explains *findings* but not yet assumptions |
+| H3 | Smart Assumption Log | 🚫 | descoped — see *Descoped items* below |
 | H4 | Smart Validation Report | ✅ | `ai/finding_explainer.py` |
 | H5 | Readiness Assessment | ✅ | D10 findings narrated operationally by `ai/narrative.py` |
 | D6 | Metadata & Documentation Generator | ✅ | `app/artifacts.py`: enumerator guide, variable specification, collection plan |
@@ -44,26 +44,36 @@ Legend: ✅ shipped · 🟡 partially shipped · ⬜ pending
 | A8 | Indicator Mapping Engine | ✅ | `ai/indicators.py` → `indicator_matrix.md` + Quality tab; question refs verified deterministically |
 | A14 | Semantic Logic Review | ✅ | D5 owns decidable defects; `ai/quality_reviewer.py` category 5 reviews conceptual pathways |
 | D1 | Reverse Engineering Engine | ✅ | `parsers/excel_parser.py` reads XLSForms (incl. SurveyCTO dialect); importing one regenerates the full documentation package; printable `*_survey_instrument.docx` in every package |
-| A11 | Domain Plausibility Review | 🟡 | survey-context grounding + domain packs + completeness review cover most of it; pack-vocabulary-aware design checks pending |
-| H3 | Smart Assumption Log (completion) | 🟡 | rules record everything; AI explains findings but not yet assumption entries |
-| D2 | Visual mapper extensions | 🟡 | Mermaid export shipped (embedded in logic_map.md); SVG/PNG needs the optional graphviz binary — deferred |
+| A11 | Domain Plausibility Review | 🚫 | descoped — see *Descoped items* below |
+| D2 | Visual mapper extensions (SVG/PNG) | 🚫 | descoped — see *Descoped items* below |
 
 ---
 
-## Remaining work
+## Descoped items
 
-Everything else from the review is shipped (see the table). Three partial
-items remain, all small:
+Three items that had shipped partially were reviewed and cut rather than
+finished halfway, to keep the roadmap matching what's actually delivered:
 
-* **A11 — pack-aware domain plausibility (S)**: feed the loaded pack's
-  vocabulary into the completeness/review prompts so domain checks cite the
-  pack's own concepts (e.g. "an IMAM survey usually records oedema").
-* **H3 — assumption-log explanations (S)**: run the finding-explainer
-  pattern over assumption-log entries (batched, one API call) so each
-  logged decision carries a plain-language elaboration.
-* **D2 — SVG/PNG rendering (S)**: shell out to the `graphviz` binary when
-  (and only when) it is installed; the DOT and Mermaid sources already
-  ship, so this is a convenience export.
+* **A11 — pack-aware domain plausibility.** Survey-context grounding,
+  domain packs (D7), and the completeness review (A4) already cover the
+  practical need — flagging a plausibly missing question or an
+  out-of-range value. A fourth, narrower AI call to check pack vocabulary
+  specifically added a fourth API round-trip per form for marginal
+  incremental signal over what A4 already surfaces. Cut.
+* **H3 — smart assumption-log explanations.** The assumption log already
+  records every automatic decision in plain language at the point it is
+  made (`app/artifacts.py`). A second AI pass to re-explain entries that
+  are already human-readable was redundant with A15's narrative summary
+  and H4's finding explainer. Cut.
+* **D2 — SVG/PNG rendering.** The DOT and Mermaid sources already ship in
+  every output package and render natively (Mermaid on GitHub/GitLab/most
+  wikis; DOT in any Graphviz viewer or the in-app chart). Shelling out to
+  an optional system `graphviz` binary to pre-render a raster image would
+  add a platform-dependent code path for a format users can already
+  generate themselves in one click. Cut.
+
+If real usage surfaces a concrete need for any of these, they should be
+re-scoped from first principles rather than resumed from a partial state.
 
 ---
 

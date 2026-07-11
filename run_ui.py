@@ -1,6 +1,6 @@
 """Convenience launcher for the Streamlit UI.
 
-Runs the XLSForm Architect web interface without needing to remember the
+Runs the XLSForm Studio web interface without needing to remember the
 full ``streamlit run`` path.  Works from a source checkout and from a
 PyInstaller/py2exe bundle.
 
@@ -17,7 +17,7 @@ from pathlib import Path
 
 def main() -> int:
     project_root = Path(__file__).resolve().parent
-    ui_path = project_root / "xlsform_architect" / "app" / "ui.py"
+    ui_path = project_root / "xlsform_studio" / "app" / "ui.py"
 
     # Ensure the package is importable.
     if str(project_root) not in sys.path:

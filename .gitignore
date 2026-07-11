@@ -18,8 +18,8 @@ env/
 .ruff_cache/
 
 # Generated output packages (keep the folder, ignore its contents)
-xlsform_architect/output/*
-!xlsform_architect/output/.gitkeep
+xlsform_studio/output/*
+!xlsform_studio/output/.gitkeep
 
 # OS
 .DS_Store

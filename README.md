@@ -1,9 +1,9 @@
-# XLSForm Architect
+# XLSForm Studio
 
 **A standalone, rule-based compiler that turns questionnaires into
 deployment-ready XLSForms for KoboToolbox, SurveyCTO, ODK, Ona and CommCare.**
 
-XLSForm Architect lets a survey designer, M&E officer or researcher drop in a
+XLSForm Studio lets a survey designer, M&E officer or researcher drop in a
 questionnaire of **any kind** (Word, Excel, PDF, CSV or JSON) and get back a
 complete, validated XLSForm package — the spreadsheet plus a data dictionary,
 QA report, assumption log, logic map and version history. It applies the
@@ -56,7 +56,7 @@ Architect standardises that work and catches the errors before deployment.
 ```
 
 All stages communicate through one intermediate representation
-(`xlsform_architect/models.py`): a `Questionnaire` of `Question`, `Choice` and
+(`xlsform_studio/models.py`): a `Questionnaire` of `Question`, `Choice` and
 `ChoiceList` objects. A parser only has to produce a `Questionnaire`; everything
 downstream then works unchanged. The `ai/` package is the **only** part of
 the codebase that makes a network call, and only when explicitly enabled —
@@ -65,7 +65,7 @@ see [AI-assisted features](#ai-assisted-features-optional).
 ### Project layout
 
 ```
-xlsform_architect/
+xlsform_studio/
 ├── app/            # controller, config, CLI (main.py) and Streamlit UI (ui.py)
 ├── parsers/        # DOCX / XLSX / PDF / CSV / JSON / text parsers  (Module 1)
 ├── engine/         # classifier, naming, logic, constraint, calculation  (Modules 2,3,5,6,7)
@@ -92,7 +92,7 @@ python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\ac
 pip install -r requirements.txt
 ```
 
-Or install as a package (gives you the `xlsform-architect` command):
+Or install as a package (gives you the `xlsform-studio` command):
 
 ```bash
 pip install -e .
@@ -106,7 +106,7 @@ pip install -e .
 
 ```bash
 python run_ui.py
-# or:  streamlit run xlsform_architect/app/ui.py
+# or:  streamlit run xlsform_studio/app/ui.py
 ```
 
 Then in the browser: upload a questionnaire → pick a target (Kobo, SurveyCTO,
@@ -117,24 +117,24 @@ and the full `.zip` package.
 ### 2. Command line
 
 ```bash
-python -m xlsform_architect.app.main xlsform_architect/examples/event_registration.json
-python -m xlsform_architect.app.main survey.docx --title "Household Survey" --output ./out
+python -m xlsform_studio.app.main xlsform_studio/examples/event_registration.json
+python -m xlsform_studio.app.main survey.docx --title "Household Survey" --output ./out
 # target a platform: validates against ITS standards and writes ITS dialect
-python -m xlsform_architect.app.main survey.docx --target surveycto
+python -m xlsform_studio.app.main survey.docx --target surveycto
 # use a customised ruleset instead of the bundled standard rules
-python -m xlsform_architect.app.main survey.docx --rules ./my_rules
+python -m xlsform_studio.app.main survey.docx --rules ./my_rules
 # after `pip install -e .`
-xlsform-architect design.csv --target kobo
+xlsform-studio design.csv --target kobo
 
 # optional AI assist (requires DEEPSEEK_API_KEY) — see the AI section below
-python -m xlsform_architect.app.main survey.docx --ai
-python -m xlsform_architect.app.main survey.docx --ai \
+python -m xlsform_studio.app.main survey.docx --ai
+python -m xlsform_studio.app.main survey.docx --ai \
     --ai-features translate,review --ai-languages "French:fr,Spanish:es"
 # ground AI suggestions in your survey's domain
-python -m xlsform_architect.app.main survey.docx --ai \
+python -m xlsform_studio.app.main survey.docx --ai \
     --ai-context "child nutrition survey in rural districts"
 # or use the standalone shortcuts (each implies --ai with that feature)
-python -m xlsform_architect.app.main survey.docx --ai-review --ai-explain \
+python -m xlsform_studio.app.main survey.docx --ai-review --ai-explain \
     --ai-group --ai-rewrite --ai-order --ai-name --ai-cross
 ```
 
@@ -144,7 +144,7 @@ into CI / batch pipelines.
 ### 3. As a library
 
 ```python
-from xlsform_architect.app.workflow import Workflow
+from xlsform_studio.app.workflow import Workflow
 
 result = Workflow().run_from_dict({
     "settings": {"form_title": "Event Registration"},
@@ -233,9 +233,9 @@ Every decision is recorded in the **assumption log** so it can be reviewed.
 
 ## The rule pack (editable, no code changes)
 
-Platform profiles live in `xlsform_architect/knowledge/platforms.yaml`
+Platform profiles live in `xlsform_studio/knowledge/platforms.yaml`
 (dialects, supported types, naming standards, per-platform tips). All other
-standard rules live in `xlsform_architect/knowledge/xlsform_rules.yaml`:
+standard rules live in `xlsform_studio/knowledge/xlsform_rules.yaml`:
 
 * `type_keywords` — keyword → XLSForm type detection
 * `yes_no` — the canonical shared Yes/No list and its detection tokens
@@ -262,7 +262,7 @@ first; with no pack, behaviour is unchanged byte-for-byte). They are plain
 YAML — edit or add your own without touching Python.
 
 ```bash
-python -m xlsform_architect.app.main survey.docx --packs nutrition,health
+python -m xlsform_studio.app.main survey.docx --packs nutrition,health
 ```
 
 In the app: **"3 · Form details" → Domain rule packs**.
@@ -277,7 +277,7 @@ reasoning problems that no rule engine can solve — for those, an **optional**
 AI layer using [DeepSeek](https://api-docs.deepseek.com/) is available.
 
 **This layer is off by default.** With no flag/checkbox and no
-`DEEPSEEK_API_KEY`, the tool behaves exactly as if `xlsform_architect/ai/`
+`DEEPSEEK_API_KEY`, the tool behaves exactly as if `xlsform_studio/ai/`
 did not exist — no network calls, no new dependency (the client uses only
 the Python standard library), identical output. It only activates when you
 explicitly enable it **and** provide an API key.
@@ -355,7 +355,7 @@ stay enforced.
 
 ```bash
 export DEEPSEEK_API_KEY="sk-..."          # https://platform.deepseek.com
-python -m xlsform_architect.app.main survey.docx --ai
+python -m xlsform_studio.app.main survey.docx --ai
 ```
 
 Or in the Streamlit app: expand **"4 · 🤖 AI assist"** in the sidebar, paste a
@@ -389,7 +389,7 @@ features and languages you want.
 
 Choosing a target platform genuinely changes the output — the tool applies
 **that platform's** rules, not just the generic XLSForm spec. The profiles
-live in `xlsform_architect/knowledge/platforms.yaml` (editable, no code
+live in `xlsform_studio/knowledge/platforms.yaml` (editable, no code
 changes — adding a platform is a YAML edit; the UI, CLI and compatibility
 matrix pick it up automatically):
 
@@ -407,7 +407,7 @@ telling you which platforms *do* support the offending type.
 
 ### Coverage & the wider landscape
 
-XLSForm Architect covers the **XLSForm family** of mobile data collection
+XLSForm Studio covers the **XLSForm family** of mobile data collection
 platforms — KoboToolbox, SurveyCTO, ODK, Ona and CommCare — which all consume
 the XLSForm format this tool produces (CommCare via its Form Builder import).
 Platforms that use **entirely different form formats** — Survey Solutions
@@ -509,7 +509,7 @@ dictionary, logic map and flowchart, quality score, QA report. Useful for
 inheriting an undocumented form or producing stakeholder-readable copies.
 
 ```bash
-python -m xlsform_architect.app.main deployed_form.xlsx
+python -m xlsform_studio.app.main deployed_form.xlsx
 ```
 
 ---
@@ -521,7 +521,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-The suite (`xlsform_architect/tests/`) covers the naming, classification,
+The suite (`xlsform_studio/tests/`) covers the naming, classification,
 logic, constraint and calculation engines, the builders/exporter, the
 validators, every parser, the end-to-end workflow, and the optional AI layer
 (fully mocked at the network boundary — no API key or internet connection is
@@ -535,11 +535,114 @@ See [`packaging/README.md`](packaging/README.md). In short:
 
 ```bat
 pip install -r requirements-dev.txt
-pyinstaller packaging\xlsform_architect_cli.spec     :: -> dist\xlsform-architect.exe
+pyinstaller packaging\xlsform_studio_cli.spec     :: -> dist\xlsform-studio.exe
 ```
 
 The CLI packages into a single standalone `.exe` (no Python needed on the
 target). The Streamlit UI ships as a small virtual-environment launcher.
+
+---
+
+## Deployment
+
+The tool has no server-side state and no database — every run is
+self-contained, so deployment is just "make the CLI or the UI runnable
+somewhere."
+
+**Docker / CI (headless, CLI only).** A minimal container needs Python
+3.11+, the package, and nothing else for the deterministic pipeline:
+
+```dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY . .
+RUN pip install --no-cache-dir .
+ENTRYPOINT ["xlsform-studio"]
+```
+
+```bash
+docker build -t xlsform-studio .
+docker run --rm -v "$PWD:/data" xlsform-studio /data/survey.docx -o /data/out
+```
+
+In a CI pipeline, run `xlsform-studio survey.docx -o build/` as a build
+step and check its exit code: `0` means the form validated, `1` means
+validation found errors (see [Usage](#usage)). No network egress is
+required unless you explicitly pass `--ai` — the pipeline is airtight for
+regulated or offline environments by default.
+
+**Server (Streamlit UI).** Run `python run_ui.py` (or `streamlit run
+xlsform_studio/app/ui.py`) behind any reverse proxy; the app is stateless
+per session, so no special session affinity is needed beyond what
+Streamlit itself requires.
+
+**Configuration knobs** (all optional; the tool runs with sane defaults if
+none are set):
+
+| Variable | Purpose |
+| --- | --- |
+| `DEEPSEEK_API_KEY` | Enables the optional AI layer. Unset = fully deterministic, zero network calls. |
+| `XLSFS_OUTPUT_DIR` | Override the default output directory. |
+| `XLSFS_DEFAULT_TARGET` | Override the default deployment platform (`kobo`, `surveycto`, `odk`, `ona`, `commcare`). |
+| `XLSFS_DEEPSEEK_BASE_URL` / `XLSFS_DEEPSEEK_MODEL` | Point the AI layer at a different DeepSeek-compatible endpoint/model. |
+| `XLSFORM_STUDIO_LOG_LEVEL` | Diagnostic log verbosity for the Streamlit UI (`DEBUG`/`INFO`/`WARNING`/`ERROR`); the CLI uses `--log-level` instead. |
+
+**Error recovery.** Every step degrades independently rather than taking
+the whole run down:
+- A parser failure on one file doesn't affect other files in a batch —
+  each `xlsform-studio` invocation is one process, one exit code.
+- Any AI feature failure (network error, malformed response, missing key)
+  falls back to the deterministic result for that feature and logs a
+  `[AI] ...` note in the assumption log; it never aborts the run.
+- Validation errors are reported, not thrown — the XLSForm and full
+  documentation package are still written even when the form is invalid,
+  so you always have something to inspect and fix.
+
+---
+
+## Troubleshooting
+
+**"AI enrichment was skipped and the deterministic result stands."**
+Either `DEEPSEEK_API_KEY` isn't set, or the form exceeds the AI
+question-count ceiling (2,000 questions, to keep prompts inside the
+model's context window and bound per-run API cost). The deterministic
+output is complete and unaffected either way — AI is enrichment, not a
+dependency.
+
+**The AI API is down / rate-limited / times out.**
+Nothing to do — the run still completes. Each AI feature independently
+falls back to the deterministic result and logs why in the assumption
+log. Re-run later, or without `--ai`, to get the same form without the
+AI notes.
+
+**A form with 500+ questions feels slow.**
+The deterministic pipeline scales roughly linearly with question and
+choice-list count and has been used well past this size, but very large
+choice lists (thousands of options) will slow the consistency validator's
+pairwise near-duplicate check the most; if that becomes a bottleneck,
+disable AI features (they add the most latency per question) and profile
+which validator is dominant before assuming it's the AI layer.
+
+**"How do I trust an AI suggestion?"**
+You don't have to — every AI mutation is validated deterministically at
+apply time (see [AI-assisted features](#ai-assisted-features-optional)),
+advisory suggestions are never applied without explicit accept, and every
+applied change is tagged "AI-suggested" in the assumption log with the
+original value preserved. Run `xlsform-studio ... --log-level DEBUG` to
+see exactly which features ran and what each one returned.
+
+**I need to see what a run actually did, not just the output.**
+Pass `--log-level DEBUG` (CLI) or set `XLSFORM_STUDIO_LOG_LEVEL=DEBUG`
+before `streamlit run` (UI). This traces every AI feature's run/skip
+decision, every network call's timing and outcome, and every AI
+suggestion's accept/apply/reject outcome — without ever printing prompt
+content or the API key.
+
+**Where did my file go?**
+Every run writes into a timestamped subfolder of the output directory
+(`<form_id>_<YYYYMMDD_HHMMSS>/`), so re-running never overwrites a
+previous package. `version_history.json` at the output root is the
+append-only index across runs.
 
 ---
 
