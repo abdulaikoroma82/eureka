@@ -158,6 +158,27 @@ class AIPipeline:
         self.suggestions.extend(suggestions)
 
     # ------------------------------------------------------------------
+    def narrate(self, questionnaire: Questionnaire, quality, duration,
+                report: ValidationReport, config: AIConfig) -> List[str]:
+        """Attach an AI executive summary to *report* (Hybrid H1).
+
+        Runs post-validation, after the deterministic quality index and
+        duration estimate exist - AI narrates those audited numbers, it
+        never computes them. No-op under the same conditions as
+        :meth:`run`.
+        """
+        if not config.wants("narrative"):
+            return []
+        if self.client is None or not self.client.available:
+            return []
+        from .narrative import AIQualityNarrator
+        narrative, notes = AIQualityNarrator(self.client).narrate(
+            questionnaire, quality, duration, report)
+        if narrative:
+            report.narrative = narrative
+        return notes
+
+    # ------------------------------------------------------------------
     def explain_findings(self, report: ValidationReport,
                          config: AIConfig) -> List[str]:
         """Add plain-English explanations to already-computed findings.

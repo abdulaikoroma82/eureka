@@ -9,7 +9,9 @@ matrix.
 Runs, in order:
   1. Structure checks (sheets, types, names, group/repeat balance)
   2. Logic checks (duplicate names, broken references, choice lists)
-  3. Generic deployment checks (identifiers, reserved words, appearance)
+  3. Expression syntax + whole-form consistency checks (circular refs,
+     contradictory conditions, forward references, unused calculations)
+  4. Generic deployment checks (identifiers, reserved words, appearance)
   4. Platform checks - the standards of the CHOSEN target (Kobo / SurveyCTO /
      ODK) from ``knowledge/platforms.yaml``: supported types, naming rules,
      settings recommendations.
@@ -41,6 +43,7 @@ from typing import Optional
 
 from ..engine.knowledge_base import KnowledgeBase
 from ..models import Questionnaire
+from .consistency_validator import ConsistencyValidator
 from .expression_validator import ExpressionValidator
 from .logic_validator import LogicValidator
 from .platform_validator import PlatformValidator
@@ -61,6 +64,7 @@ class Validator:
         self.structure = StructureValidator()
         self.logic = LogicValidator()
         self.expression = ExpressionValidator()
+        self.consistency = ConsistencyValidator()
         self.xlsform = XLSFormValidator()
         self.platform = PlatformValidator(self.kb)
         self.pyxform = PyxformValidator()
@@ -73,6 +77,7 @@ class Validator:
         report.findings.extend(self.structure.validate(questionnaire))
         report.findings.extend(self.logic.validate(questionnaire))
         report.findings.extend(self.expression.validate(questionnaire))
+        report.findings.extend(self.consistency.validate(questionnaire))
         report.findings.extend(self.xlsform.validate(questionnaire))
 
         # Standards of the chosen platform.

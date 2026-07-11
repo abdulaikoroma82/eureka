@@ -274,6 +274,7 @@ explicitly enable it **and** provide an API key.
 | **Type-classification fallback** | Reclassifies a question that keyword rules defaulted to `text`, when the phrasing wasn't anticipated | Keyword lists always have blind spots; a model classifies by meaning |
 | **AI quality review** | A holistic second pass flagging things structural checks can't see — semantic contradictions, unclear names, and respondent-experience traps (ambiguous phrasing, contradictory option lists, redundant questions, incoherent skip chains); advisory only | Requires reasoning across multiple fields' relationship to each other |
 | **Explain findings** | Adds a one-sentence plain-English explanation to the validator's own findings, after validation runs | Rules own every fact (level, category, message); AI only makes them easier to read |
+| **Quality narrative** | Writes the QA report's executive summary from the deterministic Form Quality Index, duration estimate and finding counts — it is sent only the audited metrics, never asked to re-judge the form | Turning seven scores and a risk rating into two readable sentences is prose generation; the numbers themselves stay 100% rules |
 | **Question grouping** *(suggestion-only)* | Proposes logical sections for a form whose source document didn't provide them | "Water source" and "latrine type" belonging together is a semantic judgement |
 | **Question rewording** *(suggestion-only)* | Flags ambiguous, double-barreled, leading or jargon-heavy questions and suggests clearer wording (or a split, which you apply in the source document) | Whether a sentence is leading is a language judgement |
 | **Choice-list ordering** *(suggestion-only)* | Proposes a more logical option order — common answers first, themes adjacent, "Other"/"Refused" last | "Farming" belonging next to "Fishing" isn't a sortable property |
@@ -439,7 +440,11 @@ Each run writes a timestamped folder under `output/` containing:
 
 1. `*.xlsx` — the XLSForm (survey / choices / settings sheets)
 2. `*_data_dictionary.xlsx` — every variable, type, choices, constraint, calculation
-3. `QA_Report.pdf` — the validation report
+3. `QA_Report.pdf` — the validation report, including the **Form Quality
+   Index** (0–100 across seven categories: naming, constraint coverage,
+   logic completeness, choice consistency, validation readiness,
+   documentation, reusability) and a deterministic **interview-duration /
+   respondent-burden estimate**
 4. `assumption_log.md` — every deterministic decision made
 5. `logic_map.md` — relevance / constraint / calculation relationships,
    including an ASCII skip-pattern flowchart:
@@ -453,6 +458,10 @@ Each run writes a timestamped folder under `output/` containing:
    when the form has skip logic); the app's **Logic map** tab renders it
    interactively, with answer codes shown as their labels
 7. `version_history.json` — append-only audit trail across runs
+8. `change_report.md` — only with `--diff-against OLD_FILE`: what changed
+   versus a previous questionnaire version (added/removed/renamed
+   variables, logic/constraint changes, choice-list edits), with breaking
+   changes for longitudinal analysis flagged explicitly
 
 ---
 

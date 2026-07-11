@@ -73,6 +73,9 @@ class ValidationReport:
     deep_ran: bool = False
     #: The deployment platform the form was validated against ("" = generic).
     target: str = ""
+    #: Optional executive summary written by the AI narrative feature.
+    #: Purely additive commentary: it can never change a finding or score.
+    narrative: str = ""
 
     @property
     def errors(self) -> List[Finding]:
@@ -98,7 +101,16 @@ class ValidationReport:
 class ReportGenerator:
     """Render a :class:`ValidationReport` to Markdown / PDF."""
 
-    def to_markdown(self, report: ValidationReport, questionnaire: Questionnaire) -> str:
+    def to_markdown(self, report: ValidationReport,
+                    questionnaire: Questionnaire,
+                    quality=None, duration=None) -> str:
+        """Render the QA report.
+
+        *quality* (a :class:`~xlsform_architect.analysis.quality_score.
+        QualityIndex`) and *duration* (a :class:`~xlsform_architect.
+        analysis.duration.DurationEstimate`) are optional so existing
+        callers keep working; the workflow passes both.
+        """
         s = questionnaire.settings
         lines: List[str] = []
         lines.append("# XLSForm Architect - QA Validation Report")
@@ -111,6 +123,40 @@ class ReportGenerator:
         status = "PASSED" if report.is_valid else "FAILED"
         lines.append(f"## Overall status: {status}")
         lines.append("")
+        if report.narrative:
+            lines.append("## Executive summary")
+            lines.append("")
+            lines.append(f"_{report.narrative}_")
+            lines.append("")
+            lines.append("*(AI-written from the audited metrics below; "
+                         "advisory only.)*")
+            lines.append("")
+        if quality is not None:
+            lines.append(f"## Form Quality Index: {quality.overall}/100 "
+                         f"({quality.rating})")
+            lines.append("")
+            lines.append("| Category | Score |")
+            lines.append("| --- | --- |")
+            for name, score in quality.categories.items():
+                lines.append(f"| {name.replace('_', ' ')} | {score}/100 |")
+            lines.append("")
+            for ob in quality.observations:
+                lines.append(f"- {ob}")
+            if quality.observations:
+                lines.append("")
+        if duration is not None:
+            lines.append("## Estimated interview duration")
+            lines.append("")
+            lines.append(f"**~{duration.typical_minutes:.0f} minutes** "
+                         f"(range {duration.low_minutes:.0f}–"
+                         f"{duration.high_minutes:.0f}) across "
+                         f"{duration.question_count} question(s); "
+                         f"respondent-burden risk: **{duration.burden_risk}**.")
+            lines.append("")
+            for note in duration.notes:
+                lines.append(f"- {note}")
+            if duration.notes:
+                lines.append("")
         if report.target:
             lines.append(f"**Validated against:** {report.target.upper()} "
                          f"standards (plus the generic XLSForm spec)  ")
@@ -170,11 +216,12 @@ class ReportGenerator:
 
     # ------------------------------------------------------------------
     def to_pdf(self, report: ValidationReport, questionnaire: Questionnaire,
-               path: Union[str, Path]) -> Path:
+               path: Union[str, Path], quality=None, duration=None) -> Path:
         """Write a QA report PDF.  Falls back to .txt if PyMuPDF is missing."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        markdown = self.to_markdown(report, questionnaire)
+        markdown = self.to_markdown(report, questionnaire, quality=quality,
+                                    duration=duration)
         try:
             return self._pdf_via_fitz(markdown, path)
         except Exception:  # pragma: no cover - defensive fallback

@@ -75,6 +75,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", "-o", default=str(CONFIG.output_dir),
                         help="Output directory")
     parser.add_argument("--quiet", "-q", action="store_true", help="Suppress step output")
+    parser.add_argument("--diff-against", metavar="OLD_FILE",
+                        help="Also compare against a previous questionnaire "
+                             "version (any supported format); writes "
+                             "change_report.md into the output package and "
+                             "prints a summary")
 
     ai = parser.add_argument_group(
         "optional AI enrichment (DeepSeek)",
@@ -188,6 +193,18 @@ def main(argv=None) -> int:
         print(f"AI:      {'ran (' + ', '.join(ai_config.features) + ')' if result.ai_ran else 'requested but did not run (no API key)'}")
     print(f"Questions compiled: "
           f"{len([q for q in result.questionnaire.questions if not q.is_structural])}")
+    if result.quality is not None:
+        print()
+        print(f"Form Quality Index: {result.quality.overall}/100 "
+              f"({result.quality.rating})")
+        for name, score in result.quality.categories.items():
+            print(f"   {name.replace('_', ' '):22} {score}/100")
+    if result.duration is not None:
+        d = result.duration
+        print(f"Estimated interview: ~{d.typical_minutes:.0f} min "
+              f"(range {d.low_minutes:.0f}-{d.high_minutes:.0f}); "
+              f"burden risk: {d.burden_risk}")
+
     print()
     print("Validation:", "PASSED" if report.is_valid else "FAILED")
     print(" ", report.summary())
@@ -213,6 +230,32 @@ def main(argv=None) -> int:
     print("Compatibility:")
     for platform, ok in report.compatibility.items():
         print(f"   {platform.upper():10} {'OK' if ok else 'FAILED'}")
+
+    if args.diff_against:
+        old_path = Path(args.diff_against)
+        if not old_path.exists():
+            print(f"error: --diff-against file not found: {old_path}",
+                 file=sys.stderr)
+        else:
+            from ..analysis.diff import QuestionnaireDiff
+            from ..parsers.factory import parse_file
+            old_qn, _ = workflow.engine.compile(parse_file(old_path))
+            diff = QuestionnaireDiff.compare(old_qn, result.questionnaire)
+            folder = result.outputs.get("folder")
+            if folder:
+                diff_path = Path(folder) / "change_report.md"
+                diff_path.write_text(diff.to_markdown(), encoding="utf-8")
+                result.outputs["change_report"] = diff_path
+            print()
+            if not diff.has_changes:
+                print(f"Changes vs {old_path.name}: none - identical forms.")
+            else:
+                print(f"Changes vs {old_path.name}: "
+                      f"{len(diff.added)} added, {len(diff.removed)} removed, "
+                      f"{len(diff.renamed)} renamed, "
+                      f"{len(diff.field_changes)} field change(s), "
+                      f"{len(diff.list_changes) + len(diff.lists_added) + len(diff.lists_removed)} "
+                      f"choice-list change(s) - see change_report.md")
 
     print()
     print("Output package:")

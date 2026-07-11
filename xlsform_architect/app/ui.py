@@ -78,6 +78,7 @@ _AI_FEATURE_LABELS = {
     "translate": "Generate translations (only fills gaps you haven't already supplied)",
     "review": "AI quality review (semantics, naming clarity, respondent experience)",
     "explain_findings": "Explain validation findings in plain English",
+    "narrative": "Write an executive summary of the quality metrics for the QA report",
     "group": "Suggest logical question sections (accept/reject after generating)",
     "rewrite": "Suggest clearer question wording (accept/reject after generating)",
     "order": "Suggest logical choice-list ordering (accept/reject after generating)",
@@ -360,7 +361,8 @@ def _render_result(result, target: str) -> None:
     # --- detail tabs ---------------------------------------------------------
     tabs = st.tabs(["📋 Form preview", "🔤 Choices",
                     f"🧪 Findings ({len(report.findings)})",
-                    f"🎯 {label} guide", "🧠 Assumptions", "🗺 Logic map"])
+                    f"🎯 {label} guide", "🧠 Assumptions", "🗺 Logic map",
+                    "📊 Quality"])
 
     with tabs[0]:
         df = pd.DataFrame(SurveyBuilder().build(qn))
@@ -412,6 +414,51 @@ def _render_result(result, target: str) -> None:
             st.caption("No skip logic in this form — every question is "
                        "always shown.")
         st.markdown(ArtifactBuilder(_kb()).logic_map_markdown(qn))
+
+    with tabs[6]:
+        _render_quality(result)
+
+
+def _render_quality(result) -> None:
+    quality, duration = result.quality, result.duration
+    if quality is None:
+        st.caption("Quality metrics were not computed for this run.")
+        return
+
+    if result.report.narrative:
+        st.markdown(f"> {result.report.narrative}")
+        st.caption("🤖 Executive summary written by AI from the audited "
+                   "metrics below — advisory only.")
+        st.divider()
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Form Quality Index", f"{quality.overall}/100",
+              quality.rating)
+    if duration is not None:
+        c2.metric("Estimated interview",
+                  f"~{duration.typical_minutes:.0f} min",
+                  f"{duration.low_minutes:.0f}–{duration.high_minutes:.0f} min range",
+                  delta_color="off")
+        c3.metric("Respondent burden", duration.burden_risk.capitalize(),
+                  f"cognitive load {duration.cognitive_load:.0f}",
+                  delta_color="off")
+
+    st.markdown("##### Category scores")
+    for name, score in quality.categories.items():
+        st.progress(score / 100.0,
+                    text=f"{name.replace('_', ' ').capitalize()} — {score}/100")
+
+    if quality.observations:
+        st.markdown("##### What's holding the score back")
+        for ob in quality.observations:
+            st.markdown(f"- {ob}")
+    if duration is not None and duration.notes:
+        st.markdown("##### Duration notes")
+        for note in duration.notes:
+            st.markdown(f"- {note}")
+    st.caption("All scores and estimates are deterministic — computed from "
+               "the form's structure with documented formulas, identical on "
+               "every re-run.")
 
 
 def _render_ai_suggestions(result, target: str) -> None:

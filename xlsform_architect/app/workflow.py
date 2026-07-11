@@ -49,6 +49,9 @@ from ..ai.client import DeepSeekClient
 from ..ai.config import AIConfig
 from ..ai.pipeline import AIPipeline
 from ..ai.suggestions import AISuggestion, apply_suggestions
+from ..analysis.duration import DurationEstimate, DurationEstimator
+from ..analysis.quality_score import QualityIndex, QualityScorer
+from ..engine.choice_normalizer import ChoiceNormalizer
 from ..engine.knowledge_base import KnowledgeBase
 from ..engine.rule_engine import RuleEngine
 from ..models import Questionnaire
@@ -91,6 +94,10 @@ class WorkflowResult:
     #: Advisory AI suggestions (grouping, rewording, choice ordering,
     #: naming) awaiting human accept/reject - never applied automatically.
     ai_suggestions: List[AISuggestion] = field(default_factory=list)
+    #: Deterministic Form Quality Index (always computed).
+    quality: Optional[QualityIndex] = None
+    #: Deterministic interview-duration / burden estimate (always computed).
+    duration: Optional[DurationEstimate] = None
 
     @property
     def is_valid(self) -> bool:
@@ -164,6 +171,8 @@ class Workflow:
         self._emit(progress, STEP_LABELS[1], "done")
         self._emit(progress, STEP_LABELS[2], "running")
         questionnaire, notes = self.engine.compile(questionnaire)
+        # Consolidate exactly-duplicate choice lists (provably safe; logged).
+        notes.extend(ChoiceNormalizer().normalize(questionnaire))
         self._emit(progress, STEP_LABELS[2], "done")
 
         # --- optional AI enrichment (no-op unless explicitly enabled) ---
@@ -189,6 +198,13 @@ class Workflow:
         # this must run AFTER validation produces them; it never changes
         # the findings themselves, only annotates them (see AIFindingExplainer).
         notes.extend(ai_pipeline.explain_findings(report, ai_config))
+
+        # Deterministic analysis: always computed, costs nothing, and the
+        # optional AI narrative below only ever NARRATES these numbers.
+        quality = QualityScorer().score(questionnaire, report)
+        duration = DurationEstimator().estimate(questionnaire)
+        notes.extend(ai_pipeline.narrate(questionnaire, quality, duration,
+                                         report, ai_config))
         self._emit(progress, STEP_LABELS[5], "done")
 
         result = WorkflowResult(questionnaire=questionnaire, report=report,
@@ -196,12 +212,15 @@ class Workflow:
                                 target=target or "",
                                 ai_ran=bool(client and client.available
                                            and ai_config.any_feature_enabled),
-                                ai_suggestions=list(ai_pipeline.suggestions))
+                                ai_suggestions=list(ai_pipeline.suggestions),
+                                quality=quality, duration=duration)
 
         if write_outputs:
             out_dir = Path(output_dir) if output_dir else CONFIG.output_dir
             result.outputs = self._write_all(questionnaire, report, notes,
-                                              out_dir, source_name, target)
+                                              out_dir, source_name, target,
+                                              quality=quality,
+                                              duration=duration)
         return result
 
     # ------------------------------------------------------------------
@@ -227,20 +246,29 @@ class Workflow:
             qn, target=result.target or None)
         preserved = [f for f in result.report.findings
                      if f.category == "ai_review"]
+        narrative = result.report.narrative
         result.report = self.validator.validate(qn, target=result.target or None)
         result.report.findings.extend(preserved)
+        result.report.narrative = narrative
+        result.quality = QualityScorer().score(qn, result.report)
+        result.duration = DurationEstimator().estimate(qn)
 
         if write_outputs:
             out_dir = Path(output_dir) if output_dir else CONFIG.output_dir
             result.outputs = self._write_all(qn, result.report,
                                               result.assumptions, out_dir,
-                                              source_name, result.target or None)
+                                              source_name, result.target or None,
+                                              quality=result.quality,
+                                              duration=result.duration)
         return result
 
     # ------------------------------------------------------------------
     def _write_all(self, qn: Questionnaire, report: ValidationReport,
                    notes: List[str], out_dir: Path, source_name: str,
-                   target: Optional[str] = None) -> Dict[str, Path]:
+                   target: Optional[str] = None,
+                   quality: Optional[QualityIndex] = None,
+                   duration: Optional[DurationEstimate] = None
+                   ) -> Dict[str, Path]:
         stamp = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
         base = qn.settings.form_id or "form"
         folder = out_dir / f"{base}_{stamp}"
@@ -254,9 +282,10 @@ class Workflow:
         # 2. Data dictionary.
         outputs["data_dictionary"] = self.artifacts.write_data_dictionary(
             qn, folder / f"{base}_data_dictionary.xlsx")
-        # 3. Validation report (PDF).
+        # 3. Validation report (PDF), incl. quality index + duration estimate.
         outputs["validation_report"] = self.reporter.to_pdf(
-            report, qn, folder / "QA_Report.pdf")
+            report, qn, folder / "QA_Report.pdf", quality=quality,
+            duration=duration)
         # 4. Assumption log.
         assumption_path = folder / "assumption_log.md"
         assumption_path.write_text(
