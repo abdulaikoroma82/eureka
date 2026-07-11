@@ -1,0 +1,45 @@
+# =============================================================================
+# Domain rule pack: AGRICULTURE
+# =============================================================================
+# Crop production, livestock/poultry, and farmer-organization surveys.
+# Merged ON TOP of the neutral rules; plain YAML, edit freely.  Bounds are
+# generous - regional cropping systems vary enormously, so only impossible
+# values are excluded.
+# =============================================================================
+
+type_keywords:
+  - type: decimal
+    keywords: ["hectares", "acres", "land size", "farm size", "area planted",
+               "area cultivated", "yield", "harvest quantity", "milk yield"]
+  - type: integer
+    keywords: ["number of cattle", "number of goats", "number of sheep",
+               "number of chickens", "number of poultry", "livestock count",
+               "plots", "number of plots", "growing seasons",
+               "cooperative members", "group members"]
+
+constraints:
+  - match: ["hectares", "land size (ha)", "farm size (ha)"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 0 and . <= 10000"
+    message: "Land size in hectares must be between 0 and 10,000."
+  - match: ["acres"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 0 and . <= 25000"
+    message: "Land size in acres must be between 0 and 25,000."
+  - match: ["number of cattle", "number of goats", "number of sheep",
+            "number of chickens", "number of poultry", "livestock count"]
+    applies_to: ["integer"]
+    constraint: ". >= 0 and . <= 10000"
+    message: "Animal counts must be between 0 and 10,000."
+  - match: ["number of plots", "plots"]
+    applies_to: ["integer"]
+    constraint: ". >= 0 and . <= 100"
+    message: "Number of plots must be between 0 and 100."
+  - match: ["growing seasons"]
+    applies_to: ["integer"]
+    constraint: ". >= 0 and . <= 4"
+    message: "Growing seasons per year must be between 0 and 4."
+  - match: ["milk yield"]
+    applies_to: ["decimal"]
+    constraint: ". >= 0 and . <= 100"
+    message: "Milk yield in litres/day must be between 0 and 100."

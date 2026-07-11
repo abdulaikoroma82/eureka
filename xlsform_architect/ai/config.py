@@ -30,7 +30,7 @@ from typing import List, Tuple
 AI_FEATURES = ("translate", "skip_logic", "domain_constraints",
               "cross_constraints", "classify", "review", "explain_findings",
               "narrative", "group", "rewrite", "order", "naming",
-              "instructions")
+              "instructions", "completeness", "coverage")
 
 #: Accepted alternative spellings for feature keys (CLI convenience).
 FEATURE_ALIASES = {
@@ -66,6 +66,9 @@ class AIConfig:
     #: regenerated form doesn't re-pay for unchanged labels. Empty string
     #: disables caching.
     translation_cache_path: str = ".translation_cache.json"
+    #: Study objectives / indicators / research questions, one per line.
+    #: Used by the "coverage" feature to build the coverage matrix.
+    objectives: str = ""
 
     @property
     def any_feature_enabled(self) -> bool:

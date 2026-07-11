@@ -75,6 +75,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", "-o", default=str(CONFIG.output_dir),
                         help="Output directory")
     parser.add_argument("--quiet", "-q", action="store_true", help="Suppress step output")
+    parser.add_argument("--packs", default="",
+                        help="Comma-separated domain rule packs to merge on "
+                             "top of the neutral rules (e.g. "
+                             "'nutrition,health'); see knowledge/packs/")
     parser.add_argument("--diff-against", metavar="OLD_FILE",
                         help="Also compare against a previous questionnaire "
                              "version (any supported format); writes "
@@ -98,6 +102,10 @@ def build_parser() -> argparse.ArgumentParser:
                     help="Free-text description of the survey's domain, e.g. "
                          "'child nutrition survey in rural districts'; grounds "
                          "the 'domain_constraints' and 'review' features")
+    ai.add_argument("--ai-objectives", default="",
+                    help="Study objectives for the 'coverage' feature: either "
+                         "inline text (';'-separated) or a path to a text "
+                         "file with one objective per line")
     # Standalone shortcuts: each enables AI with just that feature (they
     # combine with each other, and with --ai/--ai-features if also given).
     for flag, feature, text in (
@@ -140,11 +148,18 @@ def main(argv=None) -> int:
         return 2
 
     knowledge = None
-    if args.rules:
+    pack_names = [p.strip() for p in args.packs.split(",") if p.strip()]
+    if args.rules or pack_names:
         from pathlib import Path as _P
 
         from ..engine.knowledge_base import KnowledgeBase
-        knowledge = KnowledgeBase.load(directory=_P(args.rules))
+        try:
+            knowledge = KnowledgeBase.load(
+                directory=_P(args.rules) if args.rules else None,
+                packs=pack_names)
+        except FileNotFoundError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
 
     ai_config = AIConfig.disabled()
     ai_client = None
@@ -162,9 +177,16 @@ def main(argv=None) -> int:
             print(f"error: unknown --ai-features: {', '.join(sorted(unknown))} "
                  f"(choose from: {', '.join(AI_FEATURES)})", file=sys.stderr)
             return 2
+        objectives = args.ai_objectives
+        if objectives and Path(objectives).is_file():
+            objectives = Path(objectives).read_text(encoding="utf-8")
+        elif objectives:
+            objectives = "\n".join(p.strip() for p in objectives.split(";")
+                                   if p.strip())
         ai_config = AIConfig(enabled=True, features=features,
                              translate_languages=_parse_languages(args.ai_languages),
-                             survey_context=args.ai_context)
+                             survey_context=args.ai_context,
+                             objectives=objectives)
         ai_client = DeepSeekClient()
         if not ai_client.available:
             print("warning: AI enrichment was requested but DEEPSEEK_API_KEY "

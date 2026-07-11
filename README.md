@@ -250,6 +250,23 @@ domain-specific constraints or reusable choice lists), copy the file, edit it,
 and point the tool at it with `--rules` on the CLI or
 `KnowledgeBase.load(directory=...)` in code. The Python code never changes.
 
+### Domain rule packs
+
+Ready-made specialisations ship in `knowledge/packs/` — **nutrition**
+(MUAC, weight/height, z-scores, IYCF), **health** (vitals, ANC, RMNCAH
+counts), **agriculture** (land, livestock, yields), **education**
+(enrolment, grades, assessment scores) and **humanitarian** (PDM, food
+security, water access). Each pack adds type-detection keywords and
+realistic value bounds *on top of* the neutral rules (pack rules match
+first; with no pack, behaviour is unchanged byte-for-byte). They are plain
+YAML — edit or add your own without touching Python.
+
+```bash
+python -m xlsform_architect.app.main survey.docx --packs nutrition,health
+```
+
+In the app: **"3 · Form details" → Domain rule packs**.
+
 ---
 
 ## AI-assisted features (optional)
@@ -274,7 +291,9 @@ explicitly enable it **and** provide an API key.
 | **Type-classification fallback** | Reclassifies a question that keyword rules defaulted to `text`, when the phrasing wasn't anticipated | Keyword lists always have blind spots; a model classifies by meaning |
 | **AI quality review** | A holistic second pass flagging things structural checks can't see — semantic contradictions, unclear names, and respondent-experience traps (ambiguous phrasing, contradictory option lists, redundant questions, incoherent skip chains); advisory only | Requires reasoning across multiple fields' relationship to each other |
 | **Explain findings** | Adds a one-sentence plain-English explanation to the validator's own findings, after validation runs | Rules own every fact (level, category, message); AI only makes them easier to read |
-| **Quality narrative** | Writes the QA report's executive summary from the deterministic Form Quality Index, duration estimate and finding counts — it is sent only the audited metrics, never asked to re-judge the form | Turning seven scores and a risk rating into two readable sentences is prose generation; the numbers themselves stay 100% rules |
+| **Quality narrative** | Writes the QA report's executive summary from the deterministic Form Quality Index, duration estimate, readiness findings and finding counts — it is sent only the audited metrics, never asked to re-judge the form | Turning seven scores and a risk rating into two readable sentences is prose generation; the numbers themselves stay 100% rules |
+| **Missing-question detection** | Infers the survey's purpose and flags questions it probably needs but lacks (weight + MUAC with no height blocks weight-for-height) — advisory findings only, the tool **never adds questions** | Recognising that a set of questions implies an absent member is domain reasoning, not pattern matching |
+| **Objective coverage matrix** | You list your study objectives; it maps each to the questions that inform it and flags gaps (`coverage_matrix.md` + Quality tab). Every cited question name is verified to exist — invalid references are discarded | Judging that two questions together measure "access to safe water" is semantics; the question inventory and reference checks stay 100% rules |
 | **Question grouping** *(suggestion-only)* | Proposes logical sections for a form whose source document didn't provide them | "Water source" and "latrine type" belonging together is a semantic judgement |
 | **Question rewording** *(suggestion-only)* | Flags ambiguous, double-barreled, leading or jargon-heavy questions and suggests clearer wording (or a split, which you apply in the source document) | Whether a sentence is leading is a language judgement |
 | **Choice-list ordering** *(suggestion-only)* | Proposes a more logical option order — common answers first, themes adjacent, "Other"/"Refused" last | "Farming" belonging next to "Fishing" isn't a sortable property |

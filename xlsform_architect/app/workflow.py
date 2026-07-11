@@ -98,6 +98,9 @@ class WorkflowResult:
     quality: Optional[QualityIndex] = None
     #: Deterministic interview-duration / burden estimate (always computed).
     duration: Optional[DurationEstimate] = None
+    #: Objective-coverage matrix (markdown; "" unless the AI "coverage"
+    #: feature ran with objectives supplied).
+    coverage_matrix: str = ""
 
     @property
     def is_valid(self) -> bool:
@@ -213,7 +216,8 @@ class Workflow:
                                 ai_ran=bool(client and client.available
                                            and ai_config.any_feature_enabled),
                                 ai_suggestions=list(ai_pipeline.suggestions),
-                                quality=quality, duration=duration)
+                                quality=quality, duration=duration,
+                                coverage_matrix=ai_pipeline.coverage_matrix)
 
         if write_outputs:
             out_dir = Path(output_dir) if output_dir else CONFIG.output_dir
@@ -221,6 +225,11 @@ class Workflow:
                                               out_dir, source_name, target,
                                               quality=quality,
                                               duration=duration)
+            if result.coverage_matrix:
+                matrix_path = result.outputs["folder"] / "coverage_matrix.md"
+                matrix_path.write_text(result.coverage_matrix,
+                                       encoding="utf-8")
+                result.outputs["coverage_matrix"] = matrix_path
         return result
 
     # ------------------------------------------------------------------

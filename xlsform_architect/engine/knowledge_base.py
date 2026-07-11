@@ -53,23 +53,80 @@ class KnowledgeBase:
     xlsform_rules: Dict[str, Any] = field(default_factory=dict)
     platforms: Dict[str, Any] = field(default_factory=dict)
 
+    #: Names of the domain packs merged into this knowledge base.
+    packs: List[str] = field(default_factory=list)
+
     # ------------------------------------------------------------------
     @classmethod
     def load(cls, directory: Optional[Path] = None,
-             rules_file: str = "xlsform_rules.yaml") -> "KnowledgeBase":
+             rules_file: str = "xlsform_rules.yaml",
+             packs: Optional[List[str]] = None) -> "KnowledgeBase":
         """Load the rule pack from *directory* (defaults to the bundled one).
 
         Pass a different *rules_file* to use a customised ruleset that follows
         the same structure as ``xlsform_rules.yaml``.  Platform profiles are
         always read from ``platforms.yaml`` in the same directory (falling
         back to the bundled one so custom rule dirs need not duplicate it).
+
+        *packs* names optional **domain rule packs** (Module D7) from the
+        ``packs/`` subdirectory — e.g. ``packs=["nutrition"]`` merges
+        ``knowledge/packs/nutrition.yaml`` on top of the neutral rules.
+        Pack entries take precedence: their ordered rules (type keywords,
+        constraint templates) are matched *before* the neutral ones, and
+        their scalar sections shallow-override. With no packs, behaviour
+        is byte-for-byte identical to the neutral ruleset.
         """
         directory = directory or KNOWLEDGE_DIR
         platform_data = _read_yaml(directory / "platforms.yaml")
         if not platform_data and directory != KNOWLEDGE_DIR:
             platform_data = _read_yaml(KNOWLEDGE_DIR / "platforms.yaml")
-        return cls(xlsform_rules=_read_yaml(directory / rules_file),
-                   platforms=platform_data.get("platforms", {}))
+        rules = _read_yaml(directory / rules_file)
+        loaded: List[str] = []
+        for name in packs or []:
+            pack_path = directory / "packs" / f"{name}.yaml"
+            if not pack_path.exists() and directory != KNOWLEDGE_DIR:
+                pack_path = KNOWLEDGE_DIR / "packs" / f"{name}.yaml"
+            pack = _read_yaml(pack_path)
+            if not pack:
+                raise FileNotFoundError(
+                    f"Unknown domain rule pack '{name}' (looked for "
+                    f"{pack_path}). Available: "
+                    f"{', '.join(cls.available_packs(directory)) or 'none'}")
+            rules = cls._merge_pack(rules, pack)
+            loaded.append(name)
+        return cls(xlsform_rules=rules,
+                   platforms=platform_data.get("platforms", {}),
+                   packs=loaded)
+
+    @staticmethod
+    def available_packs(directory: Optional[Path] = None) -> List[str]:
+        """Names of the domain rule packs shipped in ``knowledge/packs/``."""
+        directory = directory or KNOWLEDGE_DIR
+        packs_dir = directory / "packs"
+        if not packs_dir.is_dir() and directory != KNOWLEDGE_DIR:
+            packs_dir = KNOWLEDGE_DIR / "packs"
+        if not packs_dir.is_dir():
+            return []
+        return sorted(p.stem for p in packs_dir.glob("*.yaml"))
+
+    @staticmethod
+    def _merge_pack(rules: Dict[str, Any], pack: Dict[str, Any]) -> Dict[str, Any]:
+        """Merge a domain pack on top of *rules*, pack entries winning.
+
+        Ordered, first-match-wins lists (``type_keywords``, ``constraints``)
+        get the pack's entries PREPENDED so domain rules match before
+        neutral ones. Dict sections shallow-merge with the pack's keys
+        overriding. Anything else the pack defines replaces the section.
+        """
+        merged = dict(rules)
+        for key, value in pack.items():
+            if key in ("type_keywords", "constraints"):
+                merged[key] = list(value or []) + list(merged.get(key, []))
+            elif isinstance(value, dict) and isinstance(merged.get(key), dict):
+                merged[key] = {**merged[key], **value}
+            else:
+                merged[key] = value
+        return merged
 
     # -- platform accessors ---------------------------------------------
     def platform(self, target: str) -> Dict[str, Any]:

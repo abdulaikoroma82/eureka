@@ -72,7 +72,9 @@ from ..models import Questionnaire
 from ..validation.report_generator import Finding, ValidationReport
 from .choice_ordering import AIChoiceOrderingSuggester
 from .client import DeepSeekClient
+from .completeness import AICompletenessReviewer
 from .config import AIConfig
+from .coverage import AICoverageReviewer
 from .constraint_reviewer import AICrossFieldConstraintReviewer
 from .domain_constraints import AIDomainConstraintSynthesizer
 from .enumerator_notes import AIEnumeratorNoteSuggester
@@ -96,6 +98,9 @@ class AIPipeline:
         #: (grouping, rewording, choice ordering, naming). Never applied
         #: automatically - see :mod:`xlsform_architect.ai.suggestions`.
         self.suggestions: List[AISuggestion] = []
+        #: Objective-coverage matrix (markdown) from the most recent
+        #: :meth:`run`; "" unless the "coverage" feature produced one.
+        self.coverage_matrix: str = ""
 
     # ------------------------------------------------------------------
     def run(self, questionnaire: Questionnaire,
@@ -103,6 +108,7 @@ class AIPipeline:
         notes: List[str] = []
         findings: List[Finding] = []
         self.suggestions = []
+        self.coverage_matrix = ""
 
         if not config.any_feature_enabled:
             return questionnaire, notes, findings
@@ -149,6 +155,17 @@ class AIPipeline:
         if config.wants("instructions"):
             self._collect(notes, AIEnumeratorNoteSuggester(self.client)
                           .suggest(questionnaire))
+
+        if config.wants("completeness"):
+            findings.extend(AICompletenessReviewer(self.client).review(
+                questionnaire, config.survey_context))
+
+        if config.wants("coverage") and config.objectives.strip():
+            matrix, cov_notes, cov_findings = AICoverageReviewer(
+                self.client).review(questionnaire, config.objectives)
+            self.coverage_matrix = matrix
+            notes.extend(cov_notes)
+            findings.extend(cov_findings)
 
         if config.wants("review"):
             findings.extend(AIQualityReviewer(self.client).review(

@@ -1,0 +1,56 @@
+# =============================================================================
+# Domain rule pack: HEALTH
+# =============================================================================
+# Facility and community health surveys: HMIS/DHIS2-style reporting, RMNCAH
+# (reproductive, maternal, newborn, child & adolescent health).  Merged ON TOP
+# of the neutral rules; plain YAML, edit freely.  Bounds exclude impossible
+# values only.
+# =============================================================================
+
+type_keywords:
+  - type: decimal
+    keywords: ["temperature", "body temperature", "blood pressure",
+               "systolic", "diastolic", "pulse", "heart rate",
+               "respiratory rate", "oxygen saturation", "spo2",
+               "blood glucose", "gestational age"]
+  - type: integer
+    keywords: ["parity", "gravidity", "number of anc visits", "anc visits",
+               "doses received", "number of doses", "live births"]
+
+constraints:
+  - match: ["temperature", "body temperature"]
+    applies_to: ["decimal"]
+    constraint: ". >= 30 and . <= 45"
+    message: "Body temperature in °C must be between 30 and 45."
+  - match: ["systolic"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 50 and . <= 300"
+    message: "Systolic pressure (mmHg) must be between 50 and 300."
+  - match: ["diastolic"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 20 and . <= 200"
+    message: "Diastolic pressure (mmHg) must be between 20 and 200."
+  - match: ["pulse", "heart rate"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 20 and . <= 250"
+    message: "Pulse (beats/min) must be between 20 and 250."
+  - match: ["respiratory rate"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 5 and . <= 120"
+    message: "Respiratory rate (breaths/min) must be between 5 and 120."
+  - match: ["oxygen saturation", "spo2"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 30 and . <= 100"
+    message: "Oxygen saturation (%) must be between 30 and 100."
+  - match: ["gestational age"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 4 and . <= 45"
+    message: "Gestational age in weeks must be between 4 and 45."
+  - match: ["parity", "gravidity", "live births"]
+    applies_to: ["integer"]
+    constraint: ". >= 0 and . <= 25"
+    message: "This count must be between 0 and 25."
+  - match: ["anc visits", "number of anc visits"]
+    applies_to: ["integer"]
+    constraint: ". >= 0 and . <= 30"
+    message: "ANC visit count must be between 0 and 30."

@@ -36,15 +36,15 @@ Legend: ✅ shipped · 🟡 partially shipped · ⬜ pending
 | A9 | Enumerator Instruction Generator | ✅ | `ai/enumerator_notes.py` (advisory `hint` suggestions; author hints win) |
 | D10 | Deployment Readiness Checks | ✅ | `validation/readiness_validator.py` (translation/media/device/metadata completeness) + platform matrix + pyxform deep check |
 | A1 | Methodology Expert Review | 🟡 | overlaps quality reviewer; senior-methodologist persona + sequencing review pending |
+| D7 | Domain Rule Packs | ✅ | `knowledge/packs/*.yaml` (nutrition, health, agriculture, education, humanitarian) + `KnowledgeBase.load(packs=...)`, CLI `--packs`, UI multiselect |
+| A4 | Missing Question Detection | ✅ | `ai/completeness.py` (advisory findings; never adds questions) |
+| A5 | Objective Coverage Review | ✅ | `ai/coverage.py` (objectives via UI textarea / `--ai-objectives`) |
+| H2 | Coverage Matrix | ✅ | `coverage_matrix.md` artifact + Quality tab; question refs verified deterministically |
 | A2 | Enumerator Experience Review | ⬜ | pending |
-| A4 | Missing Question Detection | ⬜ | pending |
-| A5 | Objective Coverage Review | ⬜ | pending |
 | A8 | Indicator Mapping Engine | ⬜ | pending |
-| A11 | Domain Plausibility Review | 🟡 | survey-context grounding exists (constraints/review); domain-specific design checks pending |
+| A11 | Domain Plausibility Review | 🟡 | survey-context grounding + domain packs exist; pack-aware design checks pending |
 | A14 | Semantic Logic Review | 🟡 | D5 catches decidable defects; AI review of *conceptual* pathways pending |
 | D1 | Reverse Engineering Engine | ⬜ | pending |
-| D7 | Domain Rule Packs | ⬜ | pending (loader already supports custom rule dirs via `--rules`) |
-| H2 | Coverage Matrix | ⬜ | pending (depends on A5) |
 
 ---
 
@@ -62,6 +62,10 @@ table above for locations.
 
 ### Tier 2 — high impact, larger effort
 
+D7 (domain rule packs ×5), A4 (missing-question detection) and A5+H2
+(objective coverage matrix) are ✅ shipped — see the status table. D1
+remains:
+
 **1. D1 — Reverse engineering engine (L)**
 - *Architecture*: new `parsers/xlsform_reader.py` (XLSForm .xlsx →
   `Questionnaire`, inverse of the exporter — reuse the dialect maps) + new
@@ -77,51 +81,23 @@ table above for locations.
   third-party XLSForms read with assumptions logged for unsupported columns.
 - *Note*: the reader also unlocks D3 diffs directly between .xlsx versions.
 
-**2. D7 — Domain rule packs (L, content-heavy)**
-- *Architecture*: `knowledge/packs/<domain>.yaml` using the existing rule
-  schema (type keywords, constraint templates, choice lists, calculations);
-  loader gains `KnowledgeBase.load(packs=["nutrition"])` and CLI `--packs`.
-  Nutrition first (MUAC 65–350mm, WHZ plausibility, IYCF age windows,
-  SMART/IMAM/OTP/TSFP vocabularies), then health (DHIS2/HMIS naming),
-  agriculture, education, humanitarian (PDM, rapid assessment).
-- *Tests*: per-pack fixture questionnaires asserting pack rules fire and
-  domain-neutral behaviour is unchanged when no pack is loaded.
-- *Acceptance*: `--packs nutrition` constrains a MUAC question that the
-  neutral rules leave open; no pack = current behaviour byte-for-byte.
-- *Note*: packs are pure YAML — community-editable without touching Python.
-
-**3. A5 + H2 — Objective coverage review & matrix (M)**
-- *Architecture*: new `ai/coverage.py`; user supplies objectives/indicators
-  (UI textarea, CLI `--objectives file`); rules build the question inventory
-  (deterministic), AI maps objectives ↔ questions and marks gaps. One call.
-- *Outputs*: coverage matrix artifact (`coverage_matrix.md`) + advisory findings.
-- *Acceptance*: an objective with no mapped question is flagged; mappings
-  cite question names that exist (validated deterministically).
-
-**4. A4 — Missing question detection (S)**
-- *Architecture*: new `ai/completeness.py`; sends question inventory +
-  survey context; returns "potentially missing items" as advisory findings
-  (category `ai_review`). Never mutates the form.
-- *Acceptance*: weight+MUAC-without-height fixture yields a height suggestion;
-  suggestions never appear as form rows.
-
 ### Tier 3 — valuable, lower urgency
 
-**5. A2 — Enumerator experience review (S)**: second persona prompt in the
+**1. A2 — Enumerator experience review (S)**: second persona prompt in the
 quality reviewer (transitions, probing burden, instruction clarity);
 advisory findings only.
-**6. A1 — Methodology review completion (S)**: extend the reviewer's brief
+**2. A1 — Methodology review completion (S)**: extend the reviewer's brief
 with sequencing/ordering critique; merges with A2 into one "expert panel"
 call to keep the one-call-per-form budget.
-**7. A14 — Semantic logic review (S)**: feed the `logic_flow` graph to the
+**3. A14 — Semantic logic review (S)**: feed the `logic_flow` graph to the
 model for conceptual-pathway review (D5 already owns everything decidable).
-**8. A8 — Indicator mapping engine (M)**: infer indicators from questions;
+**4. A8 — Indicator mapping engine (M)**: infer indicators from questions;
 emit indicator matrix + means-of-verification artifact; advisory.
-**9. A11 — Domain plausibility review (S, after D7)**: pack vocabulary +
+**5. A11 — Domain plausibility review (S, after D7)**: pack vocabulary +
 survey context grounds a domain-completeness prompt.
-**10. H3 — Smart assumption log completion (S)**: run the finding-explainer
+**6. H3 — Smart assumption log completion (S)**: run the finding-explainer
 pattern over assumption-log entries (batched, one call).
-**11. D2 extensions (S)**: Mermaid export, SVG/PNG rendering (needs optional
+**7. D2 extensions (S)**: Mermaid export, SVG/PNG rendering (needs optional
 `graphviz` binary — keep optional), choice-filter/constraint edges as
 dashed overlays.
 

@@ -84,6 +84,8 @@ _AI_FEATURE_LABELS = {
     "order": "Suggest logical choice-list ordering (accept/reject after generating)",
     "naming": "Suggest clearer variable names (accept/reject after generating)",
     "instructions": "Draft enumerator instructions as device hints (accept/reject after generating)",
+    "completeness": "Flag questions the survey probably needs but doesn't have",
+    "coverage": "Check the form covers your study objectives (coverage matrix)",
 }
 
 
@@ -144,6 +146,13 @@ def _sidebar():
                 "Form id", "", placeholder="auto-generated from the title")
             version = st.text_input(
                 "Version", "", placeholder="auto-generated timestamp")
+            packs = st.multiselect(
+                "Domain rule packs", KnowledgeBase.available_packs(),
+                default=[],
+                help="Merge domain expertise (extra type detection and "
+                     "realistic value limits) on top of the standard rules "
+                     "— e.g. the nutrition pack bounds MUAC, weight and "
+                     "z-score questions. Editable YAML in knowledge/packs/.")
 
         ai_config, ai_client = _ai_sidebar()
 
@@ -153,7 +162,8 @@ def _sidebar():
         if uploaded is None:
             st.caption("Upload a questionnaire to enable generation.")
 
-    return uploaded, target, form_title, form_id, version, ai_config, ai_client, generate
+    return (uploaded, target, form_title, form_id, version, packs,
+            ai_config, ai_client, generate)
 
 
 def _ai_sidebar():
@@ -187,7 +197,8 @@ def _ai_sidebar():
                     features.append(key)
 
         survey_context = ""
-        if enabled and ({"domain_constraints", "review"} & set(features)):
+        if enabled and ({"domain_constraints", "review",
+                         "completeness"} & set(features)):
             survey_context = st.text_input(
                 "What is this survey about? (optional)",
                 placeholder="e.g. child nutrition survey in rural districts",
@@ -195,6 +206,19 @@ def _ai_sidebar():
                      "your survey's actual domain — a 'temperature' means "
                      "something different in a health survey than a weather "
                      "one.")
+
+        objectives = ""
+        if enabled and "coverage" in features:
+            objectives = st.text_area(
+                "Study objectives (one per line)",
+                placeholder="e.g.\nMeasure access to safe drinking water\n"
+                            "Estimate under-five acute malnutrition",
+                help="The coverage check maps each objective to the "
+                     "questions that inform it and flags anything the form "
+                     "doesn't cover.")
+            if not objectives.strip():
+                st.caption("Enter at least one objective, or the coverage "
+                           "check will be skipped.")
 
         languages = []
         if enabled and "translate" in features:
@@ -214,7 +238,8 @@ def _ai_sidebar():
 
         config = AIConfig(enabled=enabled, features=features,
                           translate_languages=languages,
-                          survey_context=survey_context)
+                          survey_context=survey_context,
+                          objectives=objectives)
         client = DeepSeekClient(api_key=api_key) if enabled else None
         return config, client
 
@@ -461,6 +486,10 @@ def _render_quality(result) -> None:
                "the form's structure with documented formulas, identical on "
                "every re-run.")
 
+    if result.coverage_matrix:
+        st.divider()
+        st.markdown(result.coverage_matrix)
+
 
 def _render_ai_suggestions(result, target: str) -> None:
     """Accept/reject panel for advisory AI suggestions.
@@ -537,7 +566,7 @@ def main() -> None:
     st.set_page_config(page_title="XLSForm Architect", page_icon="🧩",
                        layout="wide")
 
-    (uploaded, target, form_title, form_id, version,
+    (uploaded, target, form_title, form_id, version, packs,
      ai_config, ai_client, generate) = _sidebar()
 
     if uploaded is None:
@@ -566,8 +595,9 @@ def main() -> None:
             icon = "⏳" if status == "running" else "✅"
             placeholders[step].markdown(f"{icon} {step}")
 
+        kb = KnowledgeBase.load(packs=packs) if packs else _kb()
         try:
-            result = Workflow(knowledge=_kb(), ai_client=ai_client).run_from_file(
+            result = Workflow(knowledge=kb, ai_client=ai_client).run_from_file(
                 tmp_path,
                 form_title=form_title or None,
                 form_id=form_id or None,

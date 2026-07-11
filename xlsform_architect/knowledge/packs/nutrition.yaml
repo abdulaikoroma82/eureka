@@ -1,0 +1,57 @@
+# =============================================================================
+# Domain rule pack: NUTRITION
+# =============================================================================
+# Anthropometry and nutrition-programme surveys: SMART, IMAM/OTP/TSFP/SFP
+# monitoring, IYCF, micronutrient (MMS, vitamin A) and deworming coverage.
+# Merged ON TOP of the neutral rules (pack entries match first); edit freely -
+# it is plain YAML, no code change needed.  Bounds are deliberately generous:
+# they exclude physically impossible values, not unusual ones.
+# =============================================================================
+
+type_keywords:
+  - type: decimal
+    keywords: ["muac", "mid-upper arm circumference", "z-score", "whz", "waz",
+               "haz", "weight-for-height", "weight for height",
+               "haemoglobin", "hemoglobin", "hb level"]
+  - type: integer
+    keywords: ["age in months", "age (months)", "months old"]
+
+constraints:
+  # MUAC: unit-specific rules first (first match wins), generic mm default last.
+  - match: ["muac (cm)", "muac in cm"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 6 and . <= 40"
+    message: "MUAC in cm must be between 6 and 40."
+  - match: ["muac"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 60 and . <= 400"
+    message: "MUAC in mm must be between 60 and 400 (use cm in the label if measuring in cm)."
+  - match: ["weight (kg)", "weight in kg", "weight"]
+    applies_to: ["decimal"]
+    constraint: ". >= 0.5 and . <= 300"
+    message: "Weight in kg must be between 0.5 and 300."
+  - match: ["height (cm)", "length (cm)", "height", "length"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 30 and . <= 250"
+    message: "Height/length in cm must be between 30 and 250."
+  - match: ["z-score", "whz", "waz", "haz", "weight-for-height"]
+    applies_to: ["decimal"]
+    constraint: ". >= -6 and . <= 6"
+    message: "Z-scores outside -6 to +6 are biologically implausible (SMART flags)."
+  - match: ["haemoglobin", "hemoglobin", "hb level"]
+    applies_to: ["decimal"]
+    constraint: ". >= 1 and . <= 25"
+    message: "Haemoglobin in g/dL must be between 1 and 25."
+  - match: ["child age in months", "age of child in months",
+            "child's age in months"]
+    applies_to: ["integer"]
+    constraint: ". >= 0 and . <= 59"
+    message: "Under-five child age in months must be 0-59."
+  - match: ["times breastfed", "breastfeeding frequency"]
+    applies_to: ["integer"]
+    constraint: ". >= 0 and . <= 30"
+    message: "Feeds per day must be between 0 and 30."
+  - match: ["household size", "household members", "people in the household"]
+    applies_to: ["integer"]
+    constraint: ". >= 1 and . <= 60"
+    message: "Household size must be between 1 and 60."
