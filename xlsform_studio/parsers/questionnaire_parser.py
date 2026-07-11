@@ -1,4 +1,4 @@
-"""Questionnaire text parser (Module 1 core).
+"""Questionnaire text parser.
 
 Purpose
 -------

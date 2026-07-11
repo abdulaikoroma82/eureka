@@ -1,4 +1,4 @@
-"""Calculation engine (Module 7).
+"""Calculation engine.
 
 Purpose
 -------

@@ -1,4 +1,4 @@
-"""XLSForm exporter (part of Module 4).
+"""XLSForm exporter.
 
 Purpose
 -------

@@ -1,4 +1,4 @@
-"""Choices sheet builder (part of Module 4).
+"""Choices sheet builder.
 
 Purpose
 -------

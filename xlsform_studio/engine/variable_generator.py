@@ -1,4 +1,4 @@
-"""Variable naming engine (Module 3).
+"""Variable naming engine.
 
 Purpose
 -------

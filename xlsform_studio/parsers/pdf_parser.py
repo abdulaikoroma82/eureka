@@ -1,4 +1,4 @@
-"""PDF parser (Module 1).
+"""PDF parser.
 
 Purpose
 -------

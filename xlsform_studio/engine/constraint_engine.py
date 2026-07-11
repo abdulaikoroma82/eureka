@@ -1,4 +1,4 @@
-"""Constraint engine (Module 6).
+"""Constraint engine.
 
 Purpose
 -------

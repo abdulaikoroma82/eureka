@@ -1,4 +1,4 @@
-"""Streamlit user interface (Module 10).
+"""Streamlit user interface.
 
 Purpose
 -------

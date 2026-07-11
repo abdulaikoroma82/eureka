@@ -1,4 +1,4 @@
-"""Validation report generator (part of Module 9).
+"""Validation report generator.
 
 Purpose
 -------

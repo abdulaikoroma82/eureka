@@ -292,7 +292,7 @@ class Questionnaire:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Questionnaire":
-        """Load a questionnaire from the JSON input format (Iteration 1)."""
+        """Load a questionnaire from the JSON input format."""
         settings_data = data.get("settings", {}) or {}
         settings = FormSettings(
             form_title=settings_data.get("form_title", "Untitled Form"),

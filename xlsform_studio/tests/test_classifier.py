@@ -1,4 +1,4 @@
-"""Tests for the question classification engine (Module 2)."""
+"""Tests for the question classification engine."""
 
 from xlsform_studio.engine.question_classifier import QuestionClassifier
 from xlsform_studio.models import Question

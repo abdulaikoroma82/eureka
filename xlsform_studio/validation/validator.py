@@ -1,4 +1,4 @@
-"""Validation orchestrator (Module 9).
+"""Validation orchestrator.
 
 Purpose
 -------

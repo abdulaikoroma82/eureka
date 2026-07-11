@@ -1,4 +1,4 @@
-"""Knowledge base loader (Module 8).
+"""Knowledge base loader.
 
 Purpose
 -------

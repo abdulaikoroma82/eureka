@@ -1,4 +1,4 @@
-"""Tests for the Word (.docx) parser (Module 1 / Iteration 4)."""
+"""Tests for the Word (.docx) parser."""
 
 import docx
 import pytest

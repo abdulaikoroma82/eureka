@@ -1,4 +1,4 @@
-"""Logic validator (part of Module 9).
+"""Logic validator.
 
 Purpose
 -------

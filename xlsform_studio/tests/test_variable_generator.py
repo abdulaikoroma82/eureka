@@ -1,4 +1,4 @@
-"""Tests for the variable naming engine (Module 3)."""
+"""Tests for the variable naming engine."""
 
 from xlsform_studio.engine.variable_generator import VariableGenerator
 

@@ -1,4 +1,4 @@
-"""Validation package (Module 9)."""
+"""Validation package."""
 
 from .logic_validator import LogicValidator
 from .platform_validator import PlatformValidator

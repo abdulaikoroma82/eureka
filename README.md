@@ -76,12 +76,12 @@ see [AI-assisted features](#ai-assisted-features-optional).
 ```
 xlsform_studio/
 ├── app/            # controller, config, CLI (main.py) and Streamlit UI (ui.py)
-├── parsers/        # DOCX / XLSX / PDF / CSV / JSON / text parsers  (Module 1)
-├── engine/         # classifier, naming, logic, constraint, calculation  (Modules 2,3,5,6,7)
+├── parsers/        # DOCX / XLSX / PDF / CSV / JSON / text parsers
+├── engine/         # classifier, naming, logic, constraint, calculation
 ├── ai/             # optional AI-assist layer (DeepSeek) — off by default
-├── xlsform/        # survey / choices / settings builders + exporter  (Module 4)
-├── validation/     # structure / logic / deployment validators + report  (Module 9)
-├── knowledge/      # editable YAML rule packs  (Module 8)
+├── xlsform/        # survey / choices / settings builders + exporter
+├── validation/     # structure / logic / deployment validators + report
+├── knowledge/      # editable YAML rule packs
 ├── templates/      # blank XLSForm template
 ├── examples/       # sample questionnaires
 ├── output/         # generated packages land here
@@ -209,11 +209,11 @@ choice list, relevance, constraint and any derived calculations.
 
 | Module | Behaviour | Example |
 | --- | --- | --- |
-| **Classifier** (M2) | Assigns XLSForm types | `Yes/No → select_one yes_no`, `age → integer`, `amount → decimal`, `GPS → geopoint`, `photo → image` |
-| **Variable namer** (M3) | Safe, unique names | `"Preferred contact method" → preferred_contact_method` |
-| **Logic engine** (M5) | Natural language → expressions: compound conditions, negation, ranges, numbered references, choice shorthand | `"if yes and age over 18"`, `"unless married" → not(...)`, `"between 18 and 65" → >=18 and <=65`, `"if question 4 is married"` (resolves the source numbering, incl. coded options → stored codes), bare `"if married"` when unambiguous; multi-selects use `selected(...)` |
-| **Constraint engine** (M6) | Validation ranges | `age → . >= 0 and . <= 120`, `% → . >= 0 and . <= 100`, `date → . <= today()` |
-| **Calculation engine** (M7) | Derived fields | age in years from a date of birth |
+| **Classifier** | Assigns XLSForm types | `Yes/No → select_one yes_no`, `age → integer`, `amount → decimal`, `GPS → geopoint`, `photo → image` |
+| **Variable namer** | Safe, unique names | `"Preferred contact method" → preferred_contact_method` |
+| **Logic engine** | Natural language → expressions: compound conditions, negation, ranges, numbered references, choice shorthand | `"if yes and age over 18"`, `"unless married" → not(...)`, `"between 18 and 65" → >=18 and <=65`, `"if question 4 is married"` (resolves the source numbering, incl. coded options → stored codes), bare `"if married"` when unambiguous; multi-selects use `selected(...)` |
+| **Constraint engine** | Validation ranges | `age → . >= 0 and . <= 120`, `% → . >= 0 and . <= 100`, `date → . <= today()` |
+| **Calculation engine** | Derived fields | age in years from a date of birth |
 
 And structural intelligence on top:
 
@@ -684,16 +684,6 @@ previous package. `version_history.json` at the output root is the
 append-only index across runs.
 
 ---
-
-## Development iterations
-
-The system was built in the planned iterations: (1) JSON → XLSForm, (2) validation
-engine, (3) Excel/CSV parser, (4) Word/PDF parser, (5) rule engine, (6)
-standard XLSForm knowledge pack, (7) Streamlit interface, (8) Windows packaging,
-(9) multi-platform standards (SurveyCTO/ODK/Kobo/Ona/CommCare) and a pyxform
-deep-validation pass, (10) capability-gap closure (matrix questions, repeat
-groups, compound logic, "Other, specify", cascading selects, translations),
-(11) the optional AI-assist layer and its rules/AI co-sharing design.
 
 ## License
 

@@ -1,4 +1,4 @@
-"""XLSForm generation package (Module 4)."""
+"""XLSForm generation package."""
 
 from .choices_builder import ChoicesBuilder
 from .exporter import XLSFormExporter

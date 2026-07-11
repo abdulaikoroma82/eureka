@@ -1,4 +1,4 @@
-"""Logic engine (Module 5).
+"""Logic engine.
 
 Purpose
 -------

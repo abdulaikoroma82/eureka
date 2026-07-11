@@ -1,4 +1,4 @@
-"""Settings sheet builder (part of Module 4).
+"""Settings sheet builder.
 
 Purpose
 -------

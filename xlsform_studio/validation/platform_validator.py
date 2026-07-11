@@ -1,4 +1,4 @@
-"""Platform-specific validator (part of Module 9).
+"""Platform-specific validator.
 
 Purpose
 -------

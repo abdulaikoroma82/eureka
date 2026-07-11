@@ -1,4 +1,4 @@
-"""Tests for the calculation engine (Module 7)."""
+"""Tests for the calculation engine."""
 
 from xlsform_studio.engine.calculation_engine import CalculationEngine
 from xlsform_studio.models import Question, Questionnaire

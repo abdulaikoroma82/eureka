@@ -1,4 +1,4 @@
-"""Tests for the logic (Module 5) and constraint (Module 6) engines."""
+"""Tests for the logic and constraint engines."""
 
 from xlsform_studio.engine.constraint_engine import ConstraintEngine
 from xlsform_studio.engine.logic_engine import LogicEngine

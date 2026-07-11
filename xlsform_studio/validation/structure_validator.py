@@ -1,4 +1,4 @@
-"""Structure validator (part of Module 9).
+"""Structure validator.
 
 Purpose
 -------

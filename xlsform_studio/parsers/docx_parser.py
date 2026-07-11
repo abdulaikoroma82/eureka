@@ -1,4 +1,4 @@
-"""Word (.docx) parser (Module 1 / Iteration 4).
+"""Word (.docx) parser.
 
 Purpose
 -------

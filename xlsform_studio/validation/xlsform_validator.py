@@ -1,4 +1,4 @@
-"""XLSForm deployment validator (part of Module 9).
+"""XLSForm deployment validator.
 
 Purpose
 -------

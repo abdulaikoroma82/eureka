@@ -1,10 +1,10 @@
-"""Parser factory / dispatcher (Module 1).
+"""Parser factory / dispatcher.
 
 Purpose
 -------
 Choose the right parser for a given input file (by extension) and return a
-raw :class:`~xlsform_studio.models.Questionnaire`.  Also handles the JSON
-input format used by Iteration 1.
+raw :class:`~xlsform_studio.models.Questionnaire`.  Also handles the
+structured JSON input format.
 
 Inputs
 ------

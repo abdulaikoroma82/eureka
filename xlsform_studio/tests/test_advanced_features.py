@@ -21,7 +21,7 @@ def _run(data, **kw):
     return Workflow().run_from_dict(data, **kw)
 
 
-# --- Module 5: compound & comparison logic -----------------------------------
+# --- compound & comparison logic -----------------------------------
 def test_compound_and_condition():
     r = _run({"settings": {"form_title": "T", "form_id": "t"}, "survey": [
         {"question": "Are you employed?", "choices": ["Yes", "No"]},

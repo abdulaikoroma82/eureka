@@ -1,4 +1,4 @@
-"""Question classification engine (Module 2).
+"""Question classification engine.
 
 Purpose
 -------

@@ -1,4 +1,4 @@
-"""Excel / CSV parser (Module 1 / Iteration 3).
+"""Excel / CSV parser.
 
 Purpose
 -------

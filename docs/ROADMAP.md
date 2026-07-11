@@ -7,7 +7,7 @@ preserve: **deterministic-first** (rules are the authority), **offline-first**
 (assumption log + deterministic outputs), **YAML-driven rules**, **platform
 neutrality**.
 
-Legend: ✅ shipped · 🚫 descoped · ⬜ pending
+Legend: ✅ shipped · 🚫 descoped
 
 ---
 

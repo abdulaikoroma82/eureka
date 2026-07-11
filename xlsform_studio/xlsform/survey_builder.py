@@ -1,4 +1,4 @@
-"""Survey sheet builder (part of Module 4).
+"""Survey sheet builder.
 
 Purpose
 -------

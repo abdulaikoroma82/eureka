@@ -5,12 +5,12 @@ Purpose
 The "Rule Engine" box of the architecture.  It runs the individual engine
 modules in the correct order over a whole :class:`Questionnaire`:
 
-    1. Variable naming        (Module 3)
-    2. Question classification (Module 2)
+    1. Variable naming
+    2. Question classification
     3. Choice-list building    (via ChoicesBuilder inputs)
-    4. Logic compilation       (Module 5)
-    5. Constraint attachment   (Module 6)
-    6. Calculation generation  (Module 7)
+    4. Logic compilation
+    5. Constraint attachment
+    6. Calculation generation
 
 Inputs
 ------

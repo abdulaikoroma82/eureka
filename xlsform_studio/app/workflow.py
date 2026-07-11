@@ -64,7 +64,7 @@ from .config import CONFIG
 from .logic_flow import LogicFlowBuilder
 from .verification_checklist import VerificationChecklistBuilder
 
-# Step labels surfaced to the UI (Module 10 processing steps).  The AI step
+# Step labels surfaced to the UI.  The AI step
 # always fires (so the UI can show it) but completes instantly as a no-op
 # when AI is disabled or unconfigured - see AIPipeline.run.
 STEP_LABELS = [

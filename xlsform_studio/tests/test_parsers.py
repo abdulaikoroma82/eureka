@@ -1,4 +1,4 @@
-"""Tests for the questionnaire parsers (Module 1)."""
+"""Tests for the questionnaire parsers."""
 
 import pandas as pd
 

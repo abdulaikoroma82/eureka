@@ -1,4 +1,4 @@
-"""Deep XLSForm validator via pyxform (part of Module 9).
+"""Deep XLSForm validator via pyxform.
 
 Purpose
 -------

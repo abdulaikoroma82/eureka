@@ -1,4 +1,4 @@
-"""Tests for the validation system (Module 9)."""
+"""Tests for the validation system."""
 
 from xlsform_studio.models import (Choice, ChoiceList, Question,
                                       Questionnaire)

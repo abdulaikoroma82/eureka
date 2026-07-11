@@ -1,4 +1,4 @@
-"""Tests for the XLSForm builders and exporter (Module 4)."""
+"""Tests for the XLSForm builders and exporter."""
 
 import openpyxl
 

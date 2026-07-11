@@ -1,4 +1,4 @@
-"""XLSForm expression syntax validator (part of Module 9).
+"""XLSForm expression syntax validator.
 
 Purpose
 -------

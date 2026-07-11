@@ -1,4 +1,4 @@
-"""Questionnaire parsing package (Module 1)."""
+"""Questionnaire parsing package."""
 
 from .docx_parser import DocxParser
 from .excel_parser import ExcelParser
