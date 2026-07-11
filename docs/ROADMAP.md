@@ -31,20 +31,20 @@ Legend: ✅ shipped · 🟡 partially shipped · ⬜ pending
 | H1 | Survey Health Score | ✅ | D4 metrics + A15 narration (`narrative` feature) |
 | H3 | Smart Assumption Log | 🟡 | rules record everything; AI explains *findings* but not yet assumptions |
 | H4 | Smart Validation Report | ✅ | `ai/finding_explainer.py` |
-| D10 | Deployment Readiness Checks | 🟡 | platform matrix + pyxform deep check exist; translation/media/metadata completeness pending |
+| H5 | Readiness Assessment | ✅ | D10 findings narrated operationally by `ai/narrative.py` |
+| D6 | Metadata & Documentation Generator | ✅ | `app/artifacts.py`: enumerator guide, variable specification, collection plan |
+| A9 | Enumerator Instruction Generator | ✅ | `ai/enumerator_notes.py` (advisory `hint` suggestions; author hints win) |
+| D10 | Deployment Readiness Checks | ✅ | `validation/readiness_validator.py` (translation/media/device/metadata completeness) + platform matrix + pyxform deep check |
 | A1 | Methodology Expert Review | 🟡 | overlaps quality reviewer; senior-methodologist persona + sequencing review pending |
 | A2 | Enumerator Experience Review | ⬜ | pending |
 | A4 | Missing Question Detection | ⬜ | pending |
 | A5 | Objective Coverage Review | ⬜ | pending |
 | A8 | Indicator Mapping Engine | ⬜ | pending |
-| A9 | Enumerator Instruction Generator | ⬜ | pending |
 | A11 | Domain Plausibility Review | 🟡 | survey-context grounding exists (constraints/review); domain-specific design checks pending |
 | A14 | Semantic Logic Review | 🟡 | D5 catches decidable defects; AI review of *conceptual* pathways pending |
 | D1 | Reverse Engineering Engine | ⬜ | pending |
-| D6 | Metadata & Documentation Generator | ⬜ | pending (data dictionary + logic map already exist) |
 | D7 | Domain Rule Packs | ⬜ | pending (loader already supports custom rule dirs via `--rules`) |
 | H2 | Coverage Matrix | ⬜ | pending (depends on A5) |
-| H5 | Readiness Assessment | ⬜ | pending (depends on D10) |
 
 ---
 
@@ -53,49 +53,16 @@ Legend: ✅ shipped · 🟡 partially shipped · ⬜ pending
 Ranked by impact ÷ effort. Effort scale: **S** ≤ 1 day · **M** ≤ 3 days ·
 **L** ≤ 2 weeks.
 
-### Tier 1 — high impact, small/medium effort
+### Tier 1 — high impact, small/medium effort — ✅ ALL SHIPPED
 
-**1. D10 — Deployment readiness completion (M)**
-- *Architecture*: new `validation/readiness_validator.py`, wired into
-  `Validator` after platform checks; per-platform requirements move into
-  `knowledge/platforms.yaml` (new `readiness:` block) so they stay YAML-editable.
-- *Interface*: `ReadinessValidator.validate(questionnaire, target) -> List[Finding]`.
-- *Checks*: translation completeness per declared language column (every
-  label/choice/hint translated or listed), media file references present,
-  required settings per platform (e.g. SurveyCTO `form_id` length), metadata
-  field recommendations.
-- *Outputs*: findings (category `readiness`) + a readiness block in the QA report.
-- *Tests*: per-check unit tests + a fixture form with one gap per check.
-- *Acceptance*: a form with a half-translated French column reports exactly
-  which labels are missing; a fully-ready form reports zero readiness findings.
-
-**2. H5 — Readiness assessment hybrid (S, after D10)**
-- *Architecture*: extend `ai/narrative.py` (or a sibling `ai/readiness.py`)
-  to narrate D10's technical findings and add operational-readiness
-  commentary (training implications, deployment sequencing). One API call.
-- *Acceptance*: readiness section gains an advisory paragraph; numbers unchanged.
-
-**3. D6 — Metadata & documentation generator (M)**
-- *Architecture*: extend `app/artifacts.py` with `write_survey_package()`:
-  variable specification sheet (data dictionary + provenance + constraints
-  rationale), enumerator reference guide (per-question: label, hint, skip
-  narrative from `logic_flow`, constraints in plain words), data collection
-  plan skeleton (sections, duration estimate from D8, device requirements).
-- *Outputs*: `enumerator_guide.md`/`.pdf`, `variable_spec.xlsx`,
-  `collection_plan.md` in the output package.
-- *Tests*: golden-file style content assertions per artifact.
-- *Acceptance*: package builds offline for any valid form with no AI enabled.
-
-**4. A9 — Enumerator instruction generator (S)**
-- *Architecture*: new `ai/enumerator_notes.py`, advisory suggestions
-  (reuses `AISuggestion` with kind `hint`), applied via the existing
-  accept/reject panel into the `hint` column (never overwriting an
-  author-supplied hint — same co-share contract as translation).
-- *Acceptance*: accepted notes land in `hint`; author hints never overwritten.
+D10 (readiness validator), H5 (readiness narration), D6 (implementation
+package: enumerator guide, variable specification, collection plan), and
+A9 (enumerator instruction suggestions) are implemented — see the status
+table above for locations.
 
 ### Tier 2 — high impact, larger effort
 
-**5. D1 — Reverse engineering engine (L)**
+**1. D1 — Reverse engineering engine (L)**
 - *Architecture*: new `parsers/xlsform_reader.py` (XLSForm .xlsx →
   `Questionnaire`, inverse of the exporter — reuse the dialect maps) + new
   `docgen/` package rendering: enumerator questionnaire (DOCX via
@@ -110,7 +77,7 @@ Ranked by impact ÷ effort. Effort scale: **S** ≤ 1 day · **M** ≤ 3 days ·
   third-party XLSForms read with assumptions logged for unsupported columns.
 - *Note*: the reader also unlocks D3 diffs directly between .xlsx versions.
 
-**6. D7 — Domain rule packs (L, content-heavy)**
+**2. D7 — Domain rule packs (L, content-heavy)**
 - *Architecture*: `knowledge/packs/<domain>.yaml` using the existing rule
   schema (type keywords, constraint templates, choice lists, calculations);
   loader gains `KnowledgeBase.load(packs=["nutrition"])` and CLI `--packs`.
@@ -123,7 +90,7 @@ Ranked by impact ÷ effort. Effort scale: **S** ≤ 1 day · **M** ≤ 3 days ·
   neutral rules leave open; no pack = current behaviour byte-for-byte.
 - *Note*: packs are pure YAML — community-editable without touching Python.
 
-**7. A5 + H2 — Objective coverage review & matrix (M)**
+**3. A5 + H2 — Objective coverage review & matrix (M)**
 - *Architecture*: new `ai/coverage.py`; user supplies objectives/indicators
   (UI textarea, CLI `--objectives file`); rules build the question inventory
   (deterministic), AI maps objectives ↔ questions and marks gaps. One call.
@@ -131,7 +98,7 @@ Ranked by impact ÷ effort. Effort scale: **S** ≤ 1 day · **M** ≤ 3 days ·
 - *Acceptance*: an objective with no mapped question is flagged; mappings
   cite question names that exist (validated deterministically).
 
-**8. A4 — Missing question detection (S)**
+**4. A4 — Missing question detection (S)**
 - *Architecture*: new `ai/completeness.py`; sends question inventory +
   survey context; returns "potentially missing items" as advisory findings
   (category `ai_review`). Never mutates the form.
@@ -140,21 +107,21 @@ Ranked by impact ÷ effort. Effort scale: **S** ≤ 1 day · **M** ≤ 3 days ·
 
 ### Tier 3 — valuable, lower urgency
 
-**9. A2 — Enumerator experience review (S)**: second persona prompt in the
+**5. A2 — Enumerator experience review (S)**: second persona prompt in the
 quality reviewer (transitions, probing burden, instruction clarity);
 advisory findings only.
-**10. A1 — Methodology review completion (S)**: extend the reviewer's brief
+**6. A1 — Methodology review completion (S)**: extend the reviewer's brief
 with sequencing/ordering critique; merges with A2 into one "expert panel"
 call to keep the one-call-per-form budget.
-**11. A14 — Semantic logic review (S)**: feed the `logic_flow` graph to the
+**7. A14 — Semantic logic review (S)**: feed the `logic_flow` graph to the
 model for conceptual-pathway review (D5 already owns everything decidable).
-**12. A8 — Indicator mapping engine (M)**: infer indicators from questions;
+**8. A8 — Indicator mapping engine (M)**: infer indicators from questions;
 emit indicator matrix + means-of-verification artifact; advisory.
-**13. A11 — Domain plausibility review (S, after D7)**: pack vocabulary +
+**9. A11 — Domain plausibility review (S, after D7)**: pack vocabulary +
 survey context grounds a domain-completeness prompt.
-**14. H3 — Smart assumption log completion (S)**: run the finding-explainer
+**10. H3 — Smart assumption log completion (S)**: run the finding-explainer
 pattern over assumption-log entries (batched, one call).
-**15. D2 extensions (S)**: Mermaid export, SVG/PNG rendering (needs optional
+**11. D2 extensions (S)**: Mermaid export, SVG/PNG rendering (needs optional
 `graphviz` binary — keep optional), choice-filter/constraint edges as
 dashed overlays.
 

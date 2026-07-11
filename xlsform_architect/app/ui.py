@@ -83,6 +83,7 @@ _AI_FEATURE_LABELS = {
     "rewrite": "Suggest clearer question wording (accept/reject after generating)",
     "order": "Suggest logical choice-list ordering (accept/reject after generating)",
     "naming": "Suggest clearer variable names (accept/reject after generating)",
+    "instructions": "Draft enumerator instructions as device hints (accept/reject after generating)",
 }
 
 
@@ -474,7 +475,7 @@ def _render_ai_suggestions(result, target: str) -> None:
 
     kind_names = {"grouping": "Section grouping", "rewording": "Wording",
                   "split": "Split question", "choice_order": "Choice order",
-                  "naming": "Variable name"}
+                  "naming": "Variable name", "hint": "Enumerator note"}
     with st.expander(f"🤖 AI suggestions ({len(pending)}) — review and "
                      f"accept to apply", expanded=True):
         st.caption("Advisory only: none of these changed your form. Tick "

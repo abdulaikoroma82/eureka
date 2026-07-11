@@ -172,6 +172,11 @@ class LogicFlowBuilder:
     # ------------------------------------------------------------------
     # Condition prettifying
     # ------------------------------------------------------------------
+    def describe_condition(self, expr: str, qn: Questionnaire) -> str:
+        """Public helper: render an expression for humans (used by the
+        enumerator guide and other documentation artefacts)."""
+        return self._prettify(expr, qn)
+
     def _prettify(self, expr: str, qn: Questionnaire) -> str:
         by_name = {q.name: q for q in qn.questions}
 

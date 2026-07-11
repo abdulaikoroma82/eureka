@@ -119,6 +119,8 @@ That's the whole workflow. Repeat for each questionnaire.
 | **QA report (PDF)** | A quality check confirming the form is valid, a 0–100 quality score with category breakdown, an estimate of how long the interview will take, and any issues found. |
 | **Assumption log** | Every automatic decision the tool made, so you can double-check it. |
 | **Logic map** | A summary of the skip logic, validation rules, and calculations — including a flowchart of which answers lead where. The app's **Logic map** tab shows the same flowchart as an interactive diagram. |
+| **Enumerator guide** | A question-by-question reference for field staff: how to record each answer, the options, and skip rules in plain words. |
+| **Collection plan** | A planning starter: how long interviews will take, how many one enumerator can do per day, and what devices need (GPS, camera, files). |
 | **Version history** | A running record of every form you've generated. |
 
 ---

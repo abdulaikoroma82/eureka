@@ -56,15 +56,18 @@ _SYSTEM_PROMPT = (
     "You are a survey quality assurance lead writing the executive summary "
     "of a QA report. You are given ONLY pre-computed, audited metrics for a "
     "questionnaire (quality scores per category, an interview-duration "
-    "estimate, validation finding counts, and the rule engine's own "
-    "observations). Write 2-4 sentences of plain, professional prose "
-    "summarising the form's overall quality: lead with the strongest "
-    "aspects, name the biggest risks, and end with the single most "
-    "valuable improvement. Base every claim strictly on the metrics "
-    "provided - do not invent problems or praise not supported by them, "
-    "and do not restate raw numbers the report already shows unless they "
-    "carry the point. Respond ONLY with a json object of the form "
-    "{\"narrative\": \"...\"}.")
+    "estimate, validation finding counts, deployment-readiness findings, "
+    "and the rule engine's own observations). Write 2-5 sentences of "
+    "plain, professional prose summarising the form's overall quality and "
+    "readiness to deploy: lead with the strongest aspects, name the "
+    "biggest risks, comment on operational readiness (translations, "
+    "media, device fit, interview length and what they mean for training "
+    "and logistics) when the readiness findings warrant it, and end with "
+    "the single most valuable improvement. Base every claim strictly on "
+    "the metrics provided - do not invent problems or praise not "
+    "supported by them, and do not restate raw numbers the report already "
+    "shows unless they carry the point. Respond ONLY with a json object "
+    "of the form {\"narrative\": \"...\"}.")
 
 
 class AIQualityNarrator:
@@ -87,6 +90,11 @@ class AIQualityNarrator:
                 "warnings": len(report.warnings),
                 "is_valid": report.is_valid,
             },
+            # H5: rules assess technical readiness; the narrative adds the
+            # operational reading of those same findings.
+            "readiness_findings": [
+                f.message for f in report.findings
+                if f.category == "readiness"],
         }
         try:
             response = self.client.complete_json(

@@ -175,6 +175,169 @@ class ArtifactBuilder:
         return "\n".join(lines)
 
     # ------------------------------------------------------------------
+    # Survey implementation package (Module D6)
+    # ------------------------------------------------------------------
+    #: Plain-words description of each answer type for the enumerator guide.
+    _TYPE_WORDS = {
+        "integer": "Record a whole number.",
+        "decimal": "Record a number (decimals allowed).",
+        "text": "Write the answer in words.",
+        "date": "Record a date.",
+        "time": "Record a time.",
+        "datetime": "Record a date and time.",
+        "select_one": "Select exactly ONE option.",
+        "select_multiple": "Select ALL options that apply.",
+        "rank": "Put the options in order.",
+        "geopoint": "Capture the GPS location (stand outside if possible).",
+        "image": "Take or attach a photo.",
+        "audio": "Record audio.",
+        "video": "Record video.",
+        "file": "Attach a file.",
+        "barcode": "Scan the code.",
+        "note": "Read this to the respondent. No answer is recorded.",
+    }
+
+    def enumerator_guide_markdown(self, questionnaire: Questionnaire,
+                                  duration=None) -> str:
+        """Field-ready, question-by-question guide for enumerators."""
+        from .logic_flow import LogicFlowBuilder
+
+        flow = LogicFlowBuilder()
+        s = questionnaire.settings
+        lines = ["# Enumerator Reference Guide", "",
+                 f"**Survey:** {s.form_title}  ",
+                 f"**Version:** {s.version}  "]
+        if duration is not None:
+            lines.append(f"**Expected interview length:** about "
+                         f"{duration.typical_minutes:.0f} minutes  ")
+        lines += ["",
+                  "Ask the questions in order. A question marked *(skip "
+                  "rule)* only appears when its condition is met - the "
+                  "device handles this automatically.", ""]
+
+        current_section = object()
+        number = 0
+        for q in questionnaire.questions:
+            if q.is_structural or q.is_calculate:
+                continue
+            if q.section != current_section:
+                current_section = q.section
+                if q.section:
+                    lines += [f"## {q.section}", ""]
+            number += 1
+            required = " **(required)**" if q.required else ""
+            lines.append(f"**{number}. {q.label or q.raw_label}**{required}")
+            lines.append("")
+            how = self._TYPE_WORDS.get(q.base_type,
+                                       f"Record the answer ({q.base_type}).")
+            lines.append(f"- *How to record:* {how}")
+            if q.references_choices:
+                cl = questionnaire.choice_lists.get(
+                    self._question_list_name(q))
+                if cl:
+                    opts = "; ".join(c.label for c in cl.choices)
+                    lines.append(f"- *Options:* {opts}")
+            if q.relevant:
+                lines.append(f"- *(skip rule)* Ask only when: "
+                             f"{flow.describe_condition(q.relevant, questionnaire)}")
+            if q.constraint_message:
+                lines.append(f"- *Valid answers:* {q.constraint_message}")
+            elif q.constraint:
+                lines.append(f"- *Valid answers must satisfy:* "
+                             f"`{q.constraint}`")
+            if q.hint:
+                lines.append(f"- *Note:* {q.hint}")
+            if q.instruction:
+                lines.append(f"- *Instruction:* {q.instruction}")
+            lines.append("")
+        return "\n".join(lines).rstrip() + "\n"
+
+    def variable_specification_frame(self, questionnaire: Questionnaire) -> pd.DataFrame:
+        """Data dictionary + provenance: one row per variable including the
+        engine's logged assumptions, for analysts and data managers."""
+        df = self.data_dictionary_frame(questionnaire)
+        provenance = {q.name: " | ".join(q.assumptions)
+                      for q in questionnaire.questions if not q.is_structural}
+        df["assumptions"] = df["variable"].map(provenance).fillna("")
+        return df
+
+    def write_variable_specification(self, questionnaire: Questionnaire,
+                                     path: Union[str, Path]) -> Path:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.variable_specification_frame(questionnaire).to_excel(
+            path, index=False, sheet_name="variable_specification")
+        return path
+
+    def collection_plan_markdown(self, questionnaire: Questionnaire,
+                                 duration=None) -> str:
+        """Data-collection plan skeleton derived from the form structure."""
+        s = questionnaire.settings
+        real = [q for q in questionnaire.questions
+                if not q.is_structural and not q.is_calculate]
+        lines = ["# Data Collection Plan", "",
+                 f"**Survey:** {s.form_title}  ",
+                 f"**Form id / version:** {s.form_id} / {s.version}  ", "",
+                 "## Instrument overview", "",
+                 f"- {len(real)} questions in "
+                 f"{len({q.section for q in real if q.section}) or 1} "
+                 f"section(s)"]
+        if duration is not None:
+            lines.append(f"- Estimated interview: "
+                         f"~{duration.typical_minutes:.0f} minutes (range "
+                         f"{duration.low_minutes:.0f}–"
+                         f"{duration.high_minutes:.0f}); respondent-burden "
+                         f"risk: {duration.burden_risk}")
+            per_day = max(1, int((6 * 60) //
+                                 max(1.0, duration.typical_minutes + 10)))
+            lines.append(f"- Planning figure: ≈{per_day} interviews per "
+                         f"enumerator per 6-hour field day (includes a "
+                         f"10-minute buffer per interview for travel/consent)")
+            if duration.per_section_minutes:
+                lines += ["", "### Time by section", "",
+                          "| Section | Est. minutes |", "| --- | --- |"]
+                for section, minutes in duration.per_section_minutes.items():
+                    lines.append(f"| {section} | {minutes:.1f} |")
+        lines += ["", "## Device requirements", ""]
+        needs = []
+        types = {q.base_type for q in real}
+        if "geopoint" in types:
+            needs.append("GPS enabled (location capture)")
+        if types & {"image", "video"}:
+            needs.append("working camera (photo/video questions)")
+        if types & {"audio", "video"}:
+            needs.append("microphone (audio recording)")
+        if "barcode" in types:
+            needs.append("camera with barcode scanning")
+        media_files = sorted({v.strip() for q in questionnaire.questions
+                              for k, v in q.extra.items()
+                              if k.startswith("media::") and v.strip()})
+        if media_files:
+            needs.append(f"{len(media_files)} media file(s) sideloaded: "
+                         + ", ".join(media_files))
+        lines += [f"- {n}" for n in needs] or ["- No special hardware needed."]
+
+        languages = sorted({k.split("::", 1)[1]
+                            for q in questionnaire.questions
+                            for k in q.extra if k.startswith("label::")})
+        lines += ["", "## Languages", ""]
+        if languages:
+            lines += [f"- Default plus: {', '.join(languages)}"]
+        else:
+            lines += ["- Single language (no translation columns)."]
+        lines += ["", "## To complete manually", "",
+                  "- Sampling design and target sample size",
+                  "- Team structure, training dates and pilot plan",
+                  "- Consent script and ethics approvals",
+                  "- Data quality monitoring schedule"]
+        return "\n".join(lines) + "\n"
+
+    @staticmethod
+    def _question_list_name(q) -> str:
+        parts = (q.xlsform_type or "").split()
+        return parts[1] if len(parts) >= 2 else q.list_name
+
+    # ------------------------------------------------------------------
     # Version history (append-only audit trail)
     # ------------------------------------------------------------------
     def append_version_history(self, path: Union[str, Path],

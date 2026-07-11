@@ -301,7 +301,22 @@ class Workflow:
             dot_path = folder / "logic_flow.dot"
             dot_path.write_text(dot, encoding="utf-8")
             outputs["logic_flow"] = dot_path
-        # 6. Version history (append-only, at the output-dir root).
+        # 6. Survey implementation package (enumerator guide, variable
+        #    specification, collection plan) - all derived deterministically.
+        guide_path = folder / "enumerator_guide.md"
+        guide_path.write_text(
+            self.artifacts.enumerator_guide_markdown(qn, duration=duration),
+            encoding="utf-8")
+        outputs["enumerator_guide"] = guide_path
+        outputs["variable_specification"] = \
+            self.artifacts.write_variable_specification(
+                qn, folder / f"{base}_variable_specification.xlsx")
+        plan_path = folder / "collection_plan.md"
+        plan_path.write_text(
+            self.artifacts.collection_plan_markdown(qn, duration=duration),
+            encoding="utf-8")
+        outputs["collection_plan"] = plan_path
+        # 7. Version history (append-only, at the output-dir root).
         outputs["version_history"] = self.artifacts.append_version_history(
             out_dir / "version_history.json", qn, source_name,
             report.is_valid, len(report.errors), target=target or "")

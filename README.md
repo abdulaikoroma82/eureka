@@ -279,6 +279,7 @@ explicitly enable it **and** provide an API key.
 | **Question rewording** *(suggestion-only)* | Flags ambiguous, double-barreled, leading or jargon-heavy questions and suggests clearer wording (or a split, which you apply in the source document) | Whether a sentence is leading is a language judgement |
 | **Choice-list ordering** *(suggestion-only)* | Proposes a more logical option order — common answers first, themes adjacent, "Other"/"Refused" last | "Farming" belonging next to "Fishing" isn't a sortable property |
 | **Variable-name suggestions** *(suggestion-only)* | Offers a more natural name where the deterministic one reads awkwardly; accepting a rename also rewrites every `${...}` reference to it | Judging what an analyst will find readable is a language call |
+| **Enumerator instructions** *(suggestion-only)* | Drafts per-question field guidance (probing technique, common misunderstandings) as device `hint` text — only for questions with no author-written hint, which always wins | Anticipating how respondents misunderstand a question is survey-methodology judgement |
 
 The four **suggestion-only** features never touch the form by themselves:
 each produces an original-vs-suggested pair you accept or reject (in the
@@ -443,8 +444,10 @@ Each run writes a timestamped folder under `output/` containing:
 3. `QA_Report.pdf` — the validation report, including the **Form Quality
    Index** (0–100 across seven categories: naming, constraint coverage,
    logic completeness, choice consistency, validation readiness,
-   documentation, reusability) and a deterministic **interview-duration /
-   respondent-burden estimate**
+   documentation, reusability), a deterministic **interview-duration /
+   respondent-burden estimate**, and **deployment-readiness findings**
+   (translation completeness per language, media file manifest, device
+   fit for long choice lists)
 4. `assumption_log.md` — every deterministic decision made
 5. `logic_map.md` — relevance / constraint / calculation relationships,
    including an ASCII skip-pattern flowchart:
@@ -457,8 +460,17 @@ Each run writes a timestamped folder under `output/` containing:
 6. `logic_flow.dot` — the same flowchart as a Graphviz graph (only written
    when the form has skip logic); the app's **Logic map** tab renders it
    interactively, with answer codes shown as their labels
-7. `version_history.json` — append-only audit trail across runs
-8. `change_report.md` — only with `--diff-against OLD_FILE`: what changed
+7. `enumerator_guide.md` — a field-ready, question-by-question reference:
+   how to record each answer, the options, skip rules in plain words
+   ("Ask only when resident = Yes"), and valid-answer rules
+8. `*_variable_specification.xlsx` — the data dictionary plus provenance:
+   every engine assumption logged per variable, for data managers
+9. `collection_plan.md` — a data-collection plan skeleton: instrument
+   overview, time per section, interviews-per-enumerator planning figure,
+   device requirements (GPS/camera/media files), languages, and a
+   checklist of what to complete manually
+10. `version_history.json` — append-only audit trail across runs
+11. `change_report.md` — only with `--diff-against OLD_FILE`: what changed
    versus a previous questionnaire version (added/removed/renamed
    variables, logic/constraint changes, choice-list edits), with breaking
    changes for longitudinal analysis flagged explicitly

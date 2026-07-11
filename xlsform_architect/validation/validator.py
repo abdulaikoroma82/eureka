@@ -48,6 +48,7 @@ from .expression_validator import ExpressionValidator
 from .logic_validator import LogicValidator
 from .platform_validator import PlatformValidator
 from .pyxform_validator import PyxformValidator
+from .readiness_validator import ReadinessValidator
 from .report_generator import ValidationReport
 from .structure_validator import StructureValidator
 from .xlsform_validator import XLSFormValidator
@@ -65,6 +66,7 @@ class Validator:
         self.logic = LogicValidator()
         self.expression = ExpressionValidator()
         self.consistency = ConsistencyValidator()
+        self.readiness = ReadinessValidator()
         self.xlsform = XLSFormValidator()
         self.platform = PlatformValidator(self.kb)
         self.pyxform = PyxformValidator()
@@ -78,6 +80,7 @@ class Validator:
         report.findings.extend(self.logic.validate(questionnaire))
         report.findings.extend(self.expression.validate(questionnaire))
         report.findings.extend(self.consistency.validate(questionnaire))
+        report.findings.extend(self.readiness.validate(questionnaire))
         report.findings.extend(self.xlsform.validate(questionnaire))
 
         # Standards of the chosen platform.

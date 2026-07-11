@@ -29,7 +29,8 @@ from typing import List, Tuple
 #: it produces accept/reject suggestions and never changes the form itself.
 AI_FEATURES = ("translate", "skip_logic", "domain_constraints",
               "cross_constraints", "classify", "review", "explain_findings",
-              "narrative", "group", "rewrite", "order", "naming")
+              "narrative", "group", "rewrite", "order", "naming",
+              "instructions")
 
 #: Accepted alternative spellings for feature keys (CLI convenience).
 FEATURE_ALIASES = {

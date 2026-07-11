@@ -75,6 +75,7 @@ from .client import DeepSeekClient
 from .config import AIConfig
 from .constraint_reviewer import AICrossFieldConstraintReviewer
 from .domain_constraints import AIDomainConstraintSynthesizer
+from .enumerator_notes import AIEnumeratorNoteSuggester
 from .finding_explainer import AIFindingExplainer
 from .grouping import AIGroupingSuggester
 from .naming import AINamingSuggester
@@ -144,6 +145,9 @@ class AIPipeline:
                           .suggest(questionnaire))
         if config.wants("naming"):
             self._collect(notes, AINamingSuggester(self.client)
+                          .suggest(questionnaire))
+        if config.wants("instructions"):
+            self._collect(notes, AIEnumeratorNoteSuggester(self.client)
                           .suggest(questionnaire))
 
         if config.wants("review"):

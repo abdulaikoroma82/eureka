@@ -51,7 +51,7 @@ from ..validation import ai_validators
 #: "split" suggestions (rewording proposals to break a double-barreled
 #: question in two) are display-only: splitting changes the data model and
 #: must be done in the source document by the author.
-APPLIABLE_KINDS = ("grouping", "rewording", "choice_order", "naming")
+APPLIABLE_KINDS = ("grouping", "rewording", "choice_order", "naming", "hint")
 
 
 @dataclass
@@ -163,6 +163,21 @@ def _apply_naming(qn: Questionnaire, sug: AISuggestion) -> str:
     return ""
 
 
+def _apply_hint(qn: Questionnaire, sug: AISuggestion) -> str:
+    q = _question(qn, sug.target)
+    if q is None:
+        return "question no longer exists"
+    if q.hint:
+        return "the question now has an author-written hint, which wins"
+    hint = (sug.payload.get("hint") or "").strip()
+    if not hint:
+        return "empty hint"
+    q.hint = hint
+    q.add_assumption(f"AI-suggested enumerator instruction accepted as the "
+                     f"hint ({sug.reason or 'field guidance'}).")
+    return ""
+
+
 def _apply_grouping(qn: Questionnaire, sug: AISuggestion) -> str:
     if any(q.is_structural for q in qn.questions):
         return ("the form has explicit group markers, which are respected "
@@ -207,4 +222,5 @@ _HANDLERS = {
     "choice_order": _apply_choice_order,
     "naming": _apply_naming,
     "grouping": _apply_grouping,
+    "hint": _apply_hint,
 }
