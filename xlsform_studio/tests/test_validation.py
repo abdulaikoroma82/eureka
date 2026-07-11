@@ -1,6 +1,6 @@
 """Tests for the validation system."""
 
-from xlsform_studio.models import (Choice, ChoiceList, Question,
+from xlsform_studio.models import (ChoiceList, Question,
                                       Questionnaire)
 from xlsform_studio.validation.validator import Validator
 

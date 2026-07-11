@@ -44,7 +44,7 @@ from __future__ import annotations
 import json
 from typing import List
 
-from ..validation.report_generator import Finding, ValidationReport
+from ..validation.report_generator import ValidationReport
 from .client import AIError, DeepSeekClient
 
 _SYSTEM_PROMPT = (

@@ -118,7 +118,10 @@ class Workflow:
                  ai_client: Optional[DeepSeekClient] = None) -> None:
         self.kb = knowledge or KnowledgeBase.load()
         self.engine = RuleEngine(self.kb)
-        self.validator = Validator()
+        # Validation must use the SAME knowledge base as compilation, so a
+        # custom rules directory / domain packs govern the platform checks
+        # and compatibility matrix too - not just the rule engine.
+        self.validator = Validator(knowledge=self.kb)
         self.exporter = XLSFormExporter()
         self.reporter = ReportGenerator()
         self.artifacts = ArtifactBuilder(self.kb)

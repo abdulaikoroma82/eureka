@@ -32,10 +32,10 @@ from __future__ import annotations
 import re
 from typing import List, Set
 
-from ..models import Questionnaire
+from ..models import Questionnaire, REF_PATTERN
 from .report_generator import Finding
 
-_REF = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+_REF = REF_PATTERN
 
 
 class LogicValidator:
@@ -119,8 +119,7 @@ class LogicValidator:
         for q in questions:
             if not q.references_choices:
                 continue
-            parts = q.xlsform_type.split()
-            list_name = parts[1] if len(parts) >= 2 else q.list_name
+            list_name = q.choice_list_name
             cl = questionnaire.choice_lists.get(list_name)
             if cl and cl.choices:
                 value_sets[q.name] = {c.name for c in cl.choices}

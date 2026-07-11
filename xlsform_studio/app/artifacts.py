@@ -32,7 +32,6 @@ True
 from __future__ import annotations
 
 import datetime as _dt
-import io
 import json
 from pathlib import Path
 from typing import Dict, List, Union
@@ -61,8 +60,7 @@ class ArtifactBuilder:
             list_name = ""
             choices = ""
             if q.references_choices:
-                parts = q.xlsform_type.split()
-                list_name = parts[1] if len(parts) >= 2 else q.list_name
+                list_name = q.choice_list_name
                 cl = questionnaire.choice_lists.get(list_name)
                 if cl:
                     choices = " | ".join(f"{c.name}={c.label}" for c in cl.choices)
@@ -239,7 +237,7 @@ class ArtifactBuilder:
             lines.append(f"- *How to record:* {how}")
             if q.references_choices:
                 cl = questionnaire.choice_lists.get(
-                    self._question_list_name(q))
+                    q.choice_list_name)
                 if cl:
                     opts = "; ".join(c.label for c in cl.choices)
                     lines.append(f"- *Options:* {opts}")
@@ -404,7 +402,7 @@ class ArtifactBuilder:
                 hint.runs[0].italic = True
 
             if q.references_choices:
-                cl = questionnaire.choice_lists.get(self._question_list_name(q))
+                cl = questionnaire.choice_lists.get(q.choice_list_name)
                 mark = marks.get(q.base_type, "○")
                 for choice in (cl.choices if cl else []):
                     doc.add_paragraph(f"    {mark}  {choice.label}")
@@ -419,10 +417,6 @@ class ArtifactBuilder:
         doc.save(str(path))
         return path
 
-    @staticmethod
-    def _question_list_name(q) -> str:
-        parts = (q.xlsform_type or "").split()
-        return parts[1] if len(parts) >= 2 else q.list_name
 
     # ------------------------------------------------------------------
     # Version history (append-only audit trail)
@@ -456,9 +450,3 @@ class ArtifactBuilder:
         path.write_text(json.dumps(history, indent=2), encoding="utf-8")
         return path
 
-    # ------------------------------------------------------------------
-    @staticmethod
-    def data_dictionary_bytes(df: pd.DataFrame) -> bytes:
-        buffer = io.BytesIO()
-        df.to_excel(buffer, index=False, sheet_name="data_dictionary")
-        return buffer.getvalue()

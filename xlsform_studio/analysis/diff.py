@@ -45,7 +45,7 @@ Example
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 from ..models import Questionnaire
 

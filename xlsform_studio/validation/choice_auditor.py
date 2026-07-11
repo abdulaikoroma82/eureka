@@ -205,7 +205,7 @@ class ChoiceAuditor:
             if not q.references_choices or not q.name:
                 continue
             or_other = "or_other" in (q.xlsform_type or "")
-            cl = qn.choice_lists.get(self._list_name(q))
+            cl = qn.choice_lists.get(q.choice_list_name)
             other = self._other_choice(cl) if cl else None
 
             if or_other and other is None:
@@ -344,7 +344,3 @@ class ChoiceAuditor:
         m = _LEADING_NUMBER.match(label or "")
         return float(m.group(1)) if m else None
 
-    @staticmethod
-    def _list_name(q: Question) -> str:
-        parts = (q.xlsform_type or "").split()
-        return parts[1] if len(parts) >= 2 else q.list_name

@@ -155,8 +155,7 @@ class AIQualityReviewer:
             list_name = ""
             choices = []
             if q.references_choices:
-                parts = q.xlsform_type.split()
-                list_name = parts[1] if len(parts) >= 2 else q.list_name
+                list_name = q.choice_list_name
                 cl = qn.choice_lists.get(list_name)
                 if cl:
                     choices = [c.label for c in cl.choices]

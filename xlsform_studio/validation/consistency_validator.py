@@ -52,10 +52,10 @@ import re
 from itertools import combinations
 from typing import Dict, List, Set
 
-from ..models import Questionnaire
+from ..models import Questionnaire, REF_PATTERN
 from .report_generator import Finding
 
-_REF = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+_REF = REF_PATTERN
 _EQ = re.compile(r"\$\{(\w+)\}\s*=\s*'([^']*)'")
 _NUM_CMP = re.compile(r"\$\{(\w+)\}\s*(>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)")
 #: Overlap ratio above which two different lists are flagged as near-identical.

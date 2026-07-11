@@ -47,7 +47,7 @@ python run_ui.py
 ```
 
 ### Notes
-* The knowledge YAML files, XLSForm template and examples are bundled as data
+* The knowledge YAML files and examples are bundled as data
   files in the CLI spec (`datas`), so program rules travel with the executable.
 * The core pipeline runs entirely offline — no cloud service is contacted
   unless you explicitly enable the optional AI-assist layer (`--ai`, requires

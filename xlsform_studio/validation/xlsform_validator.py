@@ -150,10 +150,3 @@ class XLSFormValidator:
                     f"appearance; check it is supported on your target platform.",
                     q.name))
         return findings
-
-    # ------------------------------------------------------------------
-    def compatibility_matrix(self, questionnaire: Questionnaire) -> dict:
-        """Return a per-platform pass/fail summary for the QA report."""
-        errors = [f for f in self.validate(questionnaire) if f.level == "error"]
-        ok = not errors
-        return {target: ok for target in DEPLOYMENT_TARGETS}

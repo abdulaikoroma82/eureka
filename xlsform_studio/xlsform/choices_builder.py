@@ -84,8 +84,7 @@ class ChoicesBuilder:
         for q in questionnaire.questions:
             if not q.references_choices:
                 continue
-            parts = q.xlsform_type.split()
-            name = parts[1] if len(parts) >= 2 else q.list_name
+            name = q.choice_list_name
             if name and name in referenced and name not in ordered:
                 ordered.append(name)
         # Include any referenced lists not yet ordered (defensive).

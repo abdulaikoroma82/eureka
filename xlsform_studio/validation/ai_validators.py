@@ -28,11 +28,12 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from typing import Dict, Iterable, List, Optional, Sequence, Set
+from typing import Iterable, Optional, Sequence, Set
 
+from ..models import REF_PATTERN
 from .expression_validator import ExpressionValidator
 
-_REF = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+_REF = REF_PATTERN
 #: XLSForm-safe identifier: starts with a letter, then letters/digits/underscores.
 _NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 

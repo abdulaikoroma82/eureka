@@ -82,7 +82,6 @@ xlsform_studio/
 ├── xlsform/        # survey / choices / settings builders + exporter
 ├── validation/     # structure / logic / deployment validators + report
 ├── knowledge/      # editable YAML rule packs
-├── templates/      # blank XLSForm template
 ├── examples/       # sample questionnaires
 ├── output/         # generated packages land here
 └── tests/          # pytest suite
@@ -622,7 +621,6 @@ none are set):
 | --- | --- |
 | `DEEPSEEK_API_KEY` | Enables the optional AI layer. Unset = fully deterministic, zero network calls. |
 | `XLSFS_OUTPUT_DIR` | Override the default output directory. |
-| `XLSFS_DEFAULT_TARGET` | Override the default deployment platform (`kobo`, `surveycto`, `odk`, `ona`, `commcare`). |
 | `XLSFS_DEEPSEEK_BASE_URL` / `XLSFS_DEEPSEEK_MODEL` | Point the AI layer at a different DeepSeek-compatible endpoint/model. |
 | `XLSFORM_STUDIO_LOG_LEVEL` | Diagnostic log verbosity for the Streamlit UI (`DEBUG`/`INFO`/`WARNING`/`ERROR`); the CLI uses `--log-level` instead. |
 

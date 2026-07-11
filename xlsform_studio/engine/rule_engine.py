@@ -249,11 +249,10 @@ class RuleEngine:
         for q in qn.questions:
             if not q.references_choices:
                 continue
-            parts = q.xlsform_type.split()
-            current = parts[1] if len(parts) >= 2 else q.list_name
+            current = q.choice_list_name
             if current in remap:
                 shared = remap[current]
-                q.xlsform_type = f"{parts[0]} {shared}"
+                q.xlsform_type = f"{q.base_type} {shared}"
                 q.list_name = shared
                 q.add_assumption(
                     f"Options identical to list '{shared}'; shared it instead "

@@ -32,7 +32,7 @@ xlsform-studio = "xlsform_studio.app.main:main"
 include = ["xlsform_studio*"]
 
 [tool.setuptools.package-data]
-xlsform_studio = ["knowledge/*.yaml", "templates/*.xlsx", "examples/*"]
+xlsform_studio = ["knowledge/*.yaml", "knowledge/packs/*.yaml", "examples/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["xlsform_studio/tests"]

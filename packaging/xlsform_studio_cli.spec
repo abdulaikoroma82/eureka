@@ -20,7 +20,7 @@ pkg = project_root / "xlsform_studio"
 
 datas = []
 datas += [(str(p), "xlsform_studio/knowledge") for p in (pkg / "knowledge").glob("*.yaml")]
-datas += [(str(p), "xlsform_studio/templates") for p in (pkg / "templates").glob("*.xlsx")]
+datas += [(str(p), "xlsform_studio/knowledge/packs") for p in (pkg / "knowledge" / "packs").glob("*.yaml")]
 datas += collect_data_files("xlsform_studio", includes=["examples/*"])
 # pyxform ships template/data files that must travel with the executable.
 datas += collect_data_files("pyxform")

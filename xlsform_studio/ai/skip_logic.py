@@ -56,13 +56,12 @@ Example
 
 from __future__ import annotations
 
-import re
 from typing import Dict, List
 
-from ..models import Questionnaire
+from ..models import Questionnaire, REF_PATTERN
 from .client import AIError, DeepSeekClient
 
-_REF = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+_REF = REF_PATTERN
 
 _SYSTEM_PROMPT = (
     "You are an XLSForm logic expert. You are given a compiled survey (an "

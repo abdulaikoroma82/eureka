@@ -77,9 +77,7 @@ class AIEnumeratorNoteSuggester:
                 continue        # author hints are authoritative: not offered
             options = []
             if q.references_choices:
-                parts = (q.xlsform_type or "").split()
-                cl = questionnaire.choice_lists.get(
-                    parts[1] if len(parts) >= 2 else q.list_name)
+                cl = questionnaire.choice_lists.get(q.choice_list_name)
                 if cl:
                     options = [c.label for c in cl.choices]
             rows.append({"name": q.name, "label": q.label or q.raw_label,

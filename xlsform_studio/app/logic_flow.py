@@ -51,9 +51,9 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List
 
-from ..models import Question, Questionnaire
+from ..models import Questionnaire, REF_PATTERN
 
-_REF = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+_REF = REF_PATTERN
 _NOT_EQ = re.compile(r"not\(\s*\$\{(\w+)\}\s*=\s*'([^']*)'\s*\)")
 _SELECTED = re.compile(r"selected\(\s*\$\{(\w+)\}\s*,\s*'([^']*)'\s*\)")
 _CMP = re.compile(r"\$\{(\w+)\}\s*(!=|>=|<=|=|>|<)\s*'([^']*)'")
@@ -209,7 +209,7 @@ class LogicFlowBuilder:
         def label_for(name: str, code: str) -> str:
             q = by_name.get(name)
             if q is not None:
-                cl = qn.choice_lists.get(self._list_name(q))
+                cl = qn.choice_lists.get(q.choice_list_name)
                 if cl:
                     for c in cl.choices:
                         if c.name == code:
@@ -237,11 +237,6 @@ class LogicFlowBuilder:
         return label
 
     # ------------------------------------------------------------------
-    @staticmethod
-    def _list_name(q: Question) -> str:
-        parts = (q.xlsform_type or "").split()
-        return parts[1] if len(parts) >= 2 else q.list_name
-
     @staticmethod
     def _short(text: str) -> str:
         text = " ".join(text.split())

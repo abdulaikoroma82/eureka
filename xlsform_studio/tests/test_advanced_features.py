@@ -9,7 +9,7 @@ import pytest
 
 from xlsform_studio.app.workflow import Workflow
 from xlsform_studio.engine.logic_engine import LogicEngine
-from xlsform_studio.models import Question, Questionnaire
+from xlsform_studio.models import Question
 from xlsform_studio.parsers.docx_parser import DocxParser
 from xlsform_studio.parsers.pdf_parser import PdfParser
 from xlsform_studio.parsers.questionnaire_parser import QuestionnaireParser

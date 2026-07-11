@@ -4,7 +4,7 @@ the survey implementation package (D6), enumerator instruction suggestions
 
 from __future__ import annotations
 
-from xlsform_studio.ai.client import AIError, DeepSeekClient
+from xlsform_studio.ai.client import DeepSeekClient
 from xlsform_studio.ai.config import AIConfig
 from xlsform_studio.ai.enumerator_notes import AIEnumeratorNoteSuggester
 from xlsform_studio.ai.suggestions import AISuggestion, apply_suggestions

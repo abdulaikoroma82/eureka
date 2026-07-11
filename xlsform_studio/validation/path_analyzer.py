@@ -60,13 +60,13 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 from ..logging_config import get_logger
-from ..models import Questionnaire
+from ..models import Questionnaire, REF_PATTERN
 from .expression_evaluator import EMPTY, ExpressionEvaluator
 from .report_generator import Finding
 
 _log = get_logger("validation.path_analyzer")
 
-_REF = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+_REF = REF_PATTERN
 
 #: Above this many enumerated paths, switch to the conservative single-pass
 #: approximation (see module docstring).
@@ -186,7 +186,7 @@ class PathAnalyzer:
 
             choices: List[str] = []
             if q.base_type == "select_one":
-                cl = qn.choice_lists.get(self._list_name(q))
+                cl = qn.choice_lists.get(q.choice_list_name)
                 if cl:
                     choices = [c.name for c in cl.choices]
 
@@ -403,8 +403,3 @@ class PathAnalyzer:
                         q.name))
         return findings
 
-    # ------------------------------------------------------------------
-    @staticmethod
-    def _list_name(q) -> str:
-        parts = (q.xlsform_type or "").split()
-        return parts[1] if len(parts) >= 2 else q.list_name

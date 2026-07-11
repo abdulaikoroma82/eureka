@@ -13,8 +13,7 @@ from xlsform_studio.models import (Choice, ChoiceList, FormSettings,
                                       Question, Questionnaire)
 from xlsform_studio.validation.consistency_validator import (
     ConsistencyValidator)
-from xlsform_studio.validation.report_generator import (ReportGenerator,
-                                                           ValidationReport)
+from xlsform_studio.validation.report_generator import ReportGenerator
 from xlsform_studio.validation.validator import Validator
 
 

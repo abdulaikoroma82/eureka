@@ -28,8 +28,9 @@ False
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field, asdict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 # ---------------------------------------------------------------------------
@@ -37,6 +38,17 @@ from typing import Any, Dict, List, Optional
 # ---------------------------------------------------------------------------
 #: Structural row types that open/close groups and repeats.
 STRUCTURAL_TYPES = ("begin group", "end group", "begin repeat", "end repeat")
+
+#: Canonical pattern for a ``${variable}`` reference inside an XLSForm
+#: expression. The single source of truth - import this rather than
+#: re-declaring it per module.
+REF_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+
+def find_refs(expression: str) -> List[str]:
+    """All variable names referenced by *expression*, first-seen order,
+    de-duplicated."""
+    return list(dict.fromkeys(REF_PATTERN.findall(expression or "")))
 
 
 @dataclass
@@ -170,6 +182,21 @@ class Question:
         from the choices sheet.
         """
         return self.base_type in ("select_one", "select_multiple", "rank")
+
+    @property
+    def choice_list_name(self) -> str:
+        """The choice list this question draws from: the second token of the
+        type (``select_one water_sources`` -> ``water_sources``), falling
+        back to the explicit :attr:`list_name` field. "" for questions
+        that don't reference a list."""
+        if not self.references_choices:
+            return self.list_name
+        parts = (self.xlsform_type or "").split()
+        list_name = parts[1] if len(parts) >= 2 else ""
+        # "or_other" is a type suffix, never the list name itself.
+        if list_name == "or_other":
+            list_name = ""
+        return list_name or self.list_name
 
     @property
     def is_calculate(self) -> bool:

@@ -4,8 +4,6 @@ expert-panel review brief (A1/A2/A14), and Mermaid export (D2 extension)."""
 
 from __future__ import annotations
 
-import io
-
 from xlsform_studio.ai.client import DeepSeekClient
 from xlsform_studio.ai.config import AIConfig
 from xlsform_studio.ai.indicators import AIIndicatorMapper

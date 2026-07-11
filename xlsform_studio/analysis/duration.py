@@ -186,7 +186,6 @@ class DurationEstimator:
 
     @staticmethod
     def _option_count(q: Question, qn: Questionnaire) -> int:
-        parts = (q.xlsform_type or "").split()
-        list_name = parts[1] if len(parts) >= 2 else q.list_name
+        list_name = q.choice_list_name
         cl = qn.choice_lists.get(list_name)
         return len(cl.choices) if cl else 0

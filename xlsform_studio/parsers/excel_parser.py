@@ -40,11 +40,11 @@ Example
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Union
 
 import pandas as pd
 
-from ..models import Choice, ChoiceList, FormSettings, Question, Questionnaire
+from ..models import Choice, FormSettings, Question, Questionnaire
 
 _SPLIT_CHARS = ["|", ";", ",", "/"]
 

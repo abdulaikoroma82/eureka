@@ -144,8 +144,7 @@ class ReadinessValidator:
         for q in qn.questions:
             if not q.references_choices:
                 continue
-            parts = (q.xlsform_type or "").split()
-            list_name = parts[1] if len(parts) >= 2 else q.list_name
+            list_name = q.choice_list_name
             cl = qn.choice_lists.get(list_name)
             if not cl or len(cl.choices) <= _LONG_LIST:
                 continue
