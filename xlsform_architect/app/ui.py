@@ -52,6 +52,7 @@ from xlsform_architect.ai.client import DeepSeekClient
 from xlsform_architect.ai.config import AIConfig
 from xlsform_architect.app.artifacts import ArtifactBuilder
 from xlsform_architect.app.config import DEPLOYMENT_TARGETS, EXAMPLES_DIR
+from xlsform_architect.app.logic_flow import LogicFlowBuilder
 from xlsform_architect.app.workflow import STEP_LABELS, Workflow
 from xlsform_architect.engine.knowledge_base import KnowledgeBase
 from xlsform_architect.xlsform.choices_builder import ChoicesBuilder
@@ -390,6 +391,26 @@ def _render_result(result, target: str) -> None:
             qn, result.assumptions))
 
     with tabs[5]:
+        flow = LogicFlowBuilder()
+        dot = flow.to_dot(qn)
+        if dot:
+            st.markdown("##### Skip-pattern flowchart")
+            st.caption("Each arrow reads \"shown when\": the question at the "
+                       "arrow's head only appears when the condition on the "
+                       "arrow holds for the question at its tail. Answer "
+                       "codes are shown as their labels.")
+            st.graphviz_chart(dot, use_container_width=True)
+            st.download_button(
+                "⬇️ Flowchart (Graphviz .dot)", data=dot,
+                file_name=f"{qn.settings.form_id or 'form'}_logic_flow.dot",
+                mime="text/vnd.graphviz")
+            st.divider()
+        elif any(q.relevant for q in qn.questions):
+            st.caption("This form's conditions don't reference other "
+                       "questions, so there is no skip pattern to draw.")
+        else:
+            st.caption("No skip logic in this form — every question is "
+                       "always shown.")
         st.markdown(ArtifactBuilder(_kb()).logic_map_markdown(qn))
 
 

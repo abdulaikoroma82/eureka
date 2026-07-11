@@ -58,6 +58,7 @@ from ..validation.validator import Validator
 from ..xlsform.exporter import XLSFormExporter
 from .artifacts import ArtifactBuilder
 from .config import CONFIG
+from .logic_flow import LogicFlowBuilder
 
 # Step labels surfaced to the UI (Module 10 processing steps).  The AI step
 # always fires (so the UI can show it) but completes instantly as a no-op
@@ -261,10 +262,16 @@ class Workflow:
         assumption_path.write_text(
             self.artifacts.assumption_log_markdown(qn, notes), encoding="utf-8")
         outputs["assumption_log"] = assumption_path
-        # 5. Logic map.
+        # 5. Logic map (+ the skip-pattern flowchart as Graphviz DOT, when
+        #    the form has any skip logic to draw).
         logic_path = folder / "logic_map.md"
         logic_path.write_text(self.artifacts.logic_map_markdown(qn), encoding="utf-8")
         outputs["logic_map"] = logic_path
+        dot = LogicFlowBuilder().to_dot(qn)
+        if dot:
+            dot_path = folder / "logic_flow.dot"
+            dot_path.write_text(dot, encoding="utf-8")
+            outputs["logic_flow"] = dot_path
         # 6. Version history (append-only, at the output-dir root).
         outputs["version_history"] = self.artifacts.append_version_history(
             out_dir / "version_history.json", qn, source_name,

@@ -118,7 +118,7 @@ That's the whole workflow. Repeat for each questionnaire.
 | **Data dictionary** | A plain list of every question, its type, and its answer options. |
 | **QA report (PDF)** | A quality check confirming the form is valid and lists any issues. |
 | **Assumption log** | Every automatic decision the tool made, so you can double-check it. |
-| **Logic map** | A summary of the skip logic, validation rules, and calculations. |
+| **Logic map** | A summary of the skip logic, validation rules, and calculations — including a flowchart of which answers lead where. The app's **Logic map** tab shows the same flowchart as an interactive diagram. |
 | **Version history** | A running record of every form you've generated. |
 
 ---

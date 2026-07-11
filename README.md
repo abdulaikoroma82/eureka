@@ -441,8 +441,18 @@ Each run writes a timestamped folder under `output/` containing:
 2. `*_data_dictionary.xlsx` — every variable, type, choices, constraint, calculation
 3. `QA_Report.pdf` — the validation report
 4. `assumption_log.md` — every deterministic decision made
-5. `logic_map.md` — relevance / constraint / calculation relationships
-6. `version_history.json` — append-only audit trail across runs
+5. `logic_map.md` — relevance / constraint / calculation relationships,
+   including an ASCII skip-pattern flowchart:
+
+   ```text
+   resident — Are you a resident of this district?
+   ├── Yes → years_lived
+   └── otherwise → respondent_age
+   ```
+6. `logic_flow.dot` — the same flowchart as a Graphviz graph (only written
+   when the form has skip logic); the app's **Logic map** tab renders it
+   interactively, with answer codes shown as their labels
+7. `version_history.json` — append-only audit trail across runs
 
 ---
 

@@ -41,6 +41,7 @@ import pandas as pd
 
 from ..engine.knowledge_base import KnowledgeBase
 from ..models import Questionnaire
+from .logic_flow import LogicFlowBuilder
 
 
 class ArtifactBuilder:
@@ -136,6 +137,20 @@ class ArtifactBuilder:
         else:
             lines.append("_No conditional questions._")
         lines.append("")
+
+        flow = LogicFlowBuilder().to_ascii(questionnaire)
+        if flow:
+            lines.append("## Skip-pattern flowchart")
+            lines.append("")
+            lines.append("Answer values are shown as their labels; the raw "
+                         "expressions above stay authoritative. A graphical "
+                         "version is in `logic_flow.dot` (open with any "
+                         "Graphviz viewer) and in the app's Logic map tab.")
+            lines.append("")
+            lines.append("```text")
+            lines.append(flow)
+            lines.append("```")
+            lines.append("")
 
         lines.append("## Constraints")
         lines.append("")
