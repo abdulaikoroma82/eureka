@@ -1,9 +1,9 @@
 # XLSForm Studio
 
-**An offline survey engineering platform that automatically transforms
-questionnaires into validated, deployment-ready XLSForms for KoboToolbox,
-SurveyCTO, ODK, Ona and CommCare.** *(Under the hood, it works as a
-deterministic questionnaire compiler — see [Architecture](#architecture).)*
+**From questionnaire to deployment-ready XLSForm — automatically.**
+*The offline survey engineering platform for KoboToolbox, SurveyCTO, ODK,
+Ona and CommCare.* *(Under the hood, it works as a deterministic
+questionnaire compiler — see [Architecture](#architecture).)*
 
 XLSForm Studio lets a survey designer, M&E officer or researcher drop in a
 questionnaire of **any kind** (Word, Excel, PDF, CSV or JSON) and get back a
