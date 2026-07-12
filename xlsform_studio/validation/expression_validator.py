@@ -19,6 +19,11 @@ What is checked
 * function names against the ODK XPath function catalogue (unknown names
   are a *warning* - platforms add functions over time - while structural
   breakage is an *error*)
+* XPath path/predicate syntax used by cascading-select ``choice_filter``
+  expressions, e.g. ``instance('cities')/root/item[state=${state}]`` -
+  path steps (``/``, ``//``), attribute axes (``@id``), wildcards (``*``)
+  and predicates (``[...]``) are accepted as first-class grammar, not just
+  the flat comparison expressions ``relevant``/``constraint`` use
 
 Inputs
 ------
@@ -83,6 +88,10 @@ _TOKEN = re.compile(r"""
     | (?P<lparen>\()
     | (?P<rparen>\))
     | (?P<comma>,)
+    | (?P<lbracket>\[)
+    | (?P<rbracket>\])
+    | (?P<at>@)
+    | (?P<slash>//?)
     | (?P<dots>\.\.|\.)
     | (?P<name>[A-Za-z][A-Za-z0-9_:-]*)
 """, re.VERBOSE)
@@ -196,8 +205,46 @@ class ExpressionValidator:
                                                      "lparen", "name"):
                         i += 1
                         continue
+                    # a bare '*' where an operand is expected is the XPath
+                    # wildcard node-test (e.g. 'foo/*'), not multiplication
+                    if text == "*":
+                        expect_operand = False
+                        i += 1
+                        continue
                     return (f"operator '{text}' where a value was expected", unknown)
                 expect_operand = True
+                i += 1
+                continue
+
+            if kind == "slash":
+                # path step separator ('/' or '//') - valid both as the
+                # start of an absolute path and between existing steps
+                expect_operand = True
+                i += 1
+                continue
+
+            if kind == "at":
+                # attribute axis, e.g. '@id' - must be followed by a name
+                if not expect_operand:
+                    return (f"missing operator before '{text}'", unknown)
+                i += 1
+                continue
+
+            if kind == "lbracket":
+                if expect_operand:
+                    return ("predicate '[' where a value was expected", unknown)
+                paren_stack.append("predicate")
+                expect_operand = True
+                i += 1
+                continue
+
+            if kind == "rbracket":
+                if not paren_stack or paren_stack[-1] != "predicate":
+                    return ("unbalanced ']'", unknown)
+                if expect_operand:
+                    return ("expression ends with an operator before ']'", unknown)
+                paren_stack.pop()
+                expect_operand = False
                 i += 1
                 continue
 
@@ -216,6 +263,9 @@ class ExpressionValidator:
             if kind == "rparen":
                 if not paren_stack:
                     return ("unbalanced ')'", unknown)
+                if paren_stack[-1] == "predicate":
+                    return ("mismatched ')' - expected ']' to close predicate",
+                            unknown)
                 # zero-argument calls like today() close while expecting operand
                 closing_call = paren_stack[-1] == "call"
                 if expect_operand and not (closing_call and
@@ -238,6 +288,8 @@ class ExpressionValidator:
             return (f"unexpected token '{text}'", unknown)
 
         if paren_stack:
+            if paren_stack[-1] == "predicate":
+                return ("unbalanced '['", unknown)
             return ("unbalanced '('", unknown)
         if expect_operand and tokens:
             return ("expression ends with an operator", unknown)

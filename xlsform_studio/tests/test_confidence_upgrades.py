@@ -65,6 +65,55 @@ def test_expression_validator_unknown_function_is_warning_not_error():
     assert unknown == ["frobnicate"]
 
 
+# --- XPath path/predicate syntax (choice_filter) ------------------------------
+GOOD_PATH_EXPRESSIONS = [
+    "instance('cities')/root/item[state=${state}]",
+    "instance('cities')/root/item[state=${state} and country=${country}]",
+    "instance('cities')//item[@id=${city}]",
+    "/data/foo",
+    "foo/bar",
+    "foo/*",
+    "foo/bar[1]",
+    "../sibling",
+]
+
+BAD_PATH_EXPRESSIONS = [
+    "instance('cities')/root/item[state=",     # predicate ends on operator
+    "instance('cities')/root/item[state=${state}",  # unclosed predicate
+    "instance('cities')/root/item state=${state}]",  # stray close bracket
+    "foo(bar]",                                # mismatched call/predicate close
+    "foo[bar)",                                # mismatched predicate/call close
+]
+
+
+def test_expression_validator_accepts_choice_filter_paths():
+    v = ExpressionValidator()
+    for expr in GOOD_PATH_EXPRESSIONS:
+        err, _ = v.check(expr)
+        assert err is None, f"false positive on {expr!r}: {err}"
+
+
+def test_expression_validator_rejects_malformed_paths():
+    v = ExpressionValidator()
+    for expr in BAD_PATH_EXPRESSIONS:
+        err, _ = v.check(expr)
+        assert err is not None, f"missed malformed expression {expr!r}"
+
+
+def test_cascading_select_choice_filter_passes_validation():
+    """Regression: a valid cascading-select choice_filter used to be
+    reported as a malformed expression because the tokenizer had no XPath
+    path/predicate support."""
+    qn = Questionnaire(
+        settings=FormSettings(form_title="T", form_id="t"),
+        questions=[Question(
+            name="city", xlsform_type="select_one cities", label="City",
+            list_name="cities",
+            choice_filter="instance('cities')/root/item[state=${state}]")])
+    report = Validator(deep=False).validate(qn)
+    assert not any(f.category == "expression" for f in report.errors)
+
+
 def test_malformed_constraint_now_fails_validation():
     """Regression for the confirmed hole: '. >< 5' used to pass everything."""
     qn = Questionnaire(
