@@ -28,6 +28,7 @@ Legend: ✅ shipped · 🚫 descoped
 | A12 | Survey Structure Optimization | ✅ | `ai/grouping.py` (suggestion-only sections) |
 | A13 | Semantic Constraint Suggestions | ✅ | Single-field bounds now produced by `ai/form_author.py` (AI authoring); cross-field via `ai/constraint_reviewer.py` |
 | A15 | Survey Quality Narrative | ✅ | `ai/narrative.py` |
+| A16 | Document co-writing (guide, plan, logic map, instrument, checklist) | ✅ | `ai/document_writer.py` — one grounded call co-writes framing prose; deterministic builders own every fact and render unchanged offline (`documents` feature) |
 | H1 | Survey Health Score | ✅ | D4 metrics + A15 narration (`narrative` feature) |
 | H3 | Smart Assumption Log | 🚫 | descoped — see *Descoped items* below |
 | H4 | Smart Validation Report | ✅ | `ai/finding_explainer.py` |

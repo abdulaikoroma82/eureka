@@ -88,6 +88,7 @@ _AI_FEATURE_LABELS = {
     "review": "AI quality review (semantics, naming clarity, respondent experience)",
     "explain_findings": "Explain validation findings in plain English",
     "narrative": "Write an executive summary of the quality metrics for the QA report",
+    "documents": "Co-write the supporting documents' prose (guide, plan, logic map) in better English",
     "group": "Suggest logical question sections (accept/reject after generating)",
     "rewrite": "Suggest clearer question wording (accept/reject after generating)",
     "order": "Suggest logical choice-list ordering (accept/reject after generating)",
@@ -524,7 +525,8 @@ def _render_result(result, target: str) -> None:
         else:
             st.caption("No skip logic in this form — every question is "
                        "always shown.")
-        st.markdown(ArtifactBuilder(_kb()).logic_map_markdown(qn))
+        st.markdown(ArtifactBuilder(_kb()).logic_map_markdown(
+            qn, overview=result.document_prose.logic_overview))
 
     with tabs[6]:
         _render_quality(result)

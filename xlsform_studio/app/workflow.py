@@ -61,6 +61,7 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from ..ai.client import DeepSeekClient
 from ..ai.config import AIConfig
+from ..ai.document_writer import DocumentProse
 from ..ai.form_author import AIFormAuthor
 from ..ai.pipeline import AIPipeline
 from ..ai.suggestions import AISuggestion, apply_suggestions
@@ -133,6 +134,11 @@ class WorkflowResult:
     #: blocked anything; it is purely for a human to inspect and, via
     #: :meth:`Workflow.apply_review_edits`, approve or correct.
     review_table: List[ReviewRow] = field(default_factory=list)
+    #: AI-written framing prose for the supporting documents (the "documents"
+    #: feature). All-empty unless AI ran with that feature enabled; the
+    #: deterministic builders slot each block into a labelled position and
+    #: render unchanged when it is empty.
+    document_prose: DocumentProse = field(default_factory=DocumentProse)
 
     @property
     def is_valid(self) -> bool:
@@ -264,6 +270,12 @@ class Workflow:
         duration = DurationEstimator().estimate(questionnaire)
         notes.extend(ai_pipeline.narrate(questionnaire, quality, duration,
                                          report, ai_config))
+        # AI co-writes the supporting documents' framing prose, grounded in
+        # the audited metrics above. Fails open to empty prose; the
+        # deterministic builders slot it in and render unchanged without it.
+        document_prose, doc_notes = ai_pipeline.write_documents(
+            questionnaire, quality, duration, report, ai_config)
+        notes.extend(doc_notes)
         self._emit(progress, STEP_LABELS[4], "done")
 
         result = WorkflowResult(questionnaire=questionnaire, report=report,
@@ -275,14 +287,16 @@ class Workflow:
                                 quality=quality, duration=duration,
                                 coverage_matrix=ai_pipeline.coverage_matrix,
                                 indicator_matrix=ai_pipeline.indicator_matrix,
-                                review_table=build_review_table(questionnaire))
+                                review_table=build_review_table(questionnaire),
+                                document_prose=document_prose)
 
         if write_outputs:
             out_dir = Path(output_dir) if output_dir else CONFIG.output_dir
             result.outputs = self._write_all(questionnaire, report, notes,
                                               out_dir, source_name, target,
                                               quality=quality,
-                                              duration=duration)
+                                              duration=duration,
+                                              prose=document_prose)
             if result.coverage_matrix:
                 matrix_path = result.outputs["folder"] / "coverage_matrix.md"
                 matrix_path.write_text(result.coverage_matrix,
@@ -334,7 +348,8 @@ class Workflow:
                                               result.assumptions, out_dir,
                                               source_name, result.target or None,
                                               quality=result.quality,
-                                              duration=result.duration)
+                                              duration=result.duration,
+                                              prose=result.document_prose)
         return result
 
     # ------------------------------------------------------------------
@@ -373,7 +388,8 @@ class Workflow:
                                               result.assumptions, out_dir,
                                               source_name, result.target or None,
                                               quality=result.quality,
-                                              duration=result.duration)
+                                              duration=result.duration,
+                                              prose=result.document_prose)
         return result
 
     # ------------------------------------------------------------------
@@ -381,8 +397,10 @@ class Workflow:
                    notes: List[str], out_dir: Path, source_name: str,
                    target: Optional[str] = None,
                    quality: Optional[QualityIndex] = None,
-                   duration: Optional[DurationEstimate] = None
+                   duration: Optional[DurationEstimate] = None,
+                   prose: Optional[DocumentProse] = None
                    ) -> Dict[str, Path]:
+        prose = prose or DocumentProse()
         stamp = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
         base = qn.settings.form_id or "form"
         folder = out_dir / f"{base}_{stamp}"
@@ -408,11 +426,14 @@ class Workflow:
             self.artifacts.assumption_log_markdown(qn, notes), encoding="utf-8")
         outputs["assumption_log"] = assumption_path
         outputs["assumptions_to_verify"] = VerificationChecklistBuilder().write(
-            qn, notes, folder / "assumptions_to_verify.md")
+            qn, notes, folder / "assumptions_to_verify.md",
+            intro=prose.assumptions_intro)
         # 5. Logic map (+ the skip-pattern flowchart as Graphviz DOT, when
         #    the form has any skip logic to draw).
         logic_path = folder / "logic_map.md"
-        logic_path.write_text(self.artifacts.logic_map_markdown(qn), encoding="utf-8")
+        logic_path.write_text(
+            self.artifacts.logic_map_markdown(qn, overview=prose.logic_overview),
+            encoding="utf-8")
         outputs["logic_map"] = logic_path
         dot = LogicFlowBuilder().to_dot(qn)
         if dot:
@@ -423,7 +444,8 @@ class Workflow:
         #    specification, collection plan) - all derived deterministically.
         guide_path = folder / "enumerator_guide.md"
         guide_path.write_text(
-            self.artifacts.enumerator_guide_markdown(qn, duration=duration),
+            self.artifacts.enumerator_guide_markdown(
+                qn, duration=duration, intro=prose.enumerator_intro),
             encoding="utf-8")
         outputs["enumerator_guide"] = guide_path
         outputs["variable_specification"] = \
@@ -431,11 +453,13 @@ class Workflow:
                 qn, folder / f"{base}_variable_specification.xlsx")
         plan_path = folder / "collection_plan.md"
         plan_path.write_text(
-            self.artifacts.collection_plan_markdown(qn, duration=duration),
+            self.artifacts.collection_plan_markdown(
+                qn, duration=duration, overview=prose.collection_plan_overview),
             encoding="utf-8")
         outputs["collection_plan"] = plan_path
         outputs["survey_instrument"] = self.artifacts.write_survey_instrument_docx(
-            qn, folder / f"{base}_survey_instrument.docx", duration=duration)
+            qn, folder / f"{base}_survey_instrument.docx", duration=duration,
+            intro=prose.instrument_intro)
         # 7. Version history (append-only, at the output-dir root).
         outputs["version_history"] = self.artifacts.append_version_history(
             out_dir / "version_history.json", qn, source_name,

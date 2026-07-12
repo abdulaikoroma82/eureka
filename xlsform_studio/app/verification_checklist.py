@@ -206,7 +206,13 @@ class VerificationChecklistBuilder:
 
     # ------------------------------------------------------------------
     def build_markdown(self, questionnaire: Questionnaire,
-                       notes: List[str]) -> str:
+                       notes: List[str], intro: str = "") -> str:
+        """Build the checklist markdown.
+
+        *intro* is optional AI-written framing prose (the "documents"
+        feature); it is labelled and placed above the deterministic tallies
+        and tiers, which it never alters.
+        """
         items = [self.classify(n) for n in notes]
         by_tier = {tier: [i for i in items if i.tier == tier]
                    for tier in (CRITICAL, ADVISORY, INFO)}
@@ -214,6 +220,9 @@ class VerificationChecklistBuilder:
         lines = ["# XLSForm Studio - Assumptions to Verify", ""]
         lines.append(f"**Form:** {questionnaire.settings.form_title}  ")
         lines.append(f"**Generated:** {_dt.datetime.now():%Y-%m-%d %H:%M}  ")
+        if intro.strip():
+            lines.append("")
+            lines.append(f"> **AI-written.** {intro.strip()}")
         lines.append("")
         lines.append(f"**{len(by_tier[CRITICAL])} critical** · "
                      f"**{len(by_tier[ADVISORY])} advisory** · "
@@ -243,10 +252,10 @@ class VerificationChecklistBuilder:
 
     # ------------------------------------------------------------------
     def write(self, questionnaire: Questionnaire, notes: List[str],
-              path: Union[str, Path]) -> Path:
+              path: Union[str, Path], intro: str = "") -> Path:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(self.build_markdown(questionnaire, notes),
+        path.write_text(self.build_markdown(questionnaire, notes, intro),
                         encoding="utf-8")
         return path
 

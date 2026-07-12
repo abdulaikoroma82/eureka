@@ -222,6 +222,25 @@ class AIPipeline:
         return notes
 
     # ------------------------------------------------------------------
+    def write_documents(self, questionnaire: Questionnaire, quality, duration,
+                        report: ValidationReport, config: AIConfig):
+        """Co-write the supporting documents' framing prose (the "documents"
+        feature).
+
+        Returns ``(DocumentProse, notes)``. Like :meth:`narrate` it runs
+        post-validation, so the model is grounded in the audited quality,
+        duration and finding metrics; it never authors a fact. A no-op
+        (all-empty prose) under the same conditions as :meth:`run`.
+        """
+        from .document_writer import AIDocumentWriter, DocumentProse
+        if not self._wants(config, "documents"):
+            return DocumentProse(), []
+        if self.client is None or not self.client.available:
+            return DocumentProse(), []
+        return AIDocumentWriter(self.client).write(
+            questionnaire, duration=duration, quality=quality, report=report)
+
+    # ------------------------------------------------------------------
     def explain_findings(self, report: ValidationReport,
                          config: AIConfig) -> List[str]:
         """Add plain-English explanations to already-computed findings.

@@ -34,7 +34,7 @@ from typing import List, Tuple
 #: three as part of drafting the form, so re-doing them here would be
 #: redundant.
 AI_FEATURES = ("translate", "cross_constraints", "review", "explain_findings",
-              "narrative", "group", "rewrite", "order", "naming",
+              "narrative", "documents", "group", "rewrite", "order", "naming",
               "instructions", "completeness", "coverage", "indicators")
 
 #: Accepted alternative spellings for feature keys (CLI convenience).
