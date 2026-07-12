@@ -1,8 +1,8 @@
-# Getting Started with XLSForm Architect
+# Getting Started with XLSForm Studio
 
 A plain-language guide. **No coding knowledge needed.**
 
-XLSForm Architect turns a questionnaire (a Word, Excel, PDF, or text file) into
+XLSForm Studio turns a questionnaire (a Word, Excel, PDF, or text file) into
 a ready-to-use survey form for **KoboToolbox, SurveyCTO, ODK, Ona, or
 CommCare** — plus a set
 of supporting documents. It runs on your own computer and does **not** use any
@@ -32,7 +32,7 @@ Python is the free engine the tool runs on.
 
 ### Step 2: Get the tool onto the computer
 
-Put the project folder (the one containing the `xlsform_architect` folder and
+Put the project folder (the one containing the `xlsform_studio` folder and
 the `README.md` file) somewhere easy to find, for example your Desktop.
 
 ### Step 3: Open a command window in that folder
@@ -61,7 +61,7 @@ Type this and press Enter:
 python run_ui.py
 ```
 
-Your web browser opens automatically to the XLSForm Architect app. **That's
+Your web browser opens automatically to the XLSForm Studio app. **That's
 it — setup is done.**
 
 > **Tip for later:** to start the app again another day, you only need to
@@ -79,7 +79,7 @@ So you don't have to type anything next time, create a shortcut:
    cd /d "%~dp0"
    python run_ui.py
    ```
-3. Save it, then rename the file to **`Start XLSForm Architect.bat`**
+3. Save it, then rename the file to **`Start XLSForm Studio.bat`**
    (make sure it ends in `.bat`, not `.txt`).
 
 From now on, just **double-click that file** to launch the app.
@@ -116,9 +116,11 @@ That's the whole workflow. Repeat for each questionnaire.
 | --- | --- |
 | **The XLSForm (`.xlsx`)** | The actual survey form — upload this to your platform. |
 | **Data dictionary** | A plain list of every question, its type, and its answer options. |
-| **QA report (PDF)** | A quality check confirming the form is valid and lists any issues. |
+| **QA report (PDF)** | A quality check confirming the form is valid, a 0–100 quality score with category breakdown, an estimate of how long the interview will take, and any issues found. |
 | **Assumption log** | Every automatic decision the tool made, so you can double-check it. |
-| **Logic map** | A summary of the skip logic, validation rules, and calculations. |
+| **Logic map** | A summary of the skip logic, validation rules, and calculations — including a flowchart of which answers lead where. The app's **Logic map** tab shows the same flowchart as an interactive diagram. |
+| **Enumerator guide** | A question-by-question reference for field staff: how to record each answer, the options, and skip rules in plain words. |
+| **Collection plan** | A planning starter: how long interviews will take, how many one enumerator can do per day, and what devices need (GPS, camera, files). |
 | **Version history** | A running record of every form you've generated. |
 
 ---
@@ -176,17 +178,29 @@ do:
 
 - **Translate** your form's questions into other languages. If you've
   already written some translations yourself, those are always kept —
-  AI only fills in the ones you didn't get to.
+  AI only fills in the ones you didn't get to. Finished translations are
+  remembered between runs, so regenerating a form doesn't cost again for
+  text that hasn't changed.
 - **Untangle tricky skip instructions** — e.g. "if no, skip to question 20" —
   into the proper format automatically.
+- **Suggest sensible value limits** for questions the standard checks left
+  open — tell it what your survey is about (e.g. "child nutrition survey")
+  and it proposes realistic bounds for measurements, counts and dates.
 - **Suggest rules that compare two questions** — e.g. "the end date must be
   after the start date" — something a simple checklist can't figure out on
   its own since it only ever looks at one question at a time.
 - **Suggest a better answer type** for a question that was hard to classify.
 - **Give the finished form a second read-through** for anything that looks
-  off, including confusing question names, in plain English.
+  off — contradictions, confusing names, and questions respondents might
+  misread — in plain English.
 - **Explain any issues found** in a sentence or two, so you don't need to
   guess what a technical validation message means.
+- **Offer take-it-or-leave-it improvements** you review after generating:
+  logical sections for an unstructured form, clearer wording for confusing
+  questions, a more sensible order for long answer lists, and tidier
+  variable names. These never change your form by themselves — each is
+  shown side-by-side with the original, and only what you accept is
+  applied (the form is then rebuilt and re-checked automatically).
 
 This is completely optional and **off unless you turn it on**. To use it:
 

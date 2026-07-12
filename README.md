@@ -1,23 +1,30 @@
-# XLSForm Architect
+# XLSForm Studio
 
-**A standalone, rule-based compiler that turns questionnaires into
-deployment-ready XLSForms for KoboToolbox, SurveyCTO, ODK, Ona and CommCare.**
+**XLSForm Studio is an AI-first survey engineering platform that drafts,
+validates, documents, and quality-assures questionnaires for the entire XLSForm
+ecosystem.**
 
-XLSForm Architect lets a survey designer, M&E officer or researcher drop in a
+XLSForm Studio lets a survey designer, M&E officer or researcher drop in a
 questionnaire of **any kind** (Word, Excel, PDF, CSV or JSON) and get back a
 complete, validated XLSForm package — the spreadsheet plus a data dictionary,
 QA report, assumption log, logic map and version history. It applies the
 **standard rules of the XLSForm specification**; it is not tied to any
 particular survey domain.
 
-> **AI is optional, not required.** The core pipeline — parsing, type
-> classification, naming, logic, constraints, calculations, validation,
-> export — is 100% deterministic and runs fully offline with zero API
-> dependency. An **optional AI-assist layer** (DeepSeek) can be switched on
-> for the handful of things a rule engine genuinely cannot do (see
-> [AI-assisted features](#ai-assisted-features-optional) below). It is off by
-> default; nothing leaves your computer unless you explicitly enable it and
-> supply an API key.
+> **AI drafts the form; deterministic rules keep it on-standard.** The model
+> (DeepSeek) interprets the questionnaire and authors every field — types,
+> machine names, labels, hints, relevance/skip logic, constraints,
+> calculations and choice lists. Deterministic rules bracket the AI on both
+> sides: the parser lays out the platform scaffold (sheets and columns), and
+> the standards enforcer plus validators check the draft against the XLSForm
+> specification and the target platform's rules. You then **review and edit
+> the AI draft** before download.
+>
+> **AI is essential, not optional.** A run requires a configured DeepSeek API
+> key (`DEEPSEEK_API_KEY`); there is no offline authoring fallback. See
+> [AI-assisted features](#ai-assisted-features-optional) for the optional
+> enrichment passes (translation, quality review, narrative) that refine the
+> draft.
 
 > 🟢 **New to this / non-technical?** Start with the plain-language
 > [Getting Started guide](docs/GETTING_STARTED.md) — no coding needed.
@@ -28,11 +35,18 @@ particular survey domain.
 
 Hand-coding XLSForms is slow and error-prone: mistyped variable names, broken
 `relevant` references, missing choice lists, inconsistent constraints. XLSForm
-Architect standardises that work and catches the errors before deployment.
+Studio standardises that work and catches the errors before deployment.
 
 ---
 
 ## Architecture
+
+Structurally, XLSForm Studio is an **AI-first compiler with deterministic
+guardrails**: a parser turns a source questionnaire into an intermediate
+representation and lays out the platform scaffold, the AI author drafts every
+field into that scaffold, and deterministic rules then enforce standards and
+validate against the XLSForm specification before an exporter emits the target
+artefacts (the XLSForm workbook plus its supporting documentation).
 
 ```
               User Interface  (Streamlit UI  /  CLI)
@@ -41,12 +55,13 @@ Architect standardises that work and catches the errors before deployment.
                       |
       ---------------------------------------------
       |                  |                        |
-   Parser            Rule Engine              Validator
- (parsers/)          (engine/)              (validation/)
+   Parser           AI Author               Validator
+ (parsers/)     (ai/form_author.py)        (validation/)
+   scaffold      drafts every field       enforces standards
       |                  |                        |
       ---------------------------------------------
                       |
-           [optional]  AI Assist  (ai/)  — DeepSeek, off by default
+           Standards enforcement  (engine/)  — rules keep the AI on-standard
                       |
               XLSForm Generator  (xlsform/)
                       |
@@ -56,24 +71,26 @@ Architect standardises that work and catches the errors before deployment.
 ```
 
 All stages communicate through one intermediate representation
-(`xlsform_architect/models.py`): a `Questionnaire` of `Question`, `Choice` and
-`ChoiceList` objects. A parser only has to produce a `Questionnaire`; everything
-downstream then works unchanged. The `ai/` package is the **only** part of
-the codebase that makes a network call, and only when explicitly enabled —
-see [AI-assisted features](#ai-assisted-features-optional).
+(`xlsform_studio/models.py`): a `Questionnaire` of `Question`, `Choice` and
+`ChoiceList` objects. A parser only has to produce a raw `Questionnaire`; the
+AI author then fills every XLSForm field and everything downstream works
+unchanged. The `ai/` package is the **only** part of the codebase that makes a
+network call; because authoring is AI-first, a run requires a `DEEPSEEK_API_KEY`.
+The legacy fully-deterministic compiler (`engine/rule_engine.py`) remains as an
+internal standards/test seam (`authoring="deterministic"` / `XLSFS_AUTHORING`),
+never selected by the UI or CLI.
 
 ### Project layout
 
 ```
-xlsform_architect/
+xlsform_studio/
 ├── app/            # controller, config, CLI (main.py) and Streamlit UI (ui.py)
-├── parsers/        # DOCX / XLSX / PDF / CSV / JSON / text parsers  (Module 1)
-├── engine/         # classifier, naming, logic, constraint, calculation  (Modules 2,3,5,6,7)
-├── ai/             # optional AI-assist layer (DeepSeek) — off by default
-├── xlsform/        # survey / choices / settings builders + exporter  (Module 4)
-├── validation/     # structure / logic / deployment validators + report  (Module 9)
-├── knowledge/      # editable YAML rule packs  (Module 8)
-├── templates/      # blank XLSForm template
+├── parsers/        # DOCX / XLSX / PDF / CSV / JSON / text parsers
+├── engine/         # standards enforcer + legacy deterministic compiler (seam)
+├── ai/             # AI author (form_author.py) + enrichment layer (DeepSeek)
+├── xlsform/        # survey / choices / settings builders + exporter
+├── validation/     # structure / logic / deployment validators + report
+├── knowledge/      # editable YAML rule packs
 ├── examples/       # sample questionnaires
 ├── output/         # generated packages land here
 └── tests/          # pytest suite
@@ -92,7 +109,7 @@ python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\ac
 pip install -r requirements.txt
 ```
 
-Or install as a package (gives you the `xlsform-architect` command):
+Or install as a package (gives you the `xlsform-studio` command):
 
 ```bash
 pip install -e .
@@ -106,7 +123,7 @@ pip install -e .
 
 ```bash
 python run_ui.py
-# or:  streamlit run xlsform_architect/app/ui.py
+# or:  streamlit run xlsform_studio/app/ui.py
 ```
 
 Then in the browser: upload a questionnaire → pick a target (Kobo, SurveyCTO,
@@ -117,19 +134,27 @@ and the full `.zip` package.
 ### 2. Command line
 
 ```bash
-python -m xlsform_architect.app.main xlsform_architect/examples/event_registration.json
-python -m xlsform_architect.app.main survey.docx --title "Household Survey" --output ./out
+python -m xlsform_studio.app.main xlsform_studio/examples/event_registration.json
+python -m xlsform_studio.app.main survey.docx --title "Household Survey" --output ./out
 # target a platform: validates against ITS standards and writes ITS dialect
-python -m xlsform_architect.app.main survey.docx --target surveycto
+python -m xlsform_studio.app.main survey.docx --target surveycto
 # use a customised ruleset instead of the bundled standard rules
-python -m xlsform_architect.app.main survey.docx --rules ./my_rules
+python -m xlsform_studio.app.main survey.docx --rules ./my_rules
 # after `pip install -e .`
-xlsform-architect design.csv --target kobo
+xlsform-studio design.csv --target kobo
+# step through an interactive interview simulation in the terminal
+xlsform-studio survey.docx --simulate
 
 # optional AI assist (requires DEEPSEEK_API_KEY) — see the AI section below
-python -m xlsform_architect.app.main survey.docx --ai
-python -m xlsform_architect.app.main survey.docx --ai \
+python -m xlsform_studio.app.main survey.docx --ai
+python -m xlsform_studio.app.main survey.docx --ai \
     --ai-features translate,review --ai-languages "French:fr,Spanish:es"
+# ground AI suggestions in your survey's domain
+python -m xlsform_studio.app.main survey.docx --ai \
+    --ai-context "child nutrition survey in rural districts"
+# or use the standalone shortcuts (each implies --ai with that feature)
+python -m xlsform_studio.app.main survey.docx --ai-review --ai-explain \
+    --ai-group --ai-rewrite --ai-order --ai-name --ai-cross
 ```
 
 The process exits non-zero if validation finds blocking errors, so it slots
@@ -138,7 +163,7 @@ into CI / batch pipelines.
 ### 3. As a library
 
 ```python
-from xlsform_architect.app.workflow import Workflow
+from xlsform_studio.app.workflow import Workflow
 
 result = Workflow().run_from_dict({
     "settings": {"form_title": "Event Registration"},
@@ -194,11 +219,11 @@ choice list, relevance, constraint and any derived calculations.
 
 | Module | Behaviour | Example |
 | --- | --- | --- |
-| **Classifier** (M2) | Assigns XLSForm types | `Yes/No → select_one yes_no`, `age → integer`, `amount → decimal`, `GPS → geopoint`, `photo → image` |
-| **Variable namer** (M3) | Safe, unique names | `"Preferred contact method" → preferred_contact_method` |
-| **Logic engine** (M5) | Natural language → expressions: compound conditions, negation, ranges, numbered references, choice shorthand | `"if yes and age over 18"`, `"unless married" → not(...)`, `"between 18 and 65" → >=18 and <=65`, `"if question 4 is married"` (resolves the source numbering, incl. coded options → stored codes), bare `"if married"` when unambiguous; multi-selects use `selected(...)` |
-| **Constraint engine** (M6) | Validation ranges | `age → . >= 0 and . <= 120`, `% → . >= 0 and . <= 100`, `date → . <= today()` |
-| **Calculation engine** (M7) | Derived fields | age in years from a date of birth |
+| **Classifier** | Assigns XLSForm types | `Yes/No → select_one yes_no`, `age → integer`, `amount → decimal`, `GPS → geopoint`, `photo → image` |
+| **Variable namer** | Safe, unique names | `"Preferred contact method" → preferred_contact_method` |
+| **Logic engine** | Natural language → expressions: compound conditions, negation, ranges, numbered references, choice shorthand | `"if yes and age over 18"`, `"unless married" → not(...)`, `"between 18 and 65" → >=18 and <=65`, `"if question 4 is married"` (resolves the source numbering, incl. coded options → stored codes), bare `"if married"` when unambiguous; multi-selects use `selected(...)` |
+| **Constraint engine** | Validation ranges | `age → . >= 0 and . <= 120`, `% → . >= 0 and . <= 100`, `date → . <= today()` |
+| **Calculation engine** | Derived fields | age in years from a date of birth |
 
 And structural intelligence on top:
 
@@ -225,11 +250,55 @@ Every decision is recorded in the **assumption log** so it can be reviewed.
 
 ---
 
+## Reviewable parsing
+
+The tool optimises for **transparent assistance, not automatic
+correctness**: heuristic parsing at the boundary between natural-language
+questionnaires and precise XLSForm/XPath semantics will sometimes be wrong,
+so every inference stays visible and editable instead of being silently
+trusted.
+
+Each of the four judgment calls the engine makes per question — **type**,
+**choice list**, **relevance**, **constraint** — is recorded as a
+structured decision with a confidence:
+
+| Confidence | Meaning |
+| --- | --- |
+| 🟢 High | An exact, unambiguous signal (a keyword match, a Yes/No pair). |
+| 🟡 Medium | A reasonable rule-based reading that could be wrong (a compiled skip condition, a semantic constraint template match). |
+| 🔴 Low | A generic fallback with no real signal (defaulted to `text`, a generic per-type constraint) — or nothing could be inferred at all. |
+
+**Conservative natural-language compilation.** When an instruction is too
+ambiguous to compile safely — an unparseable compound condition, a "skip to
+question N" jump XLSForm has no construct for — the tool does **not**
+produce a plausible-but-possibly-wrong expression. It leaves the field
+blank, records it as a low-confidence decision, and surfaces it as an
+explicit review item instead.
+
+**The review panel.** In the Streamlit app, every decision appears in a
+"🧐 Review parser decisions" panel before the download buttons — expanded
+automatically whenever something needs your input. Each row shows the
+question, the field, the inferred (or blank) value, its confidence, and the
+reason; edit the value or leave it as shown, tick **Reviewed**, and apply —
+the XLSForm is rebuilt and re-validated from your reviewed values, the same
+"compile → review → rebuild" pattern the AI-suggestions panel uses. In the
+CLI, the same information prints as a summary (decisions needing input are
+listed explicitly; the rest are in `assumptions_to_verify.md`) — the CLI
+never blocks or guesses on your behalf, since batch/CI runs are
+non-interactive by design.
+
+An AI-assisted reclassification (`--ai`) adds a *new* decision on top of the
+rule engine's original rather than erasing it, so the review panel always
+shows the latest and most-informed guess — with its own confidence, still
+subject to your review.
+
+---
+
 ## The rule pack (editable, no code changes)
 
-Platform profiles live in `xlsform_architect/knowledge/platforms.yaml`
+Platform profiles live in `xlsform_studio/knowledge/platforms.yaml`
 (dialects, supported types, naming standards, per-platform tips). All other
-standard rules live in `xlsform_architect/knowledge/xlsform_rules.yaml`:
+standard rules live in `xlsform_studio/knowledge/xlsform_rules.yaml`:
 
 * `type_keywords` — keyword → XLSForm type detection
 * `yes_no` — the canonical shared Yes/No list and its detection tokens
@@ -244,29 +313,63 @@ domain-specific constraints or reusable choice lists), copy the file, edit it,
 and point the tool at it with `--rules` on the CLI or
 `KnowledgeBase.load(directory=...)` in code. The Python code never changes.
 
+### Domain rule packs
+
+Ready-made specialisations ship in `knowledge/packs/` — **nutrition**
+(MUAC, weight/height, z-scores, IYCF), **health** (vitals, ANC, RMNCAH
+counts), **agriculture** (land, livestock, yields), **education**
+(enrolment, grades, assessment scores) and **humanitarian** (PDM, food
+security, water access). Each pack adds type-detection keywords and
+realistic value bounds *on top of* the neutral rules (pack rules match
+first; with no pack, behaviour is unchanged byte-for-byte). They are plain
+YAML — edit or add your own without touching Python.
+
+```bash
+python -m xlsform_studio.app.main survey.docx --packs nutrition,health
+```
+
+In the app: **"3 · Form details" → Domain rule packs**.
+
 ---
 
-## AI-assisted features (optional)
+## AI authoring & enrichment
 
-The deterministic pipeline above solves the vast majority of what a
-questionnaire needs. A small number of things are inherently language/
-reasoning problems that no rule engine can solve — for those, an **optional**
-AI layer using [DeepSeek](https://api-docs.deepseek.com/) is available.
+Authoring is **AI-first**: the model ([DeepSeek](https://api-docs.deepseek.com/))
+drafts every field of the form, and deterministic rules enforce standards and
+validate the result. This is essential — a run requires a `DEEPSEEK_API_KEY`
+and there is no offline authoring fallback.
 
-**This layer is off by default.** With no flag/checkbox and no
-`DEEPSEEK_API_KEY`, the tool behaves exactly as if `xlsform_architect/ai/`
-did not exist — no network calls, no new dependency (the client uses only
-the Python standard library), identical output. It only activates when you
-explicitly enable it **and** provide an API key.
+On top of authoring, a set of **optional enrichment passes** refine the AI
+draft — translation into additional languages, a holistic quality/naming
+review, a plain-English narrative of the validator's findings, and advisory
+grouping/rewording suggestions. These stay off unless you enable them, and
+they only ever annotate or refine the authored form, never re-author it.
 
 | Feature | What it does | Why it can't be deterministic |
 | --- | --- | --- |
-| **Translation** | Generates `label::French (fr)`-style columns from your English labels — **only for labels you haven't already translated yourself** | Translation is language generation, not pattern matching |
-| **Logic fallback** | Resolves both "skip to question 20" jumps *and* complex conditions the compiler's pattern matching couldn't parse, into a proper `relevant` expression | Both require understanding the whole form's structure or unanticipated phrasing — genuine reasoning, not lookup |
+| **Translation** | Generates `label::French (fr)`-style columns from your English labels — **only for labels you haven't already translated yourself**; finished translations are cached locally (`.translation_cache.json`) so regenerating a form doesn't re-pay for unchanged text | Translation is language generation, not pattern matching |
+| **Logic fallback** | Resolves both "skip to question 20" jumps *and* complex conditions the compiler's pattern matching couldn't parse, into a proper `relevant` expression, each tagged with the model's own confidence (high/medium) | Both require understanding the whole form's structure or unanticipated phrasing — genuine reasoning, not lookup |
+| **Domain constraints** | Proposes realistic single-field bounds for numeric/date/text questions the rule templates left unconstrained, grounded in your optional survey description (`--ai-context`) — a "temperature" means something different in a health survey than a weather one | The bundled templates are deliberately domain-neutral; realistic domain bounds require knowing what the value *means* |
 | **Cross-field constraints** | Suggests constraints that depend on another question, e.g. "end date must be on/after start date" — **combined with `and`** if the field already has a rule-authored constraint | The constraint engine only ever looks at one question at a time — it structurally cannot see the relationship between two |
 | **Type-classification fallback** | Reclassifies a question that keyword rules defaulted to `text`, when the phrasing wasn't anticipated | Keyword lists always have blind spots; a model classifies by meaning |
-| **AI quality review** | A holistic second pass flagging things structural checks can't see — e.g. a constraint that contradicts its own label, or a name/label so unclear it would confuse someone reading the exported data (advisory only — never renames anything) | Requires reasoning across multiple fields' relationship to each other |
+| **AI quality review** | A holistic second pass flagging things structural checks can't see — semantic contradictions, unclear names, and respondent-experience traps (ambiguous phrasing, contradictory option lists, redundant questions, incoherent skip chains); advisory only | Requires reasoning across multiple fields' relationship to each other |
 | **Explain findings** | Adds a one-sentence plain-English explanation to the validator's own findings, after validation runs | Rules own every fact (level, category, message); AI only makes them easier to read |
+| **Quality narrative** | Writes the QA report's executive summary from the deterministic Form Quality Index, duration estimate, readiness findings and finding counts — it is sent only the audited metrics, never asked to re-judge the form | Turning seven scores and a risk rating into two readable sentences is prose generation; the numbers themselves stay 100% rules |
+| **Missing-question detection** | Infers the survey's purpose and flags questions it probably needs but lacks (weight + MUAC with no height blocks weight-for-height) — advisory findings only, the tool **never adds questions** | Recognising that a set of questions implies an absent member is domain reasoning, not pattern matching |
+| **Objective coverage matrix** | You list your study objectives; it maps each to the questions that inform it and flags gaps (`coverage_matrix.md` + Quality tab). Every cited question name is verified to exist — invalid references are discarded | Judging that two questions together measure "access to safe water" is semantics; the question inventory and reference checks stay 100% rules |
+| **Indicator matrix** | Drafts an M&E reporting framework from the compiled questions: indicator, source questions (verified to exist), aggregation level, means of verification (`indicator_matrix.md`) | Which questions feed which indicator is meaning, not matching |
+| **Question grouping** *(suggestion-only)* | Proposes logical sections for a form whose source document didn't provide them | "Water source" and "latrine type" belonging together is a semantic judgement |
+| **Question rewording** *(suggestion-only)* | Flags ambiguous, double-barreled, leading or jargon-heavy questions and suggests clearer wording (or a split, which you apply in the source document) | Whether a sentence is leading is a language judgement |
+| **Choice-list ordering** *(suggestion-only)* | Proposes a more logical option order — common answers first, themes adjacent, "Other"/"Refused" last | "Farming" belonging next to "Fishing" isn't a sortable property |
+| **Variable-name suggestions** *(suggestion-only)* | Offers a more natural name where the deterministic one reads awkwardly; accepting a rename also rewrites every `${...}` reference to it | Judging what an analyst will find readable is a language call |
+| **Enumerator instructions** *(suggestion-only)* | Drafts per-question field guidance (probing technique, common misunderstandings) as device `hint` text — only for questions with no author-written hint, which always wins | Anticipating how respondents misunderstand a question is survey-methodology judgement |
+
+The four **suggestion-only** features never touch the form by themselves:
+each produces an original-vs-suggested pair you accept or reject (in the
+app's *AI suggestions* panel, which rebuilds and re-validates the workbook
+with your accepted changes; on the CLI they are printed for manual review).
+Every acceptance is re-validated at apply time and logged to the assumption
+log.
 
 ### Where rules and AI genuinely co-share the same output
 
@@ -288,18 +391,22 @@ authority:
 ### What stays deterministic on purpose
 
 Not everything that *could* be done with AI *should* be. Two things were
-deliberately left alone even though a model could technically improve them
-slightly:
+deliberately kept out of AI's hands even though a model could technically
+improve them slightly:
 
-* **Variable naming.** AI could produce marginally more natural names, but
-  naming needs to be free, instant, and — critically — **stable**: the same
-  question must always produce the same variable name across re-runs, or
-  version history and diffs become meaningless. Determinism is the better
-  tool here, not a compromise.
-* **Single-field constraints and all structural/type/deployment validation.**
-  These are enumerable, must be exactly right, and run on every question in
-  every form — exactly what rule engines are for. AI only ever supplements
-  this with the *cross-field* case it structurally cannot cover (above).
+* **Variable naming.** Naming needs to be free, instant, and — critically —
+  **stable**: the same question must always produce the same variable name
+  across re-runs, or version history and diffs become meaningless. The
+  deterministic name is therefore always the one in use; the optional
+  `naming` feature only ever *stores a suggestion* for you to accept, and
+  an accepted rename deterministically rewrites every `${...}` reference so
+  nothing dangles.
+* **Standard single-field constraints and all structural/type/deployment
+  validation.** These are enumerable, must be exactly right, and run on
+  every question in every form — exactly what rule engines are for. AI only
+  supplements them where rules structurally cannot reach: the *cross-field*
+  case, and *domain-specific* bounds for questions the domain-neutral
+  templates deliberately leave unconstrained.
 
 If a cross-field AI suggestion targets a question that already has a
 constraint (very common — a date field usually already got a generic "not in
@@ -311,7 +418,7 @@ stay enforced.
 
 ```bash
 export DEEPSEEK_API_KEY="sk-..."          # https://platform.deepseek.com
-python -m xlsform_architect.app.main survey.docx --ai
+python -m xlsform_studio.app.main survey.docx --ai
 ```
 
 Or in the Streamlit app: expand **"4 · 🤖 AI assist"** in the sidebar, paste a
@@ -345,7 +452,7 @@ features and languages you want.
 
 Choosing a target platform genuinely changes the output — the tool applies
 **that platform's** rules, not just the generic XLSForm spec. The profiles
-live in `xlsform_architect/knowledge/platforms.yaml` (editable, no code
+live in `xlsform_studio/knowledge/platforms.yaml` (editable, no code
 changes — adding a platform is a YAML edit; the UI, CLI and compatibility
 matrix pick it up automatically):
 
@@ -363,7 +470,7 @@ telling you which platforms *do* support the offending type.
 
 ### Coverage & the wider landscape
 
-XLSForm Architect covers the **XLSForm family** of mobile data collection
+XLSForm Studio covers the **XLSForm family** of mobile data collection
 platforms — KoboToolbox, SurveyCTO, ODK, Ona and CommCare — which all consume
 the XLSForm format this tool produces (CommCare via its Form Builder import).
 Platforms that use **entirely different form formats** — Survey Solutions
@@ -389,6 +496,29 @@ The validator runs in layers:
   commas in function calls, malformed `${…}` references, and unknown XPath
   function names. This covers ground pyxform defers to the (Java-based) ODK
   Validate step, which this tool deliberately does not bundle.
+* **Choice-list quality** — deterministic semantic checks on every list:
+  recognised ordinal scales (Likert, satisfaction, frequency, quality)
+  missing intermediate categories; options with a logical order (days,
+  months, sizes, numeric ranges) listed out of order; an "Other" option
+  with no specify follow-up question (an error — those answers are
+  unrecoverable); non-sequential or outlier value coding (1, 2, 3, 99)
+  flagged for confirmation. Reported under **Choice List Quality** in the
+  QA report.
+* **Static path analysis** — enumerates the possible enumerator paths
+  implied by the form's `relevant` conditions (branching on referenced
+  `select_one` answers, three-valued logic for conditions it can't
+  decide) and verifies that every `calculation` / `constraint` /
+  `choice_filter` reference actually holds a value on the paths where the
+  expression runs. Catches: expressions over variables that are
+  *definitely empty* on some path (skipped group/repeat — an error that
+  every static check misses but the device won't), questions unreachable
+  under contradictory conditions, references into a repeat from outside
+  it (repeat variables are scoped), required questions whose `relevant`
+  can skip them, and near-dead questions reachable on under 5% of paths.
+  Beyond 10,000 paths it switches to a conservative approximation (noted
+  in the report) that may over-warn but cannot miss the errors. Reported
+  under **Path Analysis** in the QA report; disable with
+  `--no-path-analysis`.
 * **Deployment** — valid ODK/XML identifiers, no reserved words, recognised
   types and appearances.
 * **Platform** — the chosen target's own standards (types, naming, settings)
@@ -407,7 +537,73 @@ The validator runs in layers:
 > expressions), but every platform still runs its own validation when you
 > upload — treat that as the final authoritative check.
 
+### Confidence levels
+
+A "warning" and a "confirmed" fact are not the same kind of claim, so every
+finding is also tagged with **how sure the tool is**, independent of its
+error/warning/info severity:
+
+| Icon | Confidence | Meaning |
+| --- | --- | --- |
+| ✅ | **Confirmed** | Verified by an actual platform toolchain — pyxform converted the form to a real ODK XForm, or refused to. |
+| 🔎 | **Checked** | This tool's own deterministic rule or grammar checked it exactly (structure, logic, references, expression syntax, path analysis). |
+| 🧭 | **Heuristic** | A pattern-matched inference or AI suggestion about likely intent — useful, but not a proof. Review it. |
+| ❔ | **Unsupported** | The tool could not check this (an unrecognised function, deep validation unavailable or incomplete) and passed it through unchanged rather than guessing or rejecting it. |
+
+The principle: **never reject or silently accept something this tool
+genuinely can't verify — say so.** An unrecognised XPath function in a
+`choice_filter` is a warning tagged ❔ *unsupported*, not a hard error and
+not a silent pass; a pyxform conversion failure is an error tagged ✅
+*confirmed*, because that came from the real toolchain, not a guess. The
+CLI, the Streamlit Findings tab, and the Markdown/PDF QA report all show
+the confidence icon next to every finding.
+
 Results are written to `QA_Report.pdf` in the output package.
+
+---
+
+## Interview simulation
+
+Static checks tell you the form is *well-formed*; the simulator tells you it
+*behaves*. Instead of deploying to a device and tracing skip logic by hand,
+you answer the form right here and watch its logic run:
+
+* **Skips** — every `relevant` is re-evaluated against your answers so far,
+  hiding and revealing questions live (and logging what got skipped and
+  why).
+* **Constraints** — checked the moment you submit, with `.` bound to your
+  candidate answer; a violation is rejected with its `constraint_message`
+  instead of being recorded.
+* **Calculations** — `calculate` fields recompute as their inputs change,
+  shown running in a live panel.
+* **Repeats** — a roster can be instantiated as many times as you like, each
+  instance with its own answers and its own scope (nested repeats included).
+
+**In the web app:** open the **🎬 Simulate** tab after generating a form,
+answer with real widgets, and watch the live side panel (answered, skipped,
+calculations, recent activity).
+
+**In the terminal:**
+
+```bash
+xlsform-studio survey.docx --simulate
+```
+
+```text
+Are you a resident? *
+    1 = Yes
+    0 = No
+> 1
+Years lived here *
+> 999
+  ✗ 0-120 only. — not recorded; answer again.
+> 5
+  = status=local
+```
+
+The simulator is a pure, deterministic engine — the same concrete expression
+evaluator the validator trusts — so it never contacts a network and never
+changes the form; it only *runs* it.
 
 ---
 
@@ -417,10 +613,63 @@ Each run writes a timestamped folder under `output/` containing:
 
 1. `*.xlsx` — the XLSForm (survey / choices / settings sheets)
 2. `*_data_dictionary.xlsx` — every variable, type, choices, constraint, calculation
-3. `QA_Report.pdf` — the validation report
+3. `QA_Report.pdf` — the validation report, including the **Form Quality
+   Index** (0–100 across seven categories: naming, constraint coverage,
+   logic completeness, choice consistency, validation readiness,
+   documentation, reusability), a deterministic **interview-duration /
+   respondent-burden estimate**, and **deployment-readiness findings**
+   (translation completeness per language, media file manifest, device
+   fit for long choice lists)
 4. `assumption_log.md` — every deterministic decision made
-5. `logic_map.md` — relevance / constraint / calculation relationships
-6. `version_history.json` — append-only audit trail across runs
+5. `assumptions_to_verify.md` — the same decisions reorganised into a
+   prioritized review checklist: **Critical** (logic resolutions,
+   constraint bounds, ambiguous classifications, AI-applied changes —
+   each with a checkbox and a concrete "what to verify" action),
+   **Advisory** (translations, merges, unapplied AI suggestions), and
+   **Informational** (routine bookkeeping) — clear the critical items
+   before deployment
+6. `logic_map.md` — relevance / constraint / calculation relationships,
+   including an ASCII skip-pattern flowchart:
+
+   ```text
+   resident — Are you a resident of this district?
+   ├── Yes → years_lived
+   └── otherwise → respondent_age
+   ```
+7. `logic_flow.dot` — the same flowchart as a Graphviz graph (only written
+   when the form has skip logic); the app's **Logic map** tab renders it
+   interactively, with answer codes shown as their labels
+8. `enumerator_guide.md` — a field-ready, question-by-question reference:
+   how to record each answer, the options, skip rules in plain words
+   ("Ask only when resident = Yes"), and valid-answer rules
+9. `*_variable_specification.xlsx` — the data dictionary plus provenance:
+   every engine assumption logged per variable, for data managers
+10. `collection_plan.md` — a data-collection plan skeleton: instrument
+   overview, time per section, interviews-per-enumerator planning figure,
+   device requirements (GPS/camera/media files), languages, and a
+   checklist of what to complete manually
+11. `*_survey_instrument.docx` — a printable paper questionnaire: sections
+    as headings, numbered questions, tick-boxes for options, answer lines,
+    and skip rules in plain words — a paper backup and a review copy for
+    non-technical stakeholders
+12. `version_history.json` — append-only audit trail across runs
+13. `change_report.md` — only with `--diff-against OLD_FILE`: what changed
+   versus a previous questionnaire version (added/removed/renamed
+   variables, logic/constraint changes, choice-list edits), with breaking
+   changes for longitudinal analysis flagged explicitly
+
+### Reverse engineering an existing XLSForm
+
+The pipeline runs in both directions: feed a **deployed XLSForm** (`.xlsx`
+with `survey`/`choices`/`settings` sheets — SurveyCTO's dialect headers are
+understood too) as the input, and the full documentation package above is
+regenerated from it: printable questionnaire, enumerator guide, data
+dictionary, logic map and flowchart, quality score, QA report. Useful for
+inheriting an undocumented form or producing stakeholder-readable copies.
+
+```bash
+python -m xlsform_studio.app.main deployed_form.xlsx
+```
 
 ---
 
@@ -431,11 +680,12 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-The suite (`xlsform_architect/tests/`) covers the naming, classification,
+The suite (`xlsform_studio/tests/`) covers the naming, classification,
 logic, constraint and calculation engines, the builders/exporter, the
-validators, every parser, the end-to-end workflow, and the optional AI layer
-(fully mocked at the network boundary — no API key or internet connection is
-needed to run the suite).
+validators (including static path analysis and choice-list auditing), the
+interview simulator, every parser, the end-to-end workflow, and the optional
+AI layer (fully mocked at the network boundary — no API key or internet
+connection is needed to run the suite).
 
 ---
 
@@ -445,7 +695,7 @@ See [`packaging/README.md`](packaging/README.md). In short:
 
 ```bat
 pip install -r requirements-dev.txt
-pyinstaller packaging\xlsform_architect_cli.spec     :: -> dist\xlsform-architect.exe
+pyinstaller packaging\xlsform_studio_cli.spec     :: -> dist\xlsform-studio.exe
 ```
 
 The CLI packages into a single standalone `.exe` (no Python needed on the
@@ -453,15 +703,136 @@ target). The Streamlit UI ships as a small virtual-environment launcher.
 
 ---
 
-## Development iterations
+## Deployment
 
-The system was built in the planned iterations: (1) JSON → XLSForm, (2) validation
-engine, (3) Excel/CSV parser, (4) Word/PDF parser, (5) rule engine, (6)
-standard XLSForm knowledge pack, (7) Streamlit interface, (8) Windows packaging,
-(9) multi-platform standards (SurveyCTO/ODK/Kobo/Ona/CommCare) and a pyxform
-deep-validation pass, (10) capability-gap closure (matrix questions, repeat
-groups, compound logic, "Other, specify", cascading selects, translations),
-(11) the optional AI-assist layer and its rules/AI co-sharing design.
+The tool has no database and no cross-session server state — every browser
+session that hits the Streamlit UI gets its own private temp directory
+(`tempfile.mkdtemp()`, swept automatically after 24h), so one visitor's
+survey content is never written where another visitor's session could see
+it. That makes "host it online for a team" a matter of running the existing
+app on a public URL, not a rearchitecture.
+
+**Docker / CI (headless, CLI only).** A minimal container needs Python
+3.11+, the package, and nothing else for the deterministic pipeline:
+
+```dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY . .
+RUN pip install --no-cache-dir .
+ENTRYPOINT ["xlsform-studio"]
+```
+
+```bash
+docker build -t xlsform-studio .
+docker run --rm -v "$PWD:/data" xlsform-studio /data/survey.docx -o /data/out
+```
+
+In a CI pipeline, run `xlsform-studio survey.docx -o build/` as a build
+step and check its exit code: `0` means the form validated, `1` means
+validation found errors (see [Usage](#usage)). No network egress is
+required unless you explicitly pass `--ai` — the pipeline is airtight for
+regulated or offline environments by default.
+
+**Server (Streamlit UI).** The repo root [`Dockerfile`](Dockerfile) builds
+and serves the graphical app:
+
+```bash
+docker build -t xlsform-studio-web .
+docker run --rm -p 8501:8501 xlsform-studio-web
+# with AI enabled for every visitor, using your own key/budget:
+docker run --rm -p 8501:8501 -e DEEPSEEK_API_KEY=sk-... xlsform-studio-web
+```
+
+It respects `$PORT` (so it drops into any container platform's expected
+contract) and includes a Streamlit health-check endpoint
+(`/_stcore/health`). Locally, `python run_ui.py` does the same without
+Docker. The app is stateless per session, so no special session affinity
+is needed beyond what Streamlit itself requires — you can run more than
+one replica behind a load balancer.
+
+**Where to host it.** Any platform that runs an arbitrary Docker container
+on a public URL works; roughly in order of setup effort:
+
+| Platform | Why you'd pick it |
+| --- | --- |
+| **Render** / **Railway** | Point at this repo, it detects the `Dockerfile`, builds, and gives you a URL with HTTPS - least setup for a small team. Free/cheap tiers exist but sleep on inactivity; a paid tier keeps it always-on. |
+| **Fly.io** | Similar simplicity with more control over region/scaling; needs their CLI once to `fly launch`. |
+| **A plain VPS** (DigitalOcean, a Hetzner box, EC2) | Full control, predictable flat cost, but you own patching/updates/TLS (`docker run` behind Caddy or nginx for free auto-HTTPS is the least-effort combo). |
+| **Streamlit Community Cloud** | Purpose-built for Streamlit apps and genuinely the least effort of all, but requires a public GitHub repo (or their paid tier for private) and gives you the least infrastructure control. |
+
+Whichever you pick, set `DEEPSEEK_API_KEY` as a platform secret (never
+commit it) if you want AI features on for every visitor rather than
+requiring each person to supply their own key.
+
+**Configuration knobs** (all optional; the tool runs with sane defaults if
+none are set):
+
+| Variable | Purpose |
+| --- | --- |
+| `DEEPSEEK_API_KEY` | Enables the optional AI layer. Unset = fully deterministic, zero network calls. |
+| `XLSFS_OUTPUT_DIR` | Override the default output directory. |
+| `XLSFS_DEEPSEEK_BASE_URL` / `XLSFS_DEEPSEEK_MODEL` | Point the AI layer at a different DeepSeek-compatible endpoint/model. |
+| `XLSFORM_STUDIO_LOG_LEVEL` | Diagnostic log verbosity for the Streamlit UI (`DEBUG`/`INFO`/`WARNING`/`ERROR`); the CLI uses `--log-level` instead. |
+
+**Error recovery.** Every step degrades independently rather than taking
+the whole run down:
+- A parser failure on one file doesn't affect other files in a batch —
+  each `xlsform-studio` invocation is one process, one exit code.
+- Any AI feature failure (network error, malformed response, missing key)
+  falls back to the deterministic result for that feature and logs a
+  `[AI] ...` note in the assumption log; it never aborts the run.
+- Validation errors are reported, not thrown — the XLSForm and full
+  documentation package are still written even when the form is invalid,
+  so you always have something to inspect and fix.
+
+---
+
+## Troubleshooting
+
+**"AI enrichment was skipped and the deterministic result stands."**
+Either `DEEPSEEK_API_KEY` isn't set, or the form exceeds the AI
+question-count ceiling (2,000 questions, to keep prompts inside the
+model's context window and bound per-run API cost). The deterministic
+output is complete and unaffected either way — AI is enrichment, not a
+dependency.
+
+**The AI API is down / rate-limited / times out.**
+Nothing to do — the run still completes. Each AI feature independently
+falls back to the deterministic result and logs why in the assumption
+log. Re-run later, or without `--ai`, to get the same form without the
+AI notes.
+
+**A form with 500+ questions feels slow.**
+The deterministic pipeline scales roughly linearly with question and
+choice-list count and has been used well past this size, but very large
+choice lists (thousands of options) will slow the consistency validator's
+pairwise near-duplicate check the most; if that becomes a bottleneck,
+disable AI features (they add the most latency per question) and profile
+which validator is dominant before assuming it's the AI layer.
+
+**"How do I trust an AI suggestion?"**
+You don't have to — every AI mutation is validated deterministically at
+apply time (see [AI-assisted features](#ai-assisted-features-optional)),
+advisory suggestions are never applied without explicit accept, and every
+applied change is tagged "AI-suggested" in the assumption log with the
+original value preserved. Run `xlsform-studio ... --log-level DEBUG` to
+see exactly which features ran and what each one returned.
+
+**I need to see what a run actually did, not just the output.**
+Pass `--log-level DEBUG` (CLI) or set `XLSFORM_STUDIO_LOG_LEVEL=DEBUG`
+before `streamlit run` (UI). This traces every AI feature's run/skip
+decision, every network call's timing and outcome, and every AI
+suggestion's accept/apply/reject outcome — without ever printing prompt
+content or the API key.
+
+**Where did my file go?**
+Every run writes into a timestamped subfolder of the output directory
+(`<form_id>_<YYYYMMDD_HHMMSS>/`), so re-running never overwrites a
+previous package. `version_history.json` at the output root is the
+append-only index across runs.
+
+---
 
 ## License
 

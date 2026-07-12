@@ -1,0 +1,8 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "buildAptPackages": ["libgl1"],
+  "deploy": {
+    "aptPackages": ["libgl1"],
+    "startCommand": "python run_ui.py"
+  }
+}

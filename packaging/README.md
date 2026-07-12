@@ -1,4 +1,4 @@
-# Packaging XLSForm Architect for Windows
+# Packaging XLSForm Studio for Windows
 
 Two distribution options are supported.
 
@@ -10,14 +10,14 @@ has no web-server runtime.
 ```bat
 :: from the project root, on Windows
 pip install -r requirements-dev.txt
-pyinstaller packaging\xlsform_architect_cli.spec
+pyinstaller packaging\xlsform_studio_cli.spec
 ```
 
-This produces `dist\xlsform-architect.exe`. Copy it anywhere — it needs **no
+This produces `dist\xlsform-studio.exe`. Copy it anywhere — it needs **no
 Python** on the target machine:
 
 ```bat
-xlsform-architect.exe survey.docx --target kobo --output C:\forms
+xlsform-studio.exe survey.docx --target kobo --output C:\forms
 ```
 
 The one-click `packaging\build_windows.bat` does all of the above.
@@ -36,7 +36,7 @@ python run_ui.py
 ```
 
 `run_ui.py` launches the browser UI (`http://localhost:8501`). To ship this as a
-double-clickable launcher, save the following as `XLSForm Architect.bat` next to
+double-clickable launcher, save the following as `XLSForm Studio.bat` next to
 the project:
 
 ```bat
@@ -47,7 +47,7 @@ python run_ui.py
 ```
 
 ### Notes
-* The knowledge YAML files, XLSForm template and examples are bundled as data
+* The knowledge YAML files and examples are bundled as data
   files in the CLI spec (`datas`), so program rules travel with the executable.
 * The core pipeline runs entirely offline — no cloud service is contacted
   unless you explicitly enable the optional AI-assist layer (`--ai`, requires

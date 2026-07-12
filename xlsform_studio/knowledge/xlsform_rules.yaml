@@ -1,0 +1,148 @@
+# =============================================================================
+# XLSForm Studio - Standard XLSForm classification & compilation rules
+# =============================================================================
+# This file drives the deterministic engine.  It holds the STANDARD, general
+# rules that apply to any questionnaire - it is not tied to any specific
+# survey domain.  Editing it changes behaviour WITHOUT touching Python code
+# (Module 8 requirement).
+#
+# Sections:
+#   type_keywords     -> keyword -> xlsform type detection (Module 2)
+#   yes_no            -> canonical yes/no list + detection tokens
+#   constraints       -> generic constraint templates (Module 6)
+#   type_constraints  -> per-type default constraints
+#   calculations      -> reusable standard calculate expressions (Module 7)
+#   logic_tokens      -> natural-language logic vocabulary (Module 5)
+#   naming            -> variable naming rules (Module 3)
+# =============================================================================
+
+# --- Module 2: Question classification --------------------------------------
+# Ordered, first-match-wins list.  Each rule matches when ANY keyword appears
+# in the (lower-cased) question label.
+type_keywords:
+  - type: geopoint
+    keywords: ["gps", "geopoint", "coordinates", "gps location", "record location",
+               "lat/long", "latitude and longitude", "geolocation"]
+  - type: image
+    keywords: ["photo", "photograph", "picture", "image", "take a photo",
+               "upload a photo", "attach a photo", "snapshot"]
+  - type: audio
+    keywords: ["audio recording", "voice recording", "record audio"]
+  - type: video
+    keywords: ["video recording", "record video"]
+  - type: file
+    keywords: ["upload file", "attach file", "attachment", "upload document",
+               "attach document"]
+  - type: datetime
+    keywords: ["date and time", "datetime", "timestamp"]
+  - type: date
+    keywords: ["date of", "date", "birth date", "date of birth", "dob",
+               "when did", "day of", "start date", "end date"]
+  - type: time
+    keywords: ["time of", "what time", "start time", "end time"]
+  - type: decimal
+    keywords: ["weight", "height", "temperature", "amount", "price", "cost",
+               "rate", "distance", "average", "decimal", "kilograms", "litres",
+               "liters", "currency", "percentage", "percent", "score"]
+  - type: integer
+    keywords: ["age", "how many", "number of", "count", "how old", "quantity",
+               "years", "months", "which year", "year", "number", "no. of",
+               "total", "size", "how much"]
+  - type: barcode
+    keywords: ["barcode", "qr code", "scan code"]
+  - type: text
+    keywords: ["name of", "full name", "specify", "describe", "comment", "remark",
+               "other (specify)", "explain", "notes", "email", "address",
+               "phone", "telephone", "id number", "reason"]
+
+# --- Yes/No detection (Module 2) --------------------------------------------
+yes_no:
+  list_name: yes_no
+  positive_tokens: ["yes", "y", "true", "1"]
+  negative_tokens: ["no", "n", "false", "0"]
+  choices:
+    - name: "1"
+      label: "Yes"
+    - name: "0"
+      label: "No"
+
+# --- Module 6: Generic constraint templates ---------------------------------
+# Applied by matching the question label keywords.  ``.`` is the XLSForm
+# self-reference for the current answer.  Only universally-valid constraints
+# live here; domain-specific ranges belong in a custom rule file.
+constraints:
+  - match: ["age in months", "age (months)", "age months"]
+    applies_to: ["integer", "decimal"]
+    constraint: ". >= 0 and . <= 1200"
+    message: "Age in months must be between 0 and 1200."
+  - match: ["age"]
+    applies_to: ["integer", "decimal"]
+    constraint: ". >= 0 and . <= 120"
+    message: "Age must be between 0 and 120."
+  - match: ["percent", "percentage", "proportion"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 0 and . <= 100"
+    message: "Percentage must be between 0 and 100."
+  - match: ["hours per day"]
+    applies_to: ["integer", "decimal"]
+    constraint: ". >= 0 and . <= 24"
+    message: "Hours per day must be between 0 and 24."
+  - match: ["days per week"]
+    applies_to: ["integer", "decimal"]
+    constraint: ". >= 0 and . <= 7"
+    message: "Days per week must be between 0 and 7."
+  - match: ["which year", "year of", "year"]
+    applies_to: ["integer"]
+    constraint: ". >= 1900 and . <= 2100"
+    message: "Year must be between 1900 and 2100."
+  - match: ["which month", "month of", "month"]
+    applies_to: ["integer"]
+    constraint: ". >= 1 and . <= 12"
+    message: "Month must be between 1 and 12."
+  - match: ["phone", "telephone", "mobile number"]
+    applies_to: ["text"]
+    constraint: "regex(., '^\\+?[0-9() \\-]{7,17}$')"
+    message: "Enter a valid phone number (digits, +, -, () and spaces only)."
+  - match: ["email"]
+    applies_to: ["text"]
+    constraint: "regex(., '^[^@ ]+@[^@ ]+\\.[^@ ]+$')"
+    message: "Enter a valid email address."
+  # Counts can never be negative. Placed last so more specific ranges
+  # (age, percentage, hours...) win first.
+  - match: ["how many", "number of", "count of", "quantity of"]
+    applies_to: ["integer", "decimal"]
+    constraint: ". >= 0"
+    message: "This value cannot be negative."
+
+# Generic per-type constraints applied when no semantic match is found.
+type_constraints:
+  date:
+    constraint: ". <= today()"
+    message: "Date cannot be in the future."
+
+# --- Module 7: Standard calculate expressions -------------------------------
+# ${dob} is substituted with the actual date-of-birth variable at build time.
+calculations:
+  age_years_from_dob: "int((today() - ${dob}) div 365.25)"
+  age_months_from_dob: "int((today() - ${dob}) div 30.4375)"
+
+# --- Module 5: Natural-language logic vocabulary ----------------------------
+logic_tokens:
+  affirmative: ["yes", "if yes", "y"]
+  negative: ["no", "if no", "n"]
+  under: ["under", "less than", "below", "younger than", "<"]
+  over: ["over", "more than", "above", "older than", ">"]
+  equals: ["is", "equals", "equal to", "=="]
+
+# --- Module 3: Variable naming ----------------------------------------------
+naming:
+  max_length: 32           # safe identifier length across platforms (Stata truncates names over 32)
+  stopwords: ["the", "a", "an", "of", "is", "are", "to", "in", "on", "for",
+              "please", "what", "which", "did", "do", "does", "was", "were",
+              "how", "your", "you", "this", "that", "record", "enter",
+              "currently", "have", "has", "been", "with", "and", "or", "at"]
+  abbreviations:
+    number: num
+    identifier: id
+    percentage: pct
+    received: recv

@@ -1,0 +1,47 @@
+# =============================================================================
+# Domain rule pack: EDUCATION
+# =============================================================================
+# School surveys and learning assessments (EGRA/EGMA-style scores, EMIS-style
+# facility counts).  Merged ON TOP of the neutral rules; plain YAML, edit
+# freely.  Bounds exclude impossible values only.
+# =============================================================================
+
+type_keywords:
+  - type: integer
+    keywords: ["enrolment", "enrollment", "pupils", "learners", "students",
+               "teachers", "classrooms", "grade", "class level",
+               "correct answers", "words per minute", "school days missed",
+               "repetition", "dropouts"]
+  - type: decimal
+    keywords: ["attendance rate", "pass rate", "pupil-teacher ratio",
+               "test score", "assessment score"]
+
+constraints:
+  - match: ["grade", "class level"]
+    applies_to: ["integer"]
+    constraint: ". >= 0 and . <= 14"
+    message: "Grade/class level must be between 0 (pre-primary) and 14."
+  - match: ["enrolment", "enrollment", "pupils", "learners", "students"]
+    applies_to: ["integer"]
+    constraint: ". >= 0 and . <= 20000"
+    message: "Enrolment counts must be between 0 and 20,000."
+  - match: ["teachers", "classrooms"]
+    applies_to: ["integer"]
+    constraint: ". >= 0 and . <= 1000"
+    message: "This count must be between 0 and 1,000."
+  - match: ["attendance rate", "pass rate"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 0 and . <= 100"
+    message: "Rates must be between 0 and 100 percent."
+  - match: ["pupil-teacher ratio"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 0 and . <= 500"
+    message: "Pupil-teacher ratio must be between 0 and 500."
+  - match: ["words per minute"]
+    applies_to: ["integer", "decimal"]
+    constraint: ". >= 0 and . <= 300"
+    message: "Reading fluency must be between 0 and 300 words per minute."
+  - match: ["school days missed"]
+    applies_to: ["integer"]
+    constraint: ". >= 0 and . <= 300"
+    message: "Days missed must be between 0 and 300."

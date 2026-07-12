@@ -1,6 +1,6 @@
 @echo off
 REM ===========================================================================
-REM  Build the XLSForm Architect Windows executables.
+REM  Build the XLSForm Studio Windows executables.
 REM  Run this from the project root in a Windows command prompt.
 REM ===========================================================================
 
@@ -12,12 +12,12 @@ echo Installing dependencies...
 python -m pip install --upgrade pip
 pip install -r requirements-dev.txt
 
-echo Building CLI executable (dist\xlsform-architect.exe)...
-pyinstaller packaging\xlsform_architect_cli.spec --noconfirm
+echo Building CLI executable (dist\xlsform-studio.exe)...
+pyinstaller packaging\xlsform_studio_cli.spec --noconfirm
 
 echo.
 echo ===========================================================================
-echo  CLI build complete:  dist\xlsform-architect.exe
+echo  CLI build complete:  dist\xlsform-studio.exe
 echo.
 echo  To run the graphical (Streamlit) app on this machine instead, use:
 echo     python run_ui.py

@@ -1,0 +1,48 @@
+# =============================================================================
+# Domain rule pack: HUMANITARIAN
+# =============================================================================
+# Rapid needs assessments, post-distribution monitoring (PDM) and market
+# assessments.  Merged ON TOP of the neutral rules; plain YAML, edit freely.
+# Bounds exclude impossible values only.
+# =============================================================================
+
+type_keywords:
+  - type: integer
+    keywords: ["household size", "family members", "displaced persons",
+               "days of food", "meals per day", "coping strategies",
+               "items received", "rations received", "jerry cans",
+               "litres of water", "liters of water", "minutes to water",
+               "minutes to market"]
+  - type: decimal
+    keywords: ["market price", "price of", "exchange rate",
+               "distance to market", "distance to water"]
+
+constraints:
+  - match: ["meals per day", "meals eaten per day"]
+    applies_to: ["integer"]
+    constraint: ". >= 0 and . <= 10"
+    message: "Meals per day must be between 0 and 10."
+  - match: ["days of food", "days food will last"]
+    applies_to: ["integer"]
+    constraint: ". >= 0 and . <= 365"
+    message: "Days of food stock must be between 0 and 365."
+  - match: ["household size", "family members"]
+    applies_to: ["integer"]
+    constraint: ". >= 1 and . <= 60"
+    message: "Household size must be between 1 and 60."
+  - match: ["litres of water", "liters of water"]
+    applies_to: ["integer", "decimal"]
+    constraint: ". >= 0 and . <= 1000"
+    message: "Litres per day must be between 0 and 1,000."
+  - match: ["minutes to water", "minutes to market"]
+    applies_to: ["integer", "decimal"]
+    constraint: ". >= 0 and . <= 1440"
+    message: "Travel time in minutes must be between 0 and 1,440 (24 hours)."
+  - match: ["items received", "rations received", "jerry cans"]
+    applies_to: ["integer"]
+    constraint: ". >= 0 and . <= 1000"
+    message: "Quantities received must be between 0 and 1,000."
+  - match: ["market price", "price of"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 0"
+    message: "Prices cannot be negative."
