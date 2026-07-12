@@ -39,7 +39,16 @@ Railway auto-deploys on every push to the configured branch. Watch progress unde
 - **Dockerfile** — builds the image, installs system deps (`libgl1` for PyMuPDF), sets `XLSFS_OUTPUT_DIR=/tmp/xlsform_studio_output`, and runs `python run_ui.py`.
 - **run_ui.py** — reads `$PORT` (Railway sets this at runtime) and binds `0.0.0.0`, which Railway's edge proxy requires.
 - **railway.json** — pins the Dockerfile builder explicitly and configures a health check against Streamlit's `/_stcore/health` endpoint, with automatic restart on failure.
+- **railpack.json** — fallback config for Railway's Railpack builder (see note below). Sets `libgl1` as an apt package and `python run_ui.py` as the start command.
 - **Session isolation** — each browser session gets its own `tempfile.mkdtemp()` output directory (`xlsform_studio/app/ui.py:_session_output_dir`), with a 24h auto-sweep of stale directories. Safe for concurrent multi-user traffic out of the box.
+
+### Known issue: Railway may ignore the Dockerfile builder
+
+As of mid-2026, Railway has an active platform bug where its default builder (Railpack) sometimes ignores `railway.json`'s `"builder": "DOCKERFILE"` setting — even on a freshly created service — and falls back to auto-detecting a plain Python app, which then fails with `No start command detected` (see [Railway Central Station reports](https://station.railway.com/questions/railpack-ignoring-railway-json-dockerfil-a3c09f1b)).
+
+If your build log shows a `Railpack` banner instead of `FROM python:3.11-slim` / `apt-get` steps, this bug is active for your service. `railpack.json` at the repo root is the workaround: it gives Railpack its own start command and apt package (`libgl1`) so the build succeeds even without switching to the Dockerfile builder. No action needed on your end beyond redeploying — Railway will pick up `railpack.json` automatically.
+
+If Railway fixes the underlying bug later and your service switches back to the Dockerfile builder, `railpack.json` is simply unused and harmless to leave in place.
 
 ## Storage Notes
 
