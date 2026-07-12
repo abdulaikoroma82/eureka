@@ -58,7 +58,7 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from ..models import Questionnaire, REF_PATTERN
+from ..models import DECISION_CONFIDENCE_LEVELS, Questionnaire, REF_PATTERN
 from .client import AIError, DeepSeekClient
 
 _REF = REF_PATTERN
@@ -188,7 +188,9 @@ class AISkipLogicResolver:
                 continue
 
             target.relevant = expr
-            target.add_assumption(
+            decision_conf = confidence if confidence in DECISION_CONFIDENCE_LEVELS else "low"
+            target.add_decision(
+                "relevant", expr, decision_conf,
                 f"AI-suggested relevant condition "
                 f"({rationale or 'no rationale given'}{conf_tag}). "
                 f"Please review before deployment.")

@@ -43,7 +43,7 @@ from __future__ import annotations
 import datetime as _dt
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from ..ai.client import DeepSeekClient
 from ..ai.config import AIConfig
@@ -62,6 +62,7 @@ from ..xlsform.exporter import XLSFormExporter
 from .artifacts import ArtifactBuilder
 from .config import CONFIG
 from .logic_flow import LogicFlowBuilder
+from .review import ReviewRow, apply_review_edits, build_review_table
 from .verification_checklist import VerificationChecklistBuilder
 
 # Step labels surfaced to the UI.  The AI step
@@ -105,6 +106,12 @@ class WorkflowResult:
     #: Draft indicator matrix (markdown; "" unless the AI "indicators"
     #: feature produced one).
     indicator_matrix: str = ""
+    #: Every heuristic type/choice-list/relevant/constraint decision the
+    #: engine made, as an editable review row - see
+    #: :mod:`~xlsform_studio.app.review`. Nothing here has been applied or
+    #: blocked anything; it is purely for a human to inspect and, via
+    #: :meth:`Workflow.apply_review_edits`, approve or correct.
+    review_table: List[ReviewRow] = field(default_factory=list)
 
     @property
     def is_valid(self) -> bool:
@@ -227,7 +234,8 @@ class Workflow:
                                 ai_suggestions=list(ai_pipeline.suggestions),
                                 quality=quality, duration=duration,
                                 coverage_matrix=ai_pipeline.coverage_matrix,
-                                indicator_matrix=ai_pipeline.indicator_matrix)
+                                indicator_matrix=ai_pipeline.indicator_matrix,
+                                review_table=build_review_table(questionnaire))
 
         if write_outputs:
             out_dir = Path(output_dir) if output_dir else CONFIG.output_dir
@@ -265,6 +273,48 @@ class Workflow:
         """
         qn = result.questionnaire
         result.assumptions.extend(apply_suggestions(qn, accepted))
+
+        result.xlsform_bytes = self.exporter.export_bytes(
+            qn, target=result.target or None)
+        preserved = [f for f in result.report.findings
+                     if f.category == "ai_review"]
+        narrative = result.report.narrative
+        result.report = self.validator.validate(qn, target=result.target or None)
+        result.report.findings.extend(preserved)
+        result.report.narrative = narrative
+        result.quality = QualityScorer().score(qn, result.report)
+        result.duration = DurationEstimator().estimate(qn)
+        # A "naming" suggestion can rename a question referenced by a
+        # review row; rebuild rather than risk a stale question name.
+        result.review_table = build_review_table(qn)
+
+        if write_outputs:
+            out_dir = Path(output_dir) if output_dir else CONFIG.output_dir
+            result.outputs = self._write_all(qn, result.report,
+                                              result.assumptions, out_dir,
+                                              source_name, result.target or None,
+                                              quality=result.quality,
+                                              duration=result.duration)
+        return result
+
+    # ------------------------------------------------------------------
+    def apply_review_edits(self, result: WorkflowResult,
+                           edits: Dict[Tuple[str, str], str],
+                           output_dir: Optional[Union[str, Path]] = None,
+                           write_outputs: bool = False,
+                           source_name: str = "questionnaire"
+                           ) -> WorkflowResult:
+        """Apply human-reviewed type/choice-list/relevant/constraint values,
+        then re-export + re-validate - the same "compile, review, rebuild"
+        pattern as :meth:`apply_ai_suggestions`.
+
+        *edits* maps ``(question_name, field_name) -> value`` for every row
+        the reviewer looked at, whether they changed it (an edit) or left
+        it as shown (an approval) - see :mod:`~xlsform_studio.app.review`.
+        """
+        qn = result.questionnaire
+        result.assumptions.extend(apply_review_edits(qn, edits))
+        result.review_table = build_review_table(qn)
 
         result.xlsform_bytes = self.exporter.export_bytes(
             qn, target=result.target or None)

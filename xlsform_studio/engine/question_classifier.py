@@ -77,7 +77,8 @@ class QuestionClassifier:
 
         # 3. A bare "select_one"/"select_multiple" without options: keep base.
         if existing in ("select_one", "select_multiple") and not question.raw_choices:
-            question.add_assumption(
+            question.add_decision(
+                "choice_list", "", "low",
                 f"Kept '{existing}' but no answer options were found; add a choice list."
             )
             return question
@@ -86,14 +87,16 @@ class QuestionClassifier:
         for rule in self.type_rules:
             if self._matches(label, rule.get("keywords", [])):
                 question.xlsform_type = rule["type"]
-                question.add_assumption(
+                question.add_decision(
+                    "type", rule["type"], "high",
                     f"Type '{rule['type']}' inferred from keyword match."
                 )
                 return question
 
         # 5. Fallback: free text.
         question.xlsform_type = "text"
-        question.add_assumption("No rule matched; defaulted to 'text'.")
+        question.add_decision("type", "text", "low",
+                              "No rule matched; defaulted to 'text'.")
         return question
 
     # ------------------------------------------------------------------
@@ -105,14 +108,28 @@ class QuestionClassifier:
         if self._is_yes_no(question.raw_choices):
             question.xlsform_type = f"select_one {self.yes_no_cfg.get('list_name', 'yes_no')}"
             question.list_name = self.yes_no_cfg.get("list_name", "yes_no")
-            question.add_assumption("Yes/No options detected; used shared 'yes_no' list.")
+            question.add_decision(
+                "type", question.xlsform_type, "high",
+                "Yes/No options detected; used select_one with the shared "
+                "'yes_no' list.")
+            question.add_decision(
+                "choice_list", question.list_name, "high",
+                "Yes/No options detected; used shared 'yes_no' list.")
             return
 
         resolved_list = list_name or question.list_name or "list_placeholder"
         question.list_name = resolved_list
         question.xlsform_type = f"{base} {resolved_list}"
-        if multi and existing != "select_multiple":
-            question.add_assumption("Wording implies multiple answers; used select_multiple.")
+        ambiguous_multi = multi and existing != "select_multiple"
+        question.add_decision(
+            "type", question.xlsform_type,
+            "medium" if ambiguous_multi else "high",
+            "Wording implies multiple answers; used select_multiple."
+            if ambiguous_multi else
+            f"Answer options detected; used {base}.")
+        question.add_decision(
+            "choice_list", resolved_list, "medium",
+            f"Answer options captured into list '{resolved_list}'.")
 
     # ------------------------------------------------------------------
     def _matches(self, label: str, keywords: List[str]) -> bool:

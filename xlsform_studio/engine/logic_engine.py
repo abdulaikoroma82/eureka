@@ -87,7 +87,8 @@ class LogicEngine:
             return ""
 
         if _SKIP_TO.search(logic):
-            question.add_assumption(
+            question.add_decision(
+                "relevant", "", "low",
                 f"Skip pattern detected ('{logic}'). XLSForm expresses skips "
                 "as 'relevant' conditions on the questions being shown, not "
                 "as jumps - please add the condition to the skipped-to "
@@ -97,9 +98,11 @@ class LogicEngine:
         expr = self._compile(logic, previous, known or [])
         if expr:
             question.relevant = expr
-            question.add_assumption(f"Relevant compiled from logic: '{logic}'.")
+            question.add_decision("relevant", expr, "medium",
+                                  f"Relevant compiled from logic: '{logic}'.")
         else:
-            question.add_assumption(
+            question.add_decision(
+                "relevant", "", "low",
                 f"Logic '{logic}' could not be auto-compiled; please review "
                 f"the relevant column.")
         return question.relevant

@@ -241,6 +241,50 @@ Every decision is recorded in the **assumption log** so it can be reviewed.
 
 ---
 
+## Reviewable parsing
+
+The tool optimises for **transparent assistance, not automatic
+correctness**: heuristic parsing at the boundary between natural-language
+questionnaires and precise XLSForm/XPath semantics will sometimes be wrong,
+so every inference stays visible and editable instead of being silently
+trusted.
+
+Each of the four judgment calls the engine makes per question — **type**,
+**choice list**, **relevance**, **constraint** — is recorded as a
+structured decision with a confidence:
+
+| Confidence | Meaning |
+| --- | --- |
+| 🟢 High | An exact, unambiguous signal (a keyword match, a Yes/No pair). |
+| 🟡 Medium | A reasonable rule-based reading that could be wrong (a compiled skip condition, a semantic constraint template match). |
+| 🔴 Low | A generic fallback with no real signal (defaulted to `text`, a generic per-type constraint) — or nothing could be inferred at all. |
+
+**Conservative natural-language compilation.** When an instruction is too
+ambiguous to compile safely — an unparseable compound condition, a "skip to
+question N" jump XLSForm has no construct for — the tool does **not**
+produce a plausible-but-possibly-wrong expression. It leaves the field
+blank, records it as a low-confidence decision, and surfaces it as an
+explicit review item instead.
+
+**The review panel.** In the Streamlit app, every decision appears in a
+"🧐 Review parser decisions" panel before the download buttons — expanded
+automatically whenever something needs your input. Each row shows the
+question, the field, the inferred (or blank) value, its confidence, and the
+reason; edit the value or leave it as shown, tick **Reviewed**, and apply —
+the XLSForm is rebuilt and re-validated from your reviewed values, the same
+"compile → review → rebuild" pattern the AI-suggestions panel uses. In the
+CLI, the same information prints as a summary (decisions needing input are
+listed explicitly; the rest are in `assumptions_to_verify.md`) — the CLI
+never blocks or guesses on your behalf, since batch/CI runs are
+non-interactive by design.
+
+An AI-assisted reclassification (`--ai`) adds a *new* decision on top of the
+rule engine's original rather than erasing it, so the review panel always
+shows the latest and most-informed guess — with its own confidence, still
+subject to your review.
+
+---
+
 ## The rule pack (editable, no code changes)
 
 Platform profiles live in `xlsform_studio/knowledge/platforms.yaml`

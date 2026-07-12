@@ -43,7 +43,7 @@ from __future__ import annotations
 from typing import List
 
 from ..engine.constraint_engine import ConstraintEngine
-from ..models import Questionnaire
+from ..models import DECISION_CONFIDENCE_LEVELS, Questionnaire
 from .client import AIError, DeepSeekClient
 
 # Deliberately excludes select_one/select_multiple/rank (need a choice list,
@@ -135,7 +135,9 @@ class AITypeClassifier:
             q.xlsform_type = new_type
             q.constraint = ""  # clear the (inapplicable) text-type state
             self.constraints.apply(q)
-            q.add_assumption(
+            conf = confidence if confidence in DECISION_CONFIDENCE_LEVELS else "low"
+            q.add_decision(
+                "type", new_type, conf,
                 f"AI reclassified from 'text' to '{new_type}' "
                 f"(confidence: {confidence}). Please review.")
             notes.append(f"[AI classification] '{name}': text -> "

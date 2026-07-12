@@ -94,6 +94,27 @@ class ChoiceList:
         }
 
 
+#: Levels for :class:`Decision.confidence` - how sure the engine is about
+#: one specific field-level inference (distinct from
+#: ``validation.report_generator.CONFIDENCE_LEVELS``, which rates a
+#: validation *finding*, not a parsing *decision*).
+DECISION_CONFIDENCE_LEVELS = ("high", "medium", "low")
+
+
+@dataclass
+class Decision:
+    """One field-level inference the engine made, for the reviewable-parsing
+    UI: which field, what value (if any) it inferred, how sure it is, and
+    why. Complements the flat ``assumptions`` audit log - which is prose
+    meant to be read top to bottom - with structure a UI can render as an
+    editable table, one row per (question, field)."""
+
+    field_name: str      # "type" | "choice_list" | "relevant" | "constraint"
+    value: str           # the inferred value ("" when nothing could be inferred)
+    confidence: str      # one of DECISION_CONFIDENCE_LEVELS
+    reason: str          # short human-readable why
+
+
 # ---------------------------------------------------------------------------
 # Questions
 # ---------------------------------------------------------------------------
@@ -146,6 +167,12 @@ class Question:
 
     #: Provenance / audit trail entries (assumptions the engine made).
     assumptions: List[str] = field(default_factory=list)
+
+    #: Structured, field-level inference decisions (see :class:`Decision`).
+    #: The most recent entry for a given ``field_name`` is authoritative -
+    #: an AI-assisted reclassification appends a new one rather than
+    #: rewriting the rule engine's original.
+    decisions: List[Decision] = field(default_factory=list)
 
     #: XLSForm type keywords that contain spaces and must not be split when
     #: deriving the base type (structural markers + SurveyCTO audit types).
@@ -210,6 +237,18 @@ class Question:
     def add_assumption(self, message: str) -> None:
         if message and message not in self.assumptions:
             self.assumptions.append(message)
+
+    def add_decision(self, field_name: str, value: str, confidence: str,
+                     reason: str) -> None:
+        """Record a structured, field-level inference and its free-text
+        explanation (the latter also lands in ``assumptions``, so the log
+        stays complete even for callers that only read that list)."""
+        if confidence not in DECISION_CONFIDENCE_LEVELS:
+            raise ValueError(
+                f"Decision.confidence must be one of "
+                f"{DECISION_CONFIDENCE_LEVELS}, got {confidence!r}")
+        self.decisions.append(Decision(field_name, value, confidence, reason))
+        self.add_assumption(reason)
 
     # -- serialisation ---------------------------------------------------
     def to_dict(self) -> Dict[str, Any]:

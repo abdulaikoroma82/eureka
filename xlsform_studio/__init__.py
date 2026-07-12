@@ -22,5 +22,5 @@ supplementing, never silently overwriting. AI requires an explicit opt-in
 and an API key; with neither, the tool's behaviour is unchanged.
 """
 
-__version__ = "1.15.0"
+__version__ = "1.16.0"
 __all__ = ["__version__"]

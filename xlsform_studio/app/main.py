@@ -262,6 +262,19 @@ def main(argv=None) -> int:
         if f.explanation:
             print(f"             → {f.explanation}")
 
+    if result.review_table:
+        attention = [r for r in result.review_table if r.needs_attention]
+        print()
+        print(f"Parser decisions ({len(result.review_table)}) — heuristic "
+              f"type/choice-list/relevance/constraint inferences; review "
+              f"and edit in the app, or in assumptions_to_verify.md:")
+        if attention:
+            print(f"   {len(attention)} item(s) could NOT be inferred at "
+                  f"all and need your input:")
+            for row in attention:
+                print(f"   - [{row.field_label}] '{row.question}': "
+                      f"{row.reason}")
+
     if result.ai_suggestions:
         print()
         print(f"AI suggestions ({len(result.ai_suggestions)}) — advisory "

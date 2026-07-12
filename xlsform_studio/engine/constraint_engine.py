@@ -69,7 +69,8 @@ class ConstraintEngine:
             if self._matches(label, tpl.get("match", [])):
                 question.constraint = tpl["constraint"]
                 question.constraint_message = tpl.get("message", "")
-                question.add_assumption(
+                question.add_decision(
+                    "constraint", question.constraint, "medium",
                     f"Constraint applied from template match ({', '.join(tpl['match'])})."
                 )
                 return question
@@ -79,7 +80,8 @@ class ConstraintEngine:
         if generic:
             question.constraint = generic["constraint"]
             question.constraint_message = generic.get("message", "")
-            question.add_assumption(f"Default '{base_type}' constraint applied.")
+            question.add_decision("constraint", question.constraint, "low",
+                                  f"Default '{base_type}' constraint applied.")
         return question
 
     # ------------------------------------------------------------------

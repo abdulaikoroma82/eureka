@@ -55,6 +55,7 @@ from xlsform_studio.ai.config import AIConfig
 from xlsform_studio.app.artifacts import ArtifactBuilder
 from xlsform_studio.app.config import DEPLOYMENT_TARGETS, EXAMPLES_DIR
 from xlsform_studio.app.logic_flow import LogicFlowBuilder
+from xlsform_studio.app.review import ReviewRow
 from xlsform_studio.app.workflow import STEP_LABELS, Workflow
 from xlsform_studio.engine.knowledge_base import KnowledgeBase
 from xlsform_studio.logging_config import configure_logging
@@ -375,6 +376,7 @@ def _render_result(result, target: str) -> None:
                    "changes (marked in the assumption log and findings below) "
                    "before deploying.")
 
+    _render_review_table(result)
     _render_ai_suggestions(result, target)
 
     # --- downloads ---------------------------------------------------------
@@ -634,6 +636,58 @@ def _render_sim_state(state) -> None:
         for ev in reversed(state.events[-8:]):
             st.caption(f"{icons.get(ev.kind, '•')} {ev.label}"
                        + (f" — {ev.detail}" if ev.detail else ""))
+
+
+_DECISION_BADGE = {"high": "🟢 High", "medium": "🟡 Medium", "low": "🔴 Low"}
+
+
+def _render_review_table(result) -> None:
+    """The reviewable-parsing panel: every heuristic type / choice-list /
+    relevance / constraint decision the engine made, shown with its
+    confidence, editable and approvable before export.
+
+    Nothing here has been applied — like the AI suggestions panel below
+    it, the download buttons always serve the current, human-reviewed
+    state, and an unedited row still requires an explicit "Reviewed" tick
+    to count as approved.
+    """
+    rows: list[ReviewRow] = result.review_table
+    if not rows:
+        return
+    attention = [r for r in rows if r.needs_attention]
+    title = f"🧐 Review parser decisions ({len(rows)})"
+    if attention:
+        title += f" — {len(attention)} need your input"
+    with st.expander(title, expanded=bool(attention)):
+        st.caption("Every question type, choice list, relevance condition "
+                   "and constraint the tool inferred, with how sure it is. "
+                   "Edit a value, or leave it as shown and tick Reviewed to "
+                   "approve it, then apply — the XLSForm is rebuilt with "
+                   "your reviewed values.")
+        if attention:
+            st.warning(f"{len(attention)} item(s) could not be inferred at "
+                      "all (e.g. an ambiguous skip condition) and were left "
+                      "blank on purpose rather than guessed at — fill them "
+                      "in below.")
+        edited = {}
+        for i, row in enumerate(rows):
+            badge = _DECISION_BADGE.get(row.confidence, row.confidence)
+            flag = " 🛑 needs input" if row.needs_attention else ""
+            st.markdown(f"**{row.field_label}** — `{row.question}` "
+                       f"({row.label}){flag}  {badge}")
+            new_value = st.text_input(
+                "Value", value=row.value, key=f"review_val_{i}",
+                label_visibility="collapsed")
+            st.caption(f"💬 {row.reason}")
+            if st.checkbox("Reviewed", key=f"review_ok_{i}"):
+                edited[(row.question, row.field_name)] = new_value
+            st.divider()
+
+        if st.button(f"✅ Apply {len(edited)} reviewed item(s) and rebuild",
+                     disabled=not edited, use_container_width=True):
+            Workflow(knowledge=_kb()).apply_review_edits(result, edited)
+            st.session_state["last_result"] = result
+            st.rerun()
 
 
 def _render_ai_suggestions(result, target: str) -> None:
