@@ -661,6 +661,14 @@ Each run writes a timestamped folder under `output/` containing:
    versus a previous questionnaire version (added/removed/renamed
    variables, logic/constraint changes, choice-list edits), with breaking
    changes for longitudinal analysis flagged explicitly
+14. `coverage_matrix.md` — only with the `coverage` AI feature enabled: maps
+   your stated study objectives to the questions that inform each one and
+   flags gaps, also shown in the app's Quality tab; every cited question
+   name is verified to exist before it's written
+15. `indicator_matrix.md` — only with the `indicators` AI feature enabled: a
+   draft M&E reporting framework (indicator, source questions, aggregation
+   level, means of verification), also shown in the Quality tab; source
+   question references are likewise verified to exist
 
 Every document above is authored **deterministically** and owns every fact
 (variable names, types, logic, counts, checklist tiers). With the optional
