@@ -29,6 +29,7 @@ interface itself adds no intelligence of its own.
 from __future__ import annotations
 
 import io
+import shutil
 import sys
 import tempfile
 import zipfile
@@ -109,6 +110,55 @@ def _kb() -> KnowledgeBase:
     if "kb" not in st.session_state:
         st.session_state["kb"] = KnowledgeBase.load()
     return st.session_state["kb"]
+
+
+#: Prefix for the per-session output directories below, so the janitor can
+#: recognise (and only ever touch) directories this app created.
+_SESSION_DIR_PREFIX = "xlsform_studio_session_"
+#: Age past which an orphaned session directory is swept - generous, since
+#: it only matters for long-running server deployments (a local single-user
+#: run exits and the OS reclaims /tmp long before this).
+_SESSION_DIR_MAX_AGE_HOURS = 24
+
+
+def _session_output_dir() -> Path:
+    """A private output directory for this browser session, not the shared
+    default ``output/`` folder.
+
+    Every user hitting a hosted deployment shares one server process; if
+    every run wrote to the same directory, one user's generated package
+    (which can contain sensitive survey content) would sit right next to
+    everyone else's. Each session gets its own ``tempfile.mkdtemp()``
+    instead, created once and reused across reruns.
+    """
+    if "session_output_dir" not in st.session_state:
+        _sweep_stale_session_dirs()
+        path = Path(tempfile.mkdtemp(prefix=_SESSION_DIR_PREFIX))
+        st.session_state["session_output_dir"] = path
+    return st.session_state["session_output_dir"]
+
+
+def _sweep_stale_session_dirs() -> None:
+    """Best-effort cleanup of session directories from ended sessions.
+
+    Streamlit gives no reliable "session ended" hook, so directories from
+    sessions that were simply closed (not explicitly cleaned up) would
+    otherwise accumulate for the life of the server process. Runs at most
+    once per new session, so the cost is negligible.
+    """
+    import time
+
+    root = Path(tempfile.gettempdir())
+    cutoff = time.time() - _SESSION_DIR_MAX_AGE_HOURS * 3600
+    try:
+        for entry in root.glob(f"{_SESSION_DIR_PREFIX}*"):
+            try:
+                if entry.is_dir() and entry.stat().st_mtime < cutoff:
+                    shutil.rmtree(entry, ignore_errors=True)
+            except OSError:
+                continue    # another process may be using it - skip, not fatal
+    except OSError:
+        pass                # temp root unreadable - nothing we can do here
 
 
 def _platform_label(target: str) -> str:
@@ -805,6 +855,7 @@ def main() -> None:
                 source_name=uploaded.name,
                 ai_config=ai_config,
                 progress=progress,
+                output_dir=_session_output_dir(),
             )
         except Exception as exc:  # pragma: no cover - surfaced to the user
             st.error(f"Could not process **{uploaded.name}**: {exc}")

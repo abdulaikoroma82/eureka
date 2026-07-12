@@ -696,9 +696,12 @@ target). The Streamlit UI ships as a small virtual-environment launcher.
 
 ## Deployment
 
-The tool has no server-side state and no database — every run is
-self-contained, so deployment is just "make the CLI or the UI runnable
-somewhere."
+The tool has no database and no cross-session server state — every browser
+session that hits the Streamlit UI gets its own private temp directory
+(`tempfile.mkdtemp()`, swept automatically after 24h), so one visitor's
+survey content is never written where another visitor's session could see
+it. That makes "host it online for a team" a matter of running the existing
+app on a public URL, not a rearchitecture.
 
 **Docker / CI (headless, CLI only).** A minimal container needs Python
 3.11+, the package, and nothing else for the deterministic pipeline:
@@ -722,10 +725,36 @@ validation found errors (see [Usage](#usage)). No network egress is
 required unless you explicitly pass `--ai` — the pipeline is airtight for
 regulated or offline environments by default.
 
-**Server (Streamlit UI).** Run `python run_ui.py` (or `streamlit run
-xlsform_studio/app/ui.py`) behind any reverse proxy; the app is stateless
-per session, so no special session affinity is needed beyond what
-Streamlit itself requires.
+**Server (Streamlit UI).** The repo root [`Dockerfile`](Dockerfile) builds
+and serves the graphical app:
+
+```bash
+docker build -t xlsform-studio-web .
+docker run --rm -p 8501:8501 xlsform-studio-web
+# with AI enabled for every visitor, using your own key/budget:
+docker run --rm -p 8501:8501 -e DEEPSEEK_API_KEY=sk-... xlsform-studio-web
+```
+
+It respects `$PORT` (so it drops into any container platform's expected
+contract) and includes a Streamlit health-check endpoint
+(`/_stcore/health`). Locally, `python run_ui.py` does the same without
+Docker. The app is stateless per session, so no special session affinity
+is needed beyond what Streamlit itself requires — you can run more than
+one replica behind a load balancer.
+
+**Where to host it.** Any platform that runs an arbitrary Docker container
+on a public URL works; roughly in order of setup effort:
+
+| Platform | Why you'd pick it |
+| --- | --- |
+| **Render** / **Railway** | Point at this repo, it detects the `Dockerfile`, builds, and gives you a URL with HTTPS - least setup for a small team. Free/cheap tiers exist but sleep on inactivity; a paid tier keeps it always-on. |
+| **Fly.io** | Similar simplicity with more control over region/scaling; needs their CLI once to `fly launch`. |
+| **A plain VPS** (DigitalOcean, a Hetzner box, EC2) | Full control, predictable flat cost, but you own patching/updates/TLS (`docker run` behind Caddy or nginx for free auto-HTTPS is the least-effort combo). |
+| **Streamlit Community Cloud** | Purpose-built for Streamlit apps and genuinely the least effort of all, but requires a public GitHub repo (or their paid tier for private) and gives you the least infrastructure control. |
+
+Whichever you pick, set `DEEPSEEK_API_KEY` as a platform secret (never
+commit it) if you want AI features on for every visitor rather than
+requiring each person to supply their own key.
 
 **Configuration knobs** (all optional; the tool runs with sane defaults if
 none are set):
