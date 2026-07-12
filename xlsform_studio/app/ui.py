@@ -2,28 +2,27 @@
 
 Purpose
 -------
-A local web UI to upload a questionnaire, pick a target platform
-(KoboToolbox / SurveyCTO / ODK), generate a platform-tailored XLSForm and
-download the full output package.
+A web UI to upload a questionnaire, pick a target platform
+(KoboToolbox / SurveyCTO / ODK), have the AI draft a platform-tailored
+XLSForm, review the draft, and download the full output package.
 
 The chosen platform genuinely changes the output: the form is validated
 against that platform's standards (from ``knowledge/platforms.yaml``) and the
 workbook is written in that platform's column dialect (e.g. SurveyCTO's
 ``relevance`` header).
 
-An optional AI-assist layer (DeepSeek) can be enabled in the sidebar for
-translation, skip-logic resolution, type reclassification and a quality
-review pass. It is off by default; the deterministic pipeline's behaviour is
-completely unchanged unless a user explicitly enables it AND a DeepSeek API
-key is configured.
+Authoring is AI-first: the model (DeepSeek) drafts every field, so a
+``DEEPSEEK_API_KEY`` is required and generation is blocked without one. The
+sidebar also exposes optional enrichment passes (translation, quality
+review, narrative, advisory suggestions) that refine the authored draft.
 
 Run
 ---
     streamlit run xlsform_studio/app/ui.py
 
-The UI is a thin layer over :class:`Workflow`; all deterministic logic lives
-in the rule engine, and all AI logic lives in the ``ai`` package - the
-interface itself adds no intelligence of its own.
+The UI is a thin layer over :class:`Workflow`; the AI authors the form and
+the deterministic rules enforce standards and validate - the interface
+itself adds no intelligence of its own.
 """
 
 from __future__ import annotations
@@ -178,7 +177,8 @@ def _sidebar():
     with st.sidebar:
         st.markdown("### 🧩 XLSForm Studio")
         st.caption("Questionnaire → deployment-ready XLSForm. "
-                   "Runs fully offline by default; AI assist is optional.")
+                   "AI drafts the form; deterministic rules keep it "
+                   "on-standard. A DeepSeek API key is required.")
         st.divider()
 
         st.markdown("**1 · Upload your questionnaire**")
@@ -322,21 +322,27 @@ def _render_landing() -> None:
     st.markdown(
         "Turn **any questionnaire** — Word, Excel, PDF, CSV or plain text — "
         "into a validated, deployment-ready **XLSForm** for KoboToolbox, "
-        "SurveyCTO, ODK, Ona or CommCare.")
+        "SurveyCTO, ODK, Ona or CommCare. **AI drafts the form; you review "
+        "it; deterministic rules keep it on-standard.**")
 
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown("#### 📄 → 📋 Parse")
         st.caption("Sections, questions, answer options and skip rules are "
-                   "extracted automatically from your document.")
+                   "extracted from your document into the platform scaffold.")
     with c2:
-        st.markdown("#### ⚙️ Compile")
-        st.caption("Deterministic rules assign field types, clean variable "
-                   "names, skip logic, validation constraints and calculations.")
+        st.markdown("#### 🤖 Draft with AI")
+        st.caption("The AI authors every field — types, names, labels, hints, "
+                   "skip logic, constraints, calculations and choices — for "
+                   "you to review and edit.")
     with c3:
-        st.markdown("#### ✅ Validate")
-        st.caption("Checked against the XLSForm spec, your chosen platform's "
-                   "standards, and the actual ODK/Kobo engine (pyxform).")
+        st.markdown("#### ✅ Enforce & validate")
+        st.caption("Deterministic rules check the draft against the XLSForm "
+                   "spec, your platform's standards, and the real ODK/Kobo "
+                   "engine (pyxform).")
+
+    st.info("Authoring uses AI, so a **DeepSeek API key is required** — add it "
+            "under **4 · 🤖 AI engine** in the sidebar.", icon="🔑")
 
     st.divider()
     st.markdown("##### Try it with a sample questionnaire")
@@ -404,8 +410,9 @@ def _render_result(result, target: str) -> None:
 
     # --- headline ----------------------------------------------------------
     if report.is_valid:
-        st.success(f"**{qn.settings.form_title}** compiled and validated — "
-                   f"ready to upload to **{label}**.", icon="✅")
+        st.success(f"**{qn.settings.form_title}** drafted and validated — "
+                   f"ready to upload to **{label}** once you've reviewed it.",
+                   icon="✅")
     else:
         st.error(f"**{qn.settings.form_title}** was generated, but has "
                  f"**{len(report.errors)} blocking issue(s)** for {label}. "
@@ -428,10 +435,12 @@ def _render_result(result, target: str) -> None:
     if report.deep_ran:
         st.caption("Deep check: this form was converted by pyxform — the same "
                    "engine ODK and KoboToolbox run — as part of validation.")
+    st.info("🤖 This form was **drafted by AI** — every type, name, label, "
+            "skip condition, constraint and choice list. Review the draft "
+            "below and edit anything before you deploy.", icon="🤖")
     if result.ai_ran:
-        st.caption("🤖 AI assist ran on this form — review any AI-suggested "
-                   "changes (marked in the assumption log and findings below) "
-                   "before deploying.")
+        st.caption("Optional AI enrichment passes also ran (marked in the "
+                   "assumption log and findings below).")
 
     _render_review_table(result)
     _render_ai_suggestions(result, target)
@@ -699,9 +708,9 @@ _DECISION_BADGE = {"high": "🟢 High", "medium": "🟡 Medium", "low": "🔴 Lo
 
 
 def _render_review_table(result) -> None:
-    """The reviewable-parsing panel: every heuristic type / choice-list /
-    relevance / constraint decision the engine made, shown with its
-    confidence, editable and approvable before export.
+    """The AI-draft review panel: every type / choice-list / relevance /
+    constraint the AI authored, shown with its confidence, editable and
+    approvable before export.
 
     Nothing here has been applied — like the AI suggestions panel below
     it, the download buttons always serve the current, human-reviewed
@@ -712,20 +721,19 @@ def _render_review_table(result) -> None:
     if not rows:
         return
     attention = [r for r in rows if r.needs_attention]
-    title = f"🧐 Review parser decisions ({len(rows)})"
+    title = f"🧐 Review the AI draft ({len(rows)})"
     if attention:
         title += f" — {len(attention)} need your input"
     with st.expander(title, expanded=bool(attention)):
         st.caption("Every question type, choice list, relevance condition "
-                   "and constraint the tool inferred, with how sure it is. "
+                   "and constraint the AI authored, with how confident it is. "
                    "Edit a value, or leave it as shown and tick Reviewed to "
                    "approve it, then apply — the XLSForm is rebuilt with "
                    "your reviewed values.")
         if attention:
-            st.warning(f"{len(attention)} item(s) could not be inferred at "
-                      "all (e.g. an ambiguous skip condition) and were left "
-                      "blank on purpose rather than guessed at — fill them "
-                      "in below.")
+            st.warning(f"{len(attention)} item(s) the AI could not settle "
+                      "(e.g. an ambiguous skip condition) were left blank on "
+                      "purpose rather than guessed at — fill them in below.")
         edited = {}
         for i, row in enumerate(rows):
             badge = _DECISION_BADGE.get(row.confidence, row.confidence)
