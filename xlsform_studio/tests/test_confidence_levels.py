@@ -171,6 +171,16 @@ def test_check_two_tuple_stays_backward_compatible_for_union():
     assert unknown == []
 
 
+def test_union_of_predicated_paths_is_not_fully_checked():
+    """A union of two predicated paths (each side already exercises the
+    attribute-axis/predicate grammar) is valid and must not error."""
+    v = ExpressionValidator()
+    error, unknown, unsupported = v.check_detailed(
+        "item[@type='urban'] | item[@type='rural']")
+    assert error is None
+    assert unsupported
+
+
 # --- pyxform (real toolchain): "confirmed" or "unsupported" ----------------
 def test_pyxform_success_is_confirmed():
     v = PyxformValidator()
