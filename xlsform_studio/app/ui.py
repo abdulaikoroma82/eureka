@@ -55,7 +55,7 @@ from xlsform_studio.ai.config import AIConfig
 from xlsform_studio.app.artifacts import ArtifactBuilder
 from xlsform_studio.app.config import DEPLOYMENT_TARGETS, EXAMPLES_DIR
 from xlsform_studio.app.logic_flow import LogicFlowBuilder
-from xlsform_studio.app.review import ReviewRow
+from xlsform_studio.app.review import build_full_review
 from xlsform_studio.app.workflow import STEP_LABELS, Workflow
 from xlsform_studio.engine.knowledge_base import KnowledgeBase
 from xlsform_studio.logging_config import configure_logging
@@ -708,51 +708,70 @@ _DECISION_BADGE = {"high": "🟢 High", "medium": "🟡 Medium", "low": "🔴 Lo
 
 
 def _render_review_table(result) -> None:
-    """The AI-draft review panel: every type / choice-list / relevance /
-    constraint the AI authored, shown with its confidence, editable and
-    approvable before export.
+    """The full AI-draft editor: every authored survey-row field, grouped by
+    question, editable before export.
 
-    Nothing here has been applied — like the AI suggestions panel below
-    it, the download buttons always serve the current, human-reviewed
-    state, and an unedited row still requires an explicit "Reviewed" tick
-    to count as approved.
+    Every field is pre-filled with what the AI wrote. Edit anything and click
+    Apply — only changed fields are written, the rest stand as the AI's draft.
+    Renaming a variable rewrites its ``${references}`` automatically. Nothing
+    is written until you Apply; the downloads always serve the current state.
     """
-    rows: list[ReviewRow] = result.review_table
-    if not rows:
+    reviews = build_full_review(result.questionnaire)
+    if not reviews:
         return
-    attention = [r for r in rows if r.needs_attention]
-    title = f"🧐 Review the AI draft ({len(rows)})"
-    if attention:
-        title += f" — {len(attention)} need your input"
-    with st.expander(title, expanded=bool(attention)):
-        st.caption("Every question type, choice list, relevance condition "
-                   "and constraint the AI authored, with how confident it is. "
-                   "Edit a value, or leave it as shown and tick Reviewed to "
-                   "approve it, then apply — the XLSForm is rebuilt with "
-                   "your reviewed values.")
-        if attention:
-            st.warning(f"{len(attention)} item(s) the AI could not settle "
-                      "(e.g. an ambiguous skip condition) were left blank on "
-                      "purpose rather than guessed at — fill them in below.")
-        edited = {}
-        for i, row in enumerate(rows):
-            badge = _DECISION_BADGE.get(row.confidence, row.confidence)
-            flag = " 🛑 needs input" if row.needs_attention else ""
-            st.markdown(f"**{row.field_label}** — `{row.question}` "
-                       f"({row.label}){flag}  {badge}")
-            new_value = st.text_input(
-                "Value", value=row.value, key=f"review_val_{i}",
-                label_visibility="collapsed")
-            st.caption(f"💬 {row.reason}")
-            if st.checkbox("Reviewed", key=f"review_ok_{i}"):
-                edited[(row.question, row.field_name)] = new_value
-            st.divider()
+    attention = [r for r in reviews if r.needs_attention]
 
-        if st.button(f"✅ Apply {len(edited)} reviewed item(s) and rebuild",
-                     disabled=not edited, use_container_width=True):
-            Workflow(knowledge=_kb()).apply_review_edits(result, edited)
-            st.session_state["last_result"] = result
-            st.rerun()
+    st.markdown(f"##### 🧐 Review the AI draft — {len(reviews)} question(s)")
+    st.caption("The AI authored every field below. Edit anything; only changed "
+               "fields are applied, and the XLSForm is rebuilt from your "
+               "reviewed version. Renaming a variable updates its references "
+               "automatically.")
+    if attention:
+        st.warning(f"{len(attention)} question(s) have a field the AI couldn't "
+                   "settle (e.g. an ambiguous skip condition), left blank on "
+                   "purpose rather than guessed — they're expanded below for "
+                   "you to fill in.")
+
+    # Bump on each Apply so every widget re-initialises from the rebuilt
+    # values (Streamlit otherwise keeps stale keyed widget state).
+    nonce = st.session_state.get("review_nonce", 0)
+    edits: dict = {}
+    for qi, qr in enumerate(reviews):
+        header = f"`{qr.name}` — {qr.label or '(no label)'}"
+        if qr.needs_attention:
+            header = "🛑 " + header
+        with st.expander(header, expanded=qr.needs_attention):
+            for fe in qr.fields:
+                key = f"rev_{nonce}_{qi}_{fe.field_name}"
+                badge = ("  " + _DECISION_BADGE.get(fe.confidence, fe.confidence)
+                         if fe.confidence else "")
+                flag = " 🛑" if fe.needs_attention else ""
+                lbl = f"{fe.label}{flag}{badge}"
+                if fe.kind == "bool":
+                    checked = st.checkbox(lbl, value=(fe.value == "yes"),
+                                          key=key, help=fe.help or None)
+                    new_value = "yes" if checked else "no"
+                elif fe.kind == "long":
+                    new_value = st.text_area(lbl, value=fe.value, key=key,
+                                             help=fe.help or None, height=68)
+                else:
+                    new_value = st.text_input(lbl, value=fe.value, key=key,
+                                              help=fe.help or None)
+                if fe.reason:
+                    st.caption(f"💬 {fe.reason}")
+                if str(new_value) != str(fe.value):
+                    edits[(qr.name, fe.field_name)] = new_value
+
+    changed = len(edits)
+    label = (f"✅ Apply {changed} change(s) & rebuild" if changed
+             else "✅ Apply & rebuild (no changes yet)")
+    if st.button(label, disabled=not changed, use_container_width=True,
+                 type="primary"):
+        Workflow(knowledge=_kb()).apply_review_edits(result, edits)
+        st.session_state["last_result"] = result
+        st.session_state["review_nonce"] = nonce + 1
+        st.success(f"Applied {changed} change(s) and rebuilt the XLSForm.")
+        st.rerun()
 
 
 def _render_ai_suggestions(result, target: str) -> None:

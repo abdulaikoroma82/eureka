@@ -4,7 +4,8 @@ onto the form."""
 
 import pytest
 
-from xlsform_studio.app.review import apply_review_edits, build_review_table
+from xlsform_studio.app.review import (apply_review_edits, build_full_review,
+                                        build_review_table)
 from xlsform_studio.app.workflow import Workflow
 from xlsform_studio.engine.constraint_engine import ConstraintEngine
 from xlsform_studio.engine.logic_engine import LogicEngine
@@ -172,6 +173,102 @@ def test_apply_review_edits_unknown_question_is_noted_not_raised():
     qn = _compiled_form()
     notes = apply_review_edits(qn, {("ghost", "type"): "integer"})
     assert any("no longer exists" in n for n in notes)
+
+
+# --- build_full_review (the whole-draft editor) --------------------------------
+def test_full_review_covers_every_editable_field():
+    q = Question(name="age", label="Age", xlsform_type="integer", required=True)
+    q.add_decision("type", "integer", "high", "kw match")
+    reviews = build_full_review(Questionnaire(questions=[q]))
+    assert len(reviews) == 1
+    names = {f.field_name for f in reviews[0].fields}
+    # content + decision fields all present; choice_list absent (not a select)
+    assert {"name", "label", "hint", "required", "type", "relevant",
+            "constraint", "constraint_message", "calculation", "appearance",
+            "default"} <= names
+    assert "choice_list" not in names
+
+
+def test_full_review_shows_choice_list_for_selects_only():
+    sel = Question(name="sex", label="Sex", xlsform_type="select_one sexes",
+                   list_name="sexes")
+    txt = Question(name="note", label="Note", xlsform_type="text")
+    reviews = build_full_review(Questionnaire(questions=[sel, txt]))
+    by_name = {r.name: r for r in reviews}
+    assert any(f.field_name == "choice_list" for f in by_name["sex"].fields)
+    assert not any(f.field_name == "choice_list" for f in by_name["note"].fields)
+
+
+def test_full_review_marks_bool_and_long_field_kinds():
+    q = Question(name="age", label="Age", xlsform_type="integer")
+    fields = {f.field_name: f for f in build_full_review(
+        Questionnaire(questions=[q]))[0].fields}
+    assert fields["required"].kind == "bool"
+    assert fields["label"].kind == "long"
+    assert fields["type"].kind == "text"
+
+
+def test_full_review_surfaces_needs_attention_question_first():
+    ok = Question(name="age", xlsform_type="integer", label="Age")
+    ok.add_decision("type", "integer", "high", "ok")
+    blank = Question(name="x", xlsform_type="text", label="X")
+    blank.add_decision("relevant", "", "low", "ambiguous skip; left blank")
+    reviews = build_full_review(Questionnaire(questions=[ok, blank]))
+    assert reviews[0].name == "x"
+    assert reviews[0].needs_attention
+
+
+def test_full_review_edit_label_hint_required():
+    q = Question(name="q1", label="Old", hint="", xlsform_type="text",
+                 required=False)
+    qn = Questionnaire(questions=[q])
+    apply_review_edits(qn, {("q1", "label"): "New label",
+                            ("q1", "hint"): "A hint",
+                            ("q1", "required"): "yes"})
+    assert q.label == "New label"
+    assert q.hint == "A hint"
+    assert q.required is True
+
+
+def test_apply_review_rename_updates_references():
+    q1 = Question(name="age", label="Age", xlsform_type="integer")
+    q2 = Question(name="adult", label="Adult?", xlsform_type="text",
+                  relevant="${age} >= 18", calculation="${age} * 12")
+    qn = Questionnaire(questions=[q1, q2])
+    notes = apply_review_edits(qn, {("age", "name"): "respondent_age"})
+    assert q1.name == "respondent_age"
+    assert q2.relevant == "${respondent_age} >= 18"
+    assert q2.calculation == "${respondent_age} * 12"
+    assert any("renamed" in n for n in notes)
+
+
+def test_apply_review_rename_and_edit_same_question_in_one_batch():
+    """Renaming a question and editing another of its fields in the same
+    batch must both land - the rename must not orphan the other edit."""
+    q0 = Question(name="age", label="Age", xlsform_type="integer")
+    q1 = Question(name="adult", xlsform_type="text", relevant="${age} >= 18")
+    qn = Questionnaire(questions=[q0, q1])
+    apply_review_edits(qn, {("age", "name"): "respondent_age",
+                            ("age", "label"): "Age in years"})
+    assert q0.name == "respondent_age"
+    assert q0.label == "Age in years"
+    assert q1.relevant == "${respondent_age} >= 18"
+
+
+def test_apply_review_rename_sanitises_free_text():
+    q = Question(name="q1", label="Q", xlsform_type="text")
+    qn = Questionnaire(questions=[q])
+    apply_review_edits(qn, {("q1", "name"): "Household Size (persons)"})
+    assert q.name == "household_size_persons"
+
+
+def test_apply_review_rename_rejects_duplicate():
+    q1 = Question(name="age", xlsform_type="integer")
+    q2 = Question(name="sex", xlsform_type="text")
+    qn = Questionnaire(questions=[q1, q2])
+    notes = apply_review_edits(qn, {("sex", "name"): "age"})
+    assert q2.name == "sex"  # unchanged
+    assert any("not renamed" in n for n in notes)
 
 
 # --- Workflow integration --------------------------------------------------------
