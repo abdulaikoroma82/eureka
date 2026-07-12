@@ -102,6 +102,13 @@ def build_parser() -> argparse.ArgumentParser:
                              "simulation in the terminal: answer questions and "
                              "watch skips, constraints, calculations and "
                              "repeats fire in real time")
+    parser.add_argument("--from-model", metavar="MODEL_JSON",
+                        help="Round-trip re-import: treat INPUT as an edited "
+                             "XLSForm and reconcile it against this model "
+                             "snapshot (the '*_model.json' sidecar from the "
+                             "run that produced it). Preserves per-field "
+                             "confidence and the assumptions log for fields "
+                             "you didn't change; requires no API key")
 
     ai = parser.add_argument_group(
         "optional AI enrichment (DeepSeek)",
@@ -215,26 +222,54 @@ def main(argv=None) -> int:
                              survey_context=args.ai_context,
                              objectives=objectives)
 
-    if authoring_mode != "deterministic" and ai_client is None:
+    # Round-trip re-import authors nothing (the model came from a prior run),
+    # so it never needs a key - even though enrichment still may.
+    if not args.from_model and authoring_mode != "deterministic" \
+            and ai_client is None:
         print("error: a DeepSeek API key is required (set DEEPSEEK_API_KEY). "
               "XLSForm Studio drafts every form with AI and has no offline "
               "authoring mode.", file=sys.stderr)
         return 2
 
     workflow = Workflow(knowledge=knowledge, ai_client=ai_client)
-    print(f"Processing: {input_path}")
-    result = workflow.run_from_file(
-        input_path,
-        form_title=args.title,
-        form_id=args.form_id,
-        version=args.version,
-        target=args.target,
-        output_dir=args.output,
-        ai_config=ai_config,
-        survey_context=args.ai_context,
-        path_analysis=not args.no_path_analysis,
-        progress=None if args.quiet else _progress,
-    )
+    if args.from_model:
+        model_path = Path(args.from_model)
+        if not model_path.exists():
+            print(f"error: model snapshot not found: {model_path}",
+                  file=sys.stderr)
+            return 2
+        print(f"Re-importing edited XLSForm: {input_path}")
+        print(f"Reconciling against model:   {model_path}")
+        try:
+            result = workflow.run_roundtrip(
+                input_path, model_path,
+                form_title=args.title,
+                form_id=args.form_id,
+                version=args.version,
+                target=args.target,
+                output_dir=args.output,
+                ai_config=ai_config,
+                survey_context=args.ai_context,
+                path_analysis=not args.no_path_analysis,
+                progress=None if args.quiet else _progress,
+            )
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+    else:
+        print(f"Processing: {input_path}")
+        result = workflow.run_from_file(
+            input_path,
+            form_title=args.title,
+            form_id=args.form_id,
+            version=args.version,
+            target=args.target,
+            output_dir=args.output,
+            ai_config=ai_config,
+            survey_context=args.ai_context,
+            path_analysis=not args.no_path_analysis,
+            progress=None if args.quiet else _progress,
+        )
 
     report = result.report
     print()

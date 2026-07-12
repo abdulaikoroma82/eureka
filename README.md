@@ -669,6 +669,10 @@ Each run writes a timestamped folder under `output/` containing:
    draft M&E reporting framework (indicator, source questions, aggregation
    level, means of verification), also shown in the Quality tab; source
    question references are likewise verified to exist
+16. `*_model.json` — the **provenance sidecar**: the complete internal model,
+   including every field's confidence and the assumptions behind it. This is
+   what the workbook itself can't carry, and it's what makes round-trip
+   editing possible (see below). Written on every run.
 
 Every document above is authored **deterministically** and owns every fact
 (variable names, types, logic, counts, checklist tiers). With the optional
@@ -690,6 +694,41 @@ inheriting an undocumented form or producing stakeholder-readable copies.
 ```bash
 python -m xlsform_studio.app.main deployed_form.xlsx
 ```
+
+### Round-trip editing (edit the XLSForm, keep the provenance)
+
+Reverse engineering regenerates docs from *any* XLSForm, but a plain
+re-import starts from zero — the workbook has no column for "how sure was the
+tool about this field, and why," so that provenance is lost. **Round-trip
+editing** fixes that: export a form, edit the `.xlsx` in Excel or a
+platform's form builder, and re-import it *against the run that produced it*,
+keeping the confidence and assumptions for everything you didn't touch.
+
+Every run writes a **provenance sidecar** (`*_model.json`) — the complete
+internal model, decisions and all. Re-import an edited workbook by pointing
+`--from-model` at that sidecar:
+
+```bash
+python -m xlsform_studio.app.main household_edited.xlsx \
+    --from-model output/household_20260101_090000/household_model.json
+```
+
+The edited form is parsed deterministically — **never re-drafted by AI** —
+and reconciled field by field against the snapshot:
+
+* a field you **didn't change** keeps its original confidence and reason;
+* a field you **did change** becomes a fresh, high-confidence *"reviewed by a
+  human"* decision — exactly how an edit made in the in-app review panel is
+  recorded, so an edit in Excel and an edit in the UI are indistinguishable
+  downstream;
+* a **new** question is flagged low-confidence for review, and a **removed**
+  one is logged.
+
+The full documentation package (and a refreshed sidecar) is then rebuilt from
+the merged model. Because nothing is authored, round-trip re-import needs **no
+API key**. In library code the same flow is
+`Workflow().run_roundtrip(edited_path, model_json_path)`. This is what makes
+XLSForm Studio a *canonical editor* for a form, not just a one-shot generator.
 
 ---
 

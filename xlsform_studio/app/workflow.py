@@ -78,7 +78,10 @@ from ..xlsform.exporter import XLSFormExporter
 from .artifacts import ArtifactBuilder
 from .config import CONFIG
 from .logic_flow import LogicFlowBuilder
+from .provenance import (SIDECAR_SUFFIX, read_model_sidecar,
+                         write_model_sidecar)
 from .review import ReviewRow, apply_review_edits, build_review_table
+from .roundtrip import reconcile
 from .verification_checklist import VerificationChecklistBuilder
 
 # Step labels surfaced to the UI. In the AI-first pipeline the AI author
@@ -96,7 +99,10 @@ STEP_LABELS = [
 #: and drafts every field with the model; "deterministic" runs the legacy
 #: rule-engine compiler instead and exists only as a test/standards seam
 #: (the shipped UI and CLI never select it, so the product has no offline
-#: authoring fallback). Overridable per-run or via ``XLSFS_AUTHORING``.
+#: authoring fallback); "import" skips authoring entirely and treats the
+#: model as already authoritative - used by round-trip re-import, where the
+#: form was authored on a previous run and only edited since. Overridable
+#: per-run or via ``XLSFS_AUTHORING``.
 DEFAULT_AUTHORING = "ai"
 
 ProgressCallback = Callable[[str, str], None]  # (step_label, status)
@@ -185,6 +191,39 @@ class Workflow:
     def run(self, questionnaire: Questionnaire, **kwargs) -> WorkflowResult:
         return self._run(questionnaire, **kwargs)
 
+    def run_roundtrip(self, edited_path: Union[str, Path],
+                      prior_model: Union[str, Path, Questionnaire],
+                      **kwargs) -> WorkflowResult:
+        """Re-import an edited XLSForm and rebuild, preserving provenance.
+
+        *edited_path* is an XLSForm someone exported from a previous run and
+        edited since; *prior_model* is that run's provenance sidecar (a
+        ``*_model.json`` path) or the :class:`Questionnaire` itself. The
+        edited form is parsed deterministically - **never** re-authored by
+        AI - and reconciled field-by-field against the prior model
+        (:func:`~xlsform_studio.app.roundtrip.reconcile`): unchanged fields
+        keep their confidence, changed fields become high-confidence human
+        reviews, new questions are flagged. The full documentation package
+        (and a refreshed sidecar) is then rebuilt from the merged model.
+        """
+        progress = kwargs.get("progress")
+        self._emit(progress, STEP_LABELS[0], "running")
+        edited = parse_file(edited_path)
+        prior = (prior_model if isinstance(prior_model, Questionnaire)
+                 else read_model_sidecar(prior_model))
+        merged, notes = reconcile(edited, prior)
+        # A re-imported form carries its own settings; keep the prior form's
+        # identity when the edit didn't set one.
+        if not merged.settings.form_id:
+            merged.settings.form_id = prior.settings.form_id
+        if merged.settings.form_title in ("", "Untitled Form"):
+            merged.settings.form_title = prior.settings.form_title
+        self._emit(progress, STEP_LABELS[0], "done")
+        kwargs.setdefault("source_name", Path(edited_path).name)
+        kwargs.pop("authoring", None)          # import mode is mandatory here
+        return self._run(merged, authoring="import", extra_notes=notes,
+                         **kwargs)
+
     # ------------------------------------------------------------------
     def _run(self, questionnaire: Questionnaire, *,
              form_title: Optional[str] = None,
@@ -200,6 +239,7 @@ class Workflow:
              authoring: Optional[str] = None,
              survey_context: str = "",
              path_analysis: bool = True,
+             extra_notes: Optional[List[str]] = None,
              progress: Optional[ProgressCallback] = None) -> WorkflowResult:
 
         # Apply overrides.
@@ -226,11 +266,19 @@ class Workflow:
         # shipped UI and CLI never select it, so a run without a configured
         # DeepSeek key fails loudly rather than silently degrading.
         self._emit(progress, STEP_LABELS[1], "running")
-        if mode == "deterministic":
+        if mode == "import":
+            # Round-trip re-import: the form was authored on a previous run
+            # and only edited since, so the incoming model is authoritative -
+            # re-authoring it would overwrite the human's edits. Any
+            # reconciliation notes are supplied via ``extra_notes``.
+            notes = []
+        elif mode == "deterministic":
             questionnaire, notes = self.engine.compile(questionnaire)
         else:
             notes = AIFormAuthor(client, self.kb).author(
                 questionnaire, target=target, survey_context=survey_context)
+        if extra_notes:
+            notes = list(extra_notes) + notes
         self._emit(progress, STEP_LABELS[1], "done")
 
         # --- deterministic standards enforcement -----------------------
@@ -464,6 +512,12 @@ class Workflow:
         outputs["version_history"] = self.artifacts.append_version_history(
             out_dir / "version_history.json", qn, source_name,
             report.is_valid, len(report.errors), target=target or "")
+        # 8. Model snapshot (provenance sidecar): the complete model incl.
+        #    per-field confidence and the assumptions log, so an edited
+        #    XLSForm can later be re-imported without losing either (see
+        #    Workflow.run_roundtrip).
+        outputs["model_snapshot"] = write_model_sidecar(
+            qn, folder / f"{base}{SIDECAR_SUFFIX}")
 
         outputs["folder"] = folder
         return outputs

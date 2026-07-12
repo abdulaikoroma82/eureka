@@ -45,6 +45,7 @@ Legend: ✅ shipped · 🚫 descoped
 | A8 | Indicator Mapping Engine | ✅ | `ai/indicators.py` → `indicator_matrix.md` + Quality tab; question refs verified deterministically |
 | A14 | Semantic Logic Review | ✅ | D5 owns decidable defects; `ai/quality_reviewer.py` category 5 reviews conceptual pathways |
 | D1 | Reverse Engineering Engine | ✅ | `parsers/excel_parser.py` reads XLSForms (incl. SurveyCTO dialect); importing one regenerates the full documentation package; printable `*_survey_instrument.docx` in every package |
+| D11 | Round-trip editing | ✅ | `app/provenance.py` (model sidecar `*_model.json`, written every run) + `app/roundtrip.py` (field-level reconcile) + `Workflow.run_roundtrip` / CLI `--from-model`; re-imports an edited XLSForm without losing per-field confidence or the assumptions log, never re-authoring — makes the tool a canonical editor, not just a generator |
 | A11 | Domain Plausibility Review | 🚫 | descoped — see *Descoped items* below |
 | D2 | Visual mapper extensions (SVG/PNG) | 🚫 | descoped — see *Descoped items* below |
 
