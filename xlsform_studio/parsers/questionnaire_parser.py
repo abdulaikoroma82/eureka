@@ -56,6 +56,13 @@ _OPTION_BULLET = re.compile(
 # "code=Label" strings; the rule engine materialises the code as the choice
 # name and the right-hand side as the label.
 _CODED_OPTION = re.compile(r"^\s*([A-Za-z0-9_]{1,10})\s*=\s*(.{1,80})$")
+# Checkbox/circle glyphs laid out inline on ONE physical line rather than
+# one bullet per line - e.g. a Word paragraph reading "☐ Option A   ☐
+# Option B   ☐ Option C" (common where a form author placed checkboxes
+# side by side instead of stacking them). Restricted to unambiguous
+# checkbox-style marks, not "-"/"*"/"o", which are common in running prose
+# and would false-positive on ordinary sentences.
+_INLINE_BULLET = re.compile(r"[☐❏□▢◻○◯]|\[\s*\]|\(\s*\)")
 # Required markers survey designers commonly use: a trailing asterisk or an
 # explicit "(required)" tag on the question text.
 _REQUIRED_MARK = re.compile(r"\s*(\*+|\(\s*required\s*\))\s*$", re.IGNORECASE)
@@ -139,6 +146,15 @@ class QuestionnaireParser:
             if _SKIP_KW.match(line):
                 if current is not None:
                     current.logic = (current.logic + " " + line).strip() if current.logic else line
+                continue
+
+            # 3b. Multiple checkbox options laid out on one physical line
+            #     ("☐ Option A   ☐ Option B   ☐ Option C") - split into
+            #     separate choices on the current question instead of
+            #     letting the whole crammed line become (or get merged
+            #     into) a bogus question.
+            if current is not None and self._is_multi_bullet_line(line):
+                current.raw_choices.extend(self._split_multi_bullet(line))
                 continue
 
             # 4. Bulleted / lettered option line.  A *numbered* marker is
@@ -325,6 +341,20 @@ class QuestionnaireParser:
         if m:
             return m.group(1).strip()
         return None
+
+    @staticmethod
+    def _is_multi_bullet_line(line: str) -> bool:
+        """True when a line contains 2+ checkbox-style glyphs, meaning
+        several options are laid out inline rather than one per line."""
+        return len(_INLINE_BULLET.findall(line)) >= 2
+
+    @staticmethod
+    def _split_multi_bullet(line: str) -> List[str]:
+        """Split a line of inline checkbox options into separate choices,
+        e.g. "- ☐ A   ☐ B   ☐ C" -> ["A", "B", "C"]."""
+        parts = _INLINE_BULLET.split(line)
+        return [p.strip(" -:–—\t") for p in parts
+                if p.strip(" -:–—\t")]
 
     def _looks_like_option(self, text: str, current: Question) -> bool:
         # Options are generally short and not themselves questions.

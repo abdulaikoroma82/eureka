@@ -101,6 +101,43 @@ def test_required_marker_on_numbered_question_line():
     assert q2.raw_choices == ["Yes", "No"]
 
 
+def test_inline_checkbox_options_split_into_separate_choices():
+    """Regression: a Word-style line with several checkboxes laid out
+    side by side ('- ☐ A   ☐ B   ☐ C') must split into separate choices
+    on the preceding question, not become its own bogus question (too
+    long to look like one option) or get swallowed as a single
+    combined choice string (short enough to pass the option-length
+    check but never split)."""
+    text = ("Where are monthly reports recorded?\n"
+            "- ☐ Into main facility register  ☐ Directly onto monthly "
+            "report form  ☐ Not transmitted\n"
+            "Are you submitting monthly reports? (Ask to see copies)\n"
+            "- ☐ Always on time  ☐ Sometimes delayed  ☐ Rarely submit  "
+            "☐ Not submitting\n")
+    qn = QuestionnaireParser().parse_text(text)
+    assert len(qn.questions) == 2
+    q1, q2 = qn.questions
+    assert q1.raw_label == "Where are monthly reports recorded?"
+    assert q1.raw_choices == ["Into main facility register",
+                              "Directly onto monthly report form",
+                              "Not transmitted"]
+    assert q2.raw_choices == ["Always on time", "Sometimes delayed",
+                              "Rarely submit", "Not submitting"]
+
+
+def test_tick_any_that_apply_is_recognised_as_multiselect():
+    """'Tick any that apply' (not just 'tick/select ALL that apply') must
+    still classify as select_multiple."""
+    from xlsform_studio.engine.rule_engine import RuleEngine
+
+    text = ("To whom do you submit the report? (Tick any that apply)\n"
+            "- ☐ Direct to DHMT  ☐ To Chiefdom Supervisor  "
+            "☐ To partner organization(s)\n")
+    qn = QuestionnaireParser().parse_text(text)
+    qn, _ = RuleEngine().compile(qn)
+    assert qn.questions[0].base_type == "select_multiple"
+
+
 # --- excel design grid ------------------------------------------------------
 def test_excel_design_grid(tmp_path):
     df = pd.DataFrame([

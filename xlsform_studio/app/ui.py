@@ -521,7 +521,7 @@ def _render_simulator(result) -> None:
     constraints, calculations and repeats fire live. The interview state
     lives in the session, keyed to the current form, so Streamlit's reruns
     don't reset it."""
-    from .simulator import Interview
+    from xlsform_studio.app.simulator import Interview
 
     qn = result.questionnaire
     key = (qn.settings.form_id, len(qn.questions),

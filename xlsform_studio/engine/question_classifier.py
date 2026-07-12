@@ -44,10 +44,14 @@ from typing import List, Optional
 from ..models import Question
 from .knowledge_base import KnowledgeBase
 
-# Cues that a select question accepts more than one answer.
+# Cues that a select question accepts more than one answer. Covers both
+# "...all..." phrasing ("select all that apply") and the equally common
+# "...any..." phrasing ("tick any that apply") - real-world forms use
+# both interchangeably for the same select_multiple intent.
 _MULTI_CUES = [
-    "select all", "select all that apply", "check all", "mark all",
-    "multiple answers", "all that apply", "tick all",
+    "select all", "select any", "check all", "check any", "tick all",
+    "tick any", "mark all", "mark any", "choose all", "choose any",
+    "multiple answers", "all that apply", "any that apply",
 ]
 
 
