@@ -43,16 +43,6 @@ from ..models import Questionnaire
 from .logic_flow import LogicFlowBuilder
 
 
-def _ai_prose_block(text: str) -> List[str]:
-    """Markdown lines for an optional AI-written prose block, clearly
-    labelled so its provenance is never mistaken for a deterministic fact.
-    Returns ``[]`` when *text* is empty, so documents are unchanged offline."""
-    text = (text or "").strip()
-    if not text:
-        return []
-    return ["", f"> **AI-written.** {text}"]
-
-
 class ArtifactBuilder:
     """Build the non-XLSForm deliverables."""
 
@@ -126,11 +116,9 @@ class ArtifactBuilder:
     # ------------------------------------------------------------------
     # Logic map
     # ------------------------------------------------------------------
-    def logic_map_markdown(self, questionnaire: Questionnaire,
-                           overview: str = "") -> str:
+    def logic_map_markdown(self, questionnaire: Questionnaire) -> str:
         lines = ["# XLSForm Studio - Logic Map", ""]
         lines.append(f"**Form:** {questionnaire.settings.form_title}  ")
-        lines += _ai_prose_block(overview)
         lines.append("")
 
         rel = [q for q in questionnaire.questions if q.relevant]
@@ -214,13 +202,8 @@ class ArtifactBuilder:
     }
 
     def enumerator_guide_markdown(self, questionnaire: Questionnaire,
-                                  duration=None, intro: str = "") -> str:
-        """Field-ready, question-by-question guide for enumerators.
-
-        *intro* is optional AI-written orientation prose (the "documents"
-        feature); it is slotted in under a labelled heading and never
-        replaces any deterministic content.
-        """
+                                  duration=None) -> str:
+        """Field-ready, question-by-question guide for enumerators."""
         from .logic_flow import LogicFlowBuilder
 
         flow = LogicFlowBuilder()
@@ -231,7 +214,6 @@ class ArtifactBuilder:
         if duration is not None:
             lines.append(f"**Expected interview length:** about "
                          f"{duration.typical_minutes:.0f} minutes  ")
-        lines += _ai_prose_block(intro)
         lines += ["",
                   "Ask the questions in order. A question marked *(skip "
                   "rule)* only appears when its condition is met - the "
@@ -292,23 +274,17 @@ class ArtifactBuilder:
         return path
 
     def collection_plan_markdown(self, questionnaire: Questionnaire,
-                                 duration=None, overview: str = "") -> str:
-        """Data-collection plan skeleton derived from the form structure.
-
-        *overview* is optional AI-written prose (the "documents" feature)
-        placed under the instrument-overview heading; the bullet facts below
-        it stay deterministic.
-        """
+                                 duration=None) -> str:
+        """Data-collection plan skeleton derived from the form structure."""
         s = questionnaire.settings
         real = [q for q in questionnaire.questions
                 if not q.is_structural and not q.is_calculate]
         lines = ["# Data Collection Plan", "",
                  f"**Survey:** {s.form_title}  ",
                  f"**Form id / version:** {s.form_id} / {s.version}  ", "",
-                 "## Instrument overview"]
-        lines += _ai_prose_block(overview)
-        lines += ["",
-                  f"- {len(real)} questions in "
+                 "## Instrument overview",
+                 "",
+                 f"- {len(real)} questions in "
                   f"{len({q.section for q in real if q.section}) or 1} "
                   f"section(s)"]
         if duration is not None:
@@ -363,7 +339,7 @@ class ArtifactBuilder:
 
     def write_survey_instrument_docx(self, questionnaire: Questionnaire,
                                      path: Union[str, Path],
-                                     duration=None, intro: str = "") -> Path:
+                                     duration=None) -> Path:
         """Printable survey instrument (DOCX) - the human questionnaire.
 
         The inverse of parsing (Module D1): sections as headings, numbered
@@ -371,9 +347,6 @@ class ArtifactBuilder:
         and skip rules written in plain words. Useful as a paper backup, a
         review copy for non-technical stakeholders, or documentation of an
         imported XLSForm.
-
-        *intro* is optional AI-written orientation prose (the "documents"
-        feature), added as a labelled italic paragraph under the title.
         """
         import docx
 
@@ -391,9 +364,6 @@ class ArtifactBuilder:
         if duration is not None:
             meta.add_run(f"    Estimated interview: "
                          f"~{duration.typical_minutes:.0f} minutes")
-        if intro.strip():
-            note = doc.add_paragraph(f"AI-written: {intro.strip()}")
-            note.runs[0].italic = True
         doc.add_paragraph(
             "Interviewer: ______________________    Date: ____ / ____ / ______"
             "    Respondent ID: ______________")

@@ -1,6 +1,6 @@
-"""Tests for the advisory AI features (grouping, rewording, choice ordering,
-naming), the shared AI-output validators, translation caching, logic-fallback
-confidence scores, and the accept/apply flow. Fully mocked - no network."""
+"""Tests for the advisory AI features (grouping, rewording, choice ordering),
+the shared AI-output validators, translation caching, and the accept/apply
+flow. Fully mocked - no network."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from xlsform_studio.ai.client import AIError, DeepSeekClient
 from xlsform_studio.ai.config import (AI_FEATURES, AIConfig,
                                          normalize_features)
 from xlsform_studio.ai.grouping import AIGroupingSuggester
-from xlsform_studio.ai.naming import AINamingSuggester
 from xlsform_studio.ai.pipeline import AIPipeline
 from xlsform_studio.ai.rewording import AIRewordingSuggester
 from xlsform_studio.ai.suggestions import AISuggestion, apply_suggestions
@@ -287,38 +286,6 @@ def test_choice_order_apply_reorders_list():
     assert any("reordering" in a for a in qn.questions[2].assumptions)
 
 
-# --- naming ---------------------------------------------------------------------
-def test_naming_produces_suggestion_deterministic_name_stays():
-    qn = _form()
-    reply = {"suggestions": [{"question_name": "occupation",
-                              "suggested_name": "main_occupation",
-                              "reason": "matches the label"}]}
-    notes, suggestions = AINamingSuggester(_client(reply)).suggest(qn)
-    assert len(suggestions) == 1
-    assert qn.questions[2].name == "occupation"   # deterministic name in use
-
-
-def test_naming_rejects_invalid_and_colliding_names():
-    qn = _form()
-    reply = {"suggestions": [
-        {"question_name": "occupation", "suggested_name": "1bad"},
-        {"question_name": "occupation", "suggested_name": "age"}]}
-    notes, suggestions = AINamingSuggester(_client(reply)).suggest(qn)
-    assert suggestions == []
-    assert sum("Rejected" in n for n in notes) == 2
-
-
-def test_naming_apply_renames_and_rewrites_references():
-    qn = _form()
-    sug = AISuggestion(kind="naming", target="resident",
-                       original="resident", suggested="is_resident",
-                       payload={"name": "is_resident"})
-    apply_suggestions(qn, [sug])
-    assert qn.questions[0].name == "is_resident"
-    # the ${resident} reference in question 2's relevant followed the rename
-    assert qn.questions[1].relevant == "${is_resident}='1'"
-
-
 # --- translation cache ------------------------------------------------------------
 def _translatable() -> Questionnaire:
     return Questionnaire(questions=[
@@ -364,7 +331,7 @@ def test_translation_cache_disabled_by_default_on_direct_construction(tmp_path,
 
 # --- config / feature keys ----------------------------------------------------------
 def test_new_features_registered():
-    for feature in ("group", "rewrite", "order", "naming"):
+    for feature in ("group", "rewrite", "order"):
         assert feature in AI_FEATURES
         assert feature in AIConfig(enabled=True).features
 
@@ -401,22 +368,22 @@ def test_pipeline_suggestions_reset_between_runs():
 def test_pipeline_advisory_features_fail_open():
     qn = _form()
     config = AIConfig(enabled=True,
-                      features=["group", "rewrite", "order", "naming"])
+                      features=["group", "rewrite", "order"])
     pipeline = AIPipeline(client=_failing_client("down"))
     _, notes, findings = pipeline.run(qn, config)
     assert pipeline.suggestions == []
-    assert sum("Skipped" in n for n in notes) == 4
+    assert sum("Skipped" in n for n in notes) == 3
     assert findings == []                        # deterministic result stands
 
 
 def test_pipeline_one_call_per_feature_per_form():
     qn = _form()
     config = AIConfig(enabled=True,
-                      features=["group", "rewrite", "order", "naming"])
+                      features=["group", "rewrite", "order"])
     client, calls = _counting_client({"sections": [], "suggestions": [],
                                       "orders": []})
     AIPipeline(client=client).run(qn, config)
-    assert len(calls) == 4                       # exactly one per feature
+    assert len(calls) == 3                       # exactly one per feature
 
 
 # --- workflow end-to-end ---------------------------------------------------------------

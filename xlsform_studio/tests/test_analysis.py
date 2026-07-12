@@ -1,6 +1,6 @@
 """Tests for the deterministic analysis layer: consistency validator (D5),
 quality scoring (D4), duration estimation (D8), choice-list normalization
-(D9), the questionnaire diff engine (D3), and the AI narrative hybrid (H1)."""
+(D9), the questionnaire diff engine (D3), and the QA report sections."""
 
 from __future__ import annotations
 
@@ -326,7 +326,7 @@ def test_diff_markdown_flags_breaking_changes():
     assert "Removed questions" in md and "longitudinal" in md
 
 
-# --- H1: AI narrative + QA report sections ---------------------------------------------
+# --- QA report sections ---------------------------------------------------------------
 def test_qa_report_includes_quality_and_duration_sections():
     qn = _base_form()
     report = Validator(deep=False).validate(qn)
@@ -336,46 +336,3 @@ def test_qa_report_includes_quality_and_duration_sections():
                                        duration=duration)
     assert f"## Form Quality Index: {quality.overall}/100" in md
     assert "## Estimated interview duration" in md
-
-
-def test_narrative_attached_by_pipeline_and_rendered():
-    from xlsform_studio.ai.client import DeepSeekClient
-    from xlsform_studio.ai.config import AIConfig
-
-    client = DeepSeekClient(api_key="k")
-    captured = {}
-
-    def fake(system, user, **kw):
-        captured["user"] = user
-        return {"narrative": "Strong structure; low burden."}
-    client.complete_json = fake
-
-    config = AIConfig(enabled=True, features=["narrative"])
-    result = Workflow(ai_client=client).run(
-        _base_form(), form_title="T", form_id="t",
-        ai_config=config, write_outputs=False)
-    assert result.report.narrative == "Strong structure; low burden."
-    # the prompt carried the audited metrics, not raw question text
-    assert "quality_index" in captured["user"]
-    md = ReportGenerator().to_markdown(result.report, result.questionnaire)
-    assert "## Executive summary" in md
-    assert "Strong structure; low burden." in md
-
-
-def test_narrative_fails_open():
-    from xlsform_studio.ai.client import AIError, DeepSeekClient
-    from xlsform_studio.ai.config import AIConfig
-
-    client = DeepSeekClient(api_key="k")
-
-    def boom(*a, **kw):
-        raise AIError("down")
-    client.complete_json = boom
-
-    config = AIConfig(enabled=True, features=["narrative"])
-    result = Workflow(ai_client=client).run(
-        _base_form(), form_title="T", form_id="t",
-        ai_config=config, write_outputs=False)
-    assert result.report.narrative == ""
-    assert result.quality is not None          # deterministic result stands
-    assert any("[AI narrative] Skipped" in n for n in result.assumptions)

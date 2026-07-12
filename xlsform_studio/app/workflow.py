@@ -61,7 +61,6 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from ..ai.client import DeepSeekClient
 from ..ai.config import AIConfig
-from ..ai.document_writer import DocumentProse
 from ..ai.form_author import AIFormAuthor
 from ..ai.pipeline import AIPipeline
 from ..ai.suggestions import AISuggestion, apply_suggestions
@@ -146,11 +145,6 @@ class WorkflowResult:
     #: blocked anything; it is purely for a human to inspect and, via
     #: :meth:`Workflow.apply_review_edits`, approve or correct.
     review_table: List[ReviewRow] = field(default_factory=list)
-    #: AI-written framing prose for the supporting documents (the "documents"
-    #: feature). All-empty unless AI ran with that feature enabled; the
-    #: deterministic builders slot each block into a labelled position and
-    #: render unchanged when it is empty.
-    document_prose: DocumentProse = field(default_factory=DocumentProse)
 
     @property
     def is_valid(self) -> bool:
@@ -322,14 +316,6 @@ class Workflow:
         # optional AI narrative below only ever NARRATES these numbers.
         quality = QualityScorer().score(questionnaire, report)
         duration = DurationEstimator().estimate(questionnaire)
-        notes.extend(ai_pipeline.narrate(questionnaire, quality, duration,
-                                         report, ai_config))
-        # AI co-writes the supporting documents' framing prose, grounded in
-        # the audited metrics above. Fails open to empty prose; the
-        # deterministic builders slot it in and render unchanged without it.
-        document_prose, doc_notes = ai_pipeline.write_documents(
-            questionnaire, quality, duration, report, ai_config)
-        notes.extend(doc_notes)
         # Survey Design Score: the deterministic methodological assessment.
         # Folds in the coverage matrix (if the AI coverage feature ran) and
         # any AI-reviewer findings already in the report, but needs neither.
@@ -348,8 +334,7 @@ class Workflow:
                                 design=design,
                                 coverage_matrix=ai_pipeline.coverage_matrix,
                                 indicator_matrix=ai_pipeline.indicator_matrix,
-                                review_table=build_review_table(questionnaire),
-                                document_prose=document_prose)
+                                review_table=build_review_table(questionnaire))
 
         if write_outputs:
             out_dir = Path(output_dir) if output_dir else CONFIG.output_dir
@@ -357,7 +342,6 @@ class Workflow:
                                               out_dir, source_name, target,
                                               quality=quality,
                                               duration=duration,
-                                              prose=document_prose,
                                               design=design)
             if result.coverage_matrix:
                 matrix_path = result.outputs["folder"] / "coverage_matrix.md"
@@ -394,17 +378,15 @@ class Workflow:
             qn, target=result.target or None)
         preserved = [f for f in result.report.findings
                      if f.category == "ai_review"]
-        narrative = result.report.narrative
         result.report = self.validator.validate(qn, target=result.target or None)
         result.report.findings.extend(preserved)
-        result.report.narrative = narrative
         result.quality = QualityScorer().score(qn, result.report)
         result.duration = DurationEstimator().estimate(qn)
         result.design = DesignIntelligence().score(
             qn, result.report, duration=result.duration,
             coverage_matrix=result.coverage_matrix)
-        # A "naming" suggestion can rename a question referenced by a
-        # review row; rebuild rather than risk a stale question name.
+        # An advisory suggestion (e.g. grouping) can rename or move a question
+        # referenced by a review row; rebuild rather than risk a stale name.
         result.review_table = build_review_table(qn)
 
         if write_outputs:
@@ -414,7 +396,6 @@ class Workflow:
                                               source_name, result.target or None,
                                               quality=result.quality,
                                               duration=result.duration,
-                                              prose=result.document_prose,
                                               design=result.design)
         return result
 
@@ -441,10 +422,8 @@ class Workflow:
             qn, target=result.target or None)
         preserved = [f for f in result.report.findings
                      if f.category == "ai_review"]
-        narrative = result.report.narrative
         result.report = self.validator.validate(qn, target=result.target or None)
         result.report.findings.extend(preserved)
-        result.report.narrative = narrative
         result.quality = QualityScorer().score(qn, result.report)
         result.duration = DurationEstimator().estimate(qn)
         result.design = DesignIntelligence().score(
@@ -458,7 +437,6 @@ class Workflow:
                                               source_name, result.target or None,
                                               quality=result.quality,
                                               duration=result.duration,
-                                              prose=result.document_prose,
                                               design=result.design)
         return result
 
@@ -468,10 +446,8 @@ class Workflow:
                    target: Optional[str] = None,
                    quality: Optional[QualityIndex] = None,
                    duration: Optional[DurationEstimate] = None,
-                   prose: Optional[DocumentProse] = None,
                    design: Optional[SurveyDesignScore] = None
                    ) -> Dict[str, Path]:
-        prose = prose or DocumentProse()
         stamp = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
         base = qn.settings.form_id or "form"
         folder = out_dir / f"{base}_{stamp}"
@@ -497,13 +473,12 @@ class Workflow:
             self.artifacts.assumption_log_markdown(qn, notes), encoding="utf-8")
         outputs["assumption_log"] = assumption_path
         outputs["assumptions_to_verify"] = VerificationChecklistBuilder().write(
-            qn, notes, folder / "assumptions_to_verify.md",
-            intro=prose.assumptions_intro)
+            qn, notes, folder / "assumptions_to_verify.md")
         # 5. Logic map (+ the skip-pattern flowchart as Graphviz DOT, when
         #    the form has any skip logic to draw).
         logic_path = folder / "logic_map.md"
         logic_path.write_text(
-            self.artifacts.logic_map_markdown(qn, overview=prose.logic_overview),
+            self.artifacts.logic_map_markdown(qn),
             encoding="utf-8")
         outputs["logic_map"] = logic_path
         dot = LogicFlowBuilder().to_dot(qn)
@@ -515,8 +490,7 @@ class Workflow:
         #    specification, collection plan) - all derived deterministically.
         guide_path = folder / "enumerator_guide.md"
         guide_path.write_text(
-            self.artifacts.enumerator_guide_markdown(
-                qn, duration=duration, intro=prose.enumerator_intro),
+            self.artifacts.enumerator_guide_markdown(qn, duration=duration),
             encoding="utf-8")
         outputs["enumerator_guide"] = guide_path
         outputs["variable_specification"] = \
@@ -524,13 +498,11 @@ class Workflow:
                 qn, folder / f"{base}_variable_specification.xlsx")
         plan_path = folder / "collection_plan.md"
         plan_path.write_text(
-            self.artifacts.collection_plan_markdown(
-                qn, duration=duration, overview=prose.collection_plan_overview),
+            self.artifacts.collection_plan_markdown(qn, duration=duration),
             encoding="utf-8")
         outputs["collection_plan"] = plan_path
         outputs["survey_instrument"] = self.artifacts.write_survey_instrument_docx(
-            qn, folder / f"{base}_survey_instrument.docx", duration=duration,
-            intro=prose.instrument_intro)
+            qn, folder / f"{base}_survey_instrument.docx", duration=duration)
         # 7. Version history (append-only, at the output-dir root).
         outputs["version_history"] = self.artifacts.append_version_history(
             out_dir / "version_history.json", qn, source_name,

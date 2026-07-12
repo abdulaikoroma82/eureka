@@ -26,16 +26,16 @@ from typing import List, Tuple
 #: All AI sub-features, by key. Used to validate CLI/UI input. These are
 #: enrichment passes that run ON TOP of AI authoring (which drafts the whole
 #: form); they refine or review the authored draft. The advisory-only group
-#: ("group", "rewrite", "order", "naming") produces accept/reject suggestions
-#: and never changes the form itself.
+#: ("group", "rewrite", "order") produces accept/reject suggestions and never
+#: changes the form itself.
 #:
 #: Note: type classification, skip-logic resolution and single-field domain
 #: constraints are no longer enrichment features - the AI author produces all
 #: three as part of drafting the form, so re-doing them here would be
 #: redundant.
 AI_FEATURES = ("translate", "cross_constraints", "review", "explain_findings",
-              "narrative", "documents", "group", "rewrite", "order", "naming",
-              "instructions", "completeness", "coverage", "indicators")
+              "group", "rewrite", "order", "instructions", "completeness",
+              "coverage", "indicators")
 
 #: Accepted alternative spellings for feature keys (CLI convenience).
 FEATURE_ALIASES = {

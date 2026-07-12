@@ -76,7 +76,6 @@ from .enumerator_notes import AIEnumeratorNoteSuggester
 from .finding_explainer import AIFindingExplainer
 from .grouping import AIGroupingSuggester
 from .indicators import AIIndicatorMapper
-from .naming import AINamingSuggester
 from .quality_reviewer import AIQualityReviewer
 from .rewording import AIRewordingSuggester
 from .suggestions import AISuggestion
@@ -91,7 +90,7 @@ class AIPipeline:
     def __init__(self, client: Optional[DeepSeekClient]) -> None:
         self.client = client
         #: Advisory suggestions collected by the most recent :meth:`run`
-        #: (grouping, rewording, choice ordering, naming). Never applied
+        #: (grouping, rewording, choice ordering, hints). Never applied
         #: automatically - see :mod:`xlsform_studio.ai.suggestions`.
         self.suggestions: List[AISuggestion] = []
         #: Objective-coverage matrix (markdown) from the most recent
@@ -157,9 +156,6 @@ class AIPipeline:
         if self._wants(config, "order"):
             self._collect(notes, AIChoiceOrderingSuggester(self.client)
                           .suggest(questionnaire))
-        if self._wants(config, "naming"):
-            self._collect(notes, AINamingSuggester(self.client)
-                          .suggest(questionnaire))
         if self._wants(config, "instructions"):
             self._collect(notes, AIEnumeratorNoteSuggester(self.client)
                           .suggest(questionnaire))
@@ -199,46 +195,6 @@ class AIPipeline:
         feature_notes, suggestions = result
         notes.extend(feature_notes)
         self.suggestions.extend(suggestions)
-
-    # ------------------------------------------------------------------
-    def narrate(self, questionnaire: Questionnaire, quality, duration,
-                report: ValidationReport, config: AIConfig) -> List[str]:
-        """Attach an AI executive summary to *report* (Hybrid H1).
-
-        Runs post-validation, after the deterministic quality index and
-        duration estimate exist - AI narrates those audited numbers, it
-        never computes them. No-op under the same conditions as
-        :meth:`run`.
-        """
-        if not self._wants(config, "narrative"):
-            return []
-        if self.client is None or not self.client.available:
-            return []
-        from .narrative import AIQualityNarrator
-        narrative, notes = AIQualityNarrator(self.client).narrate(
-            questionnaire, quality, duration, report)
-        if narrative:
-            report.narrative = narrative
-        return notes
-
-    # ------------------------------------------------------------------
-    def write_documents(self, questionnaire: Questionnaire, quality, duration,
-                        report: ValidationReport, config: AIConfig):
-        """Co-write the supporting documents' framing prose (the "documents"
-        feature).
-
-        Returns ``(DocumentProse, notes)``. Like :meth:`narrate` it runs
-        post-validation, so the model is grounded in the audited quality,
-        duration and finding metrics; it never authors a fact. A no-op
-        (all-empty prose) under the same conditions as :meth:`run`.
-        """
-        from .document_writer import AIDocumentWriter, DocumentProse
-        if not self._wants(config, "documents"):
-            return DocumentProse(), []
-        if self.client is None or not self.client.available:
-            return DocumentProse(), []
-        return AIDocumentWriter(self.client).write(
-            questionnaire, duration=duration, quality=quality, report=report)
 
     # ------------------------------------------------------------------
     def explain_findings(self, report: ValidationReport,

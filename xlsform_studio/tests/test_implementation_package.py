@@ -1,6 +1,6 @@
 """Tests for Tier-1 roadmap items: deployment readiness validation (D10),
-the survey implementation package (D6), enumerator instruction suggestions
-(A9), and readiness narration (H5)."""
+the survey implementation package (D6), and enumerator instruction
+suggestions (A9)."""
 
 from __future__ import annotations
 
@@ -231,23 +231,3 @@ def test_instructions_feature_wired_into_pipeline():
     assert pipeline.suggestions[0].kind == "hint"
 
 
-# --- H5: readiness narration -----------------------------------------------------------
-def test_narrative_payload_includes_readiness_findings():
-    qn = _form()
-    qn.questions[0].extra["label::French (fr)"] = "fr"   # incomplete translation
-    captured = {}
-    client = DeepSeekClient(api_key="k")
-
-    def fake(system, user, **kw):
-        captured["user"] = user
-        return {"narrative": "Solid form; finish the French translation "
-                             "before training."}
-    client.complete_json = fake
-
-    config = AIConfig(enabled=True, features=["narrative"])
-    result = Workflow(ai_client=client).run(
-        qn, form_title="T", form_id="t", ai_config=config,
-        write_outputs=False)
-    assert "readiness_findings" in captured["user"]
-    assert "untranslated" in captured["user"]
-    assert "French translation" in result.report.narrative

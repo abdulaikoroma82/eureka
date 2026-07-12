@@ -111,9 +111,6 @@ class ValidationReport:
     deep_ran: bool = False
     #: The deployment platform the form was validated against ("" = generic).
     target: str = ""
-    #: Optional executive summary written by the AI narrative feature.
-    #: Purely additive commentary: it can never change a finding or score.
-    narrative: str = ""
 
     @property
     def errors(self) -> List[Finding]:
@@ -172,14 +169,6 @@ class ReportGenerator:
         status = "PASSED" if report.is_valid else "FAILED"
         lines.append(f"## Overall status: {status}")
         lines.append("")
-        if report.narrative:
-            lines.append("## Executive summary")
-            lines.append("")
-            lines.append(f"_{report.narrative}_")
-            lines.append("")
-            lines.append("*(AI-written from the audited metrics below; "
-                         "advisory only.)*")
-            lines.append("")
         if quality is not None:
             lines.append(f"## Form Quality Index: {quality.overall}/100 "
                          f"({quality.rating})")

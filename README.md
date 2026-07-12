@@ -23,8 +23,8 @@ particular survey domain.
 > **AI is essential, not optional.** A run requires a configured DeepSeek API
 > key (`DEEPSEEK_API_KEY`); there is no offline authoring fallback. See
 > [AI authoring & enrichment](#ai-authoring--enrichment) for the optional
-> enrichment passes (translation, quality review, narrative, document
-> co-writing) that refine the draft and its documentation.
+> enrichment passes (translation, quality review, advisory suggestions) that
+> refine the draft.
 
 > 🟢 **New to this / non-technical?** Start with the plain-language
 > [Getting Started guide](docs/GETTING_STARTED.md) — no coding needed.
@@ -346,8 +346,8 @@ validate the result. This is essential — a run requires a `DEEPSEEK_API_KEY`
 and there is no offline authoring fallback.
 
 On top of authoring, a set of **optional enrichment passes** refine the AI
-draft — translation into additional languages, a holistic quality/naming
-review, a plain-English narrative of the validator's findings, and advisory
+draft — translation into additional languages, a holistic quality review,
+plain-English explanations of the validator's findings, and advisory
 grouping/rewording suggestions. These stay off unless you enable them, and
 they only ever annotate or refine the authored form, never re-author it.
 
@@ -357,18 +357,15 @@ they only ever annotate or refine the authored form, never re-author it.
 | **Cross-field constraints** | Suggests constraints that depend on another question, e.g. "end date must be on/after start date" — **combined with `and`** if the field already has an authored constraint | A per-question check only ever looks at one question at a time — it structurally cannot see the relationship between two |
 | **AI quality review** | A holistic second pass flagging things structural checks can't see — semantic contradictions, unclear names, and respondent-experience traps (ambiguous phrasing, contradictory option lists, redundant questions, incoherent skip chains); advisory only | Requires reasoning across multiple fields' relationship to each other |
 | **Explain findings** | Adds a one-sentence plain-English explanation to the validator's own findings, after validation runs | Rules own every fact (level, category, message); AI only makes them easier to read |
-| **Quality narrative** | Writes the QA report's executive summary from the deterministic Form Quality Index, duration estimate, readiness findings and finding counts — it is sent only the audited metrics, never asked to re-judge the form | Turning seven scores and a risk rating into two readable sentences is prose generation; the numbers themselves stay 100% rules |
-| **Document co-writing** | Rewrites the *framing prose* of the supporting documents (enumerator guide, collection plan, logic map, printable instrument, assumptions checklist) in better natural language, slotted under a labelled "AI-written" block; the deterministic builders still author every fact and render unchanged when it's off | Polishing an orientation paragraph is prose; the counts, names, logic and checklist tiers it frames stay 100% rules |
 | **Missing-question detection** | Infers the survey's purpose and flags questions it probably needs but lacks (weight + MUAC with no height blocks weight-for-height) — advisory findings only, the tool **never adds questions** | Recognising that a set of questions implies an absent member is domain reasoning, not pattern matching |
 | **Objective coverage matrix** | You list your study objectives; it maps each to the questions that inform it and flags gaps (`coverage_matrix.md` + Quality tab). Every cited question name is verified to exist — invalid references are discarded | Judging that two questions together measure "access to safe water" is semantics; the question inventory and reference checks stay 100% rules |
 | **Indicator matrix** | Drafts an M&E reporting framework from the compiled questions: indicator, source questions (verified to exist), aggregation level, means of verification (`indicator_matrix.md`) | Which questions feed which indicator is meaning, not matching |
 | **Question grouping** *(suggestion-only)* | Proposes logical sections for a form whose source document didn't provide them | "Water source" and "latrine type" belonging together is a semantic judgement |
 | **Question rewording** *(suggestion-only)* | Flags ambiguous, double-barreled, leading or jargon-heavy questions and suggests clearer wording (or a split, which you apply in the source document) | Whether a sentence is leading is a language judgement |
 | **Choice-list ordering** *(suggestion-only)* | Proposes a more logical option order — common answers first, themes adjacent, "Other"/"Refused" last | "Farming" belonging next to "Fishing" isn't a sortable property |
-| **Variable-name suggestions** *(suggestion-only)* | Offers a more natural name where the deterministic one reads awkwardly; accepting a rename also rewrites every `${...}` reference to it | Judging what an analyst will find readable is a language call |
 | **Enumerator instructions** *(suggestion-only)* | Drafts per-question field guidance (probing technique, common misunderstandings) as device `hint` text — only for questions with no author-written hint, which always wins | Anticipating how respondents misunderstand a question is survey-methodology judgement |
 
-The five **suggestion-only** features never touch the form by themselves:
+The four **suggestion-only** features never touch the form by themselves:
 each produces an original-vs-suggested pair you accept or reject (in the
 app's *AI suggestions* panel, which rebuilds and re-validates the workbook
 with your accepted changes; on the CLI they are printed for manual review).
@@ -401,10 +398,10 @@ improve them slightly:
 * **Variable naming.** Naming needs to be free, instant, and — critically —
   **stable**: the same question must always produce the same variable name
   across re-runs, or version history and diffs become meaningless. The
-  deterministic name is therefore always the one in use; the optional
-  `naming` feature only ever *stores a suggestion* for you to accept, and
-  an accepted rename deterministically rewrites every `${...}` reference so
-  nothing dangles.
+  deterministic name is therefore always the one in use. If you want a
+  different name, rename it in the review panel — the tool deterministically
+  rewrites every `${...}` reference so nothing dangles — rather than delegating
+  naming to a model.
 * **All structural / type / deployment validation.** These checks are
   enumerable, must be exactly right, and run on every question in every form
   — exactly what rule engines are for. The AI author drafts each question's
@@ -723,12 +720,8 @@ Each run writes a timestamped folder under `output/` containing:
    the specific findings behind each deduction. Written on every run.
 
 Every document above is authored **deterministically** and owns every fact
-(variable names, types, logic, counts, checklist tiers). With the optional
-`documents` AI feature enabled, the model additionally **co-writes the
-framing prose** of the enumerator guide, collection plan, logic map,
-printable instrument and assumptions checklist — slotted under a labelled
-"AI-written" block, never replacing a fact. Turn it off and every document is
-byte-for-byte the deterministic version.
+(variable names, types, logic, counts, checklist tiers) — the same form
+always produces the same documents, byte-for-byte, with no model in the loop.
 
 ### Reverse engineering an existing XLSForm
 

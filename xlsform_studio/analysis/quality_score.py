@@ -6,8 +6,7 @@ Score the compiled form 0-100 across seven measurable categories, so a
 team can gate deployment ("nothing ships below 80"), track quality across
 versions, and see at a glance *where* a form is weak. Every category is
 computed arithmetically from the form itself and the validation report -
-the same form always scores the same. The optional AI layer can narrate
-the numbers (:mod:`xlsform_studio.ai.narrative`) but never moves them.
+the same form always scores the same.
 
 Categories (each 0-100; weights below)
 --------------------------------------

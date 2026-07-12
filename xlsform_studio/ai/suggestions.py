@@ -40,7 +40,6 @@ Example
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from typing import Dict, List
 
@@ -54,14 +53,14 @@ _audit = get_audit_logger()
 #: "split" suggestions (rewording proposals to break a double-barreled
 #: question in two) are display-only: splitting changes the data model and
 #: must be done in the source document by the author.
-APPLIABLE_KINDS = ("grouping", "rewording", "choice_order", "naming", "hint")
+APPLIABLE_KINDS = ("grouping", "rewording", "choice_order", "hint")
 
 
 @dataclass
 class AISuggestion:
     """One reviewable original-vs-suggested pair produced by an AI feature."""
 
-    kind: str                 # "grouping" | "rewording" | "split" | "choice_order" | "naming"
+    kind: str                 # "grouping" | "rewording" | "split" | "choice_order" | "hint"
     #: Question name (or choice list name for "choice_order"; "" for the
     #: form-level "grouping" suggestion).
     target: str
@@ -147,31 +146,6 @@ def _apply_choice_order(qn: Questionnaire, sug: AISuggestion) -> str:
     return ""
 
 
-def _apply_naming(qn: Questionnaire, sug: AISuggestion) -> str:
-    q = _question(qn, sug.target)
-    if q is None:
-        return "question no longer exists"
-    new = (sug.payload.get("name") or "").strip()
-    existing = {other.name for other in qn.questions if other is not q}
-    error = ai_validators.check_variable_name(new, existing)
-    if error:
-        return error
-    old = q.name
-    q.name = new
-    # Every ${old} reference anywhere in the form must follow the rename.
-    ref = re.compile(r"\$\{" + re.escape(old) + r"\}")
-    for other in qn.questions:
-        for attr in ("relevant", "constraint", "calculation",
-                     "choice_filter", "default"):
-            value = getattr(other, attr)
-            if value:
-                setattr(other, attr, ref.sub("${" + new + "}", value))
-    q.add_assumption(f"AI-suggested variable name accepted: '{old}' -> "
-                     f"'{new}' ({sug.reason or 'clarity'}); all references "
-                     f"were updated.")
-    return ""
-
-
 def _apply_hint(qn: Questionnaire, sug: AISuggestion) -> str:
     q = _question(qn, sug.target)
     if q is None:
@@ -229,7 +203,6 @@ def _question(qn: Questionnaire, name: str):
 _HANDLERS = {
     "rewording": _apply_rewording,
     "choice_order": _apply_choice_order,
-    "naming": _apply_naming,
     "grouping": _apply_grouping,
     "hint": _apply_hint,
 }

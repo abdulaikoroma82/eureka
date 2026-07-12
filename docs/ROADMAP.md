@@ -27,12 +27,12 @@ Legend: ✅ shipped · 🚫 descoped · ⭐ signature capability
 | A10 | Choice Quality Review | ✅ | `ai/quality_reviewer.py` + `ai/choice_ordering.py` |
 | A12 | Survey Structure Optimization | ✅ | `ai/grouping.py` (suggestion-only sections) |
 | A13 | Semantic Constraint Suggestions | ✅ | Single-field bounds now produced by `ai/form_author.py` (AI authoring); cross-field via `ai/constraint_reviewer.py` |
-| A15 | Survey Quality Narrative | ✅ | `ai/narrative.py` |
-| A16 | Document co-writing (guide, plan, logic map, instrument, checklist) | ✅ | `ai/document_writer.py` — one grounded call co-writes framing prose; deterministic builders own every fact and render unchanged offline (`documents` feature) |
-| H1 | Survey Health Score | ✅ | D4 metrics + A15 narration (`narrative` feature) |
+| A15 | Survey Quality Narrative | 🚫 | descoped — see *Descoped items* below |
+| A16 | Document co-writing (guide, plan, logic map, instrument, checklist) | 🚫 | descoped — see *Descoped items* below |
+| H1 | Survey Health Score | ✅ | D4 Form Quality Index (`analysis/quality_score.py`) + the Survey Design Score (S1) |
 | H3 | Smart Assumption Log | 🚫 | descoped — see *Descoped items* below |
 | H4 | Smart Validation Report | ✅ | `ai/finding_explainer.py` |
-| H5 | Readiness Assessment | ✅ | D10 findings narrated operationally by `ai/narrative.py` |
+| H5 | Readiness Assessment | ✅ | `validation/readiness_validator.py` (translation/media/device/metadata completeness) surfaced in the QA report |
 | D6 | Metadata & Documentation Generator | ✅ | `app/artifacts.py`: enumerator guide, variable specification, collection plan |
 | A9 | Enumerator Instruction Generator | ✅ | `ai/enumerator_notes.py` (advisory `hint` suggestions; author hints win) |
 | D10 | Deployment Readiness Checks | ✅ | `validation/readiness_validator.py` (translation/media/device/metadata completeness) + platform matrix + pyxform deep check |
@@ -54,9 +54,30 @@ Legend: ✅ shipped · 🚫 descoped · ⭐ signature capability
 
 ## Descoped items
 
-Three items that had shipped partially were reviewed and cut rather than
-finished halfway, to keep the roadmap matching what's actually delivered:
+Several items were reviewed and cut rather than kept half-used, to keep the
+product focused on survey **engineering** and methodology rather than prose
+polish, and to reduce API usage and maintenance:
 
+* **A16 — AI document co-writing.** The supporting documents (enumerator
+  guide, collection plan, logic map, printable instrument, assumptions
+  checklist) are authored deterministically and already contain every fact.
+  AI only rewrote their introductory *prose*, which reads a little more
+  naturally but changes nothing about the tool's engineering value. Removing
+  it cut an API call per form, simplified the artefact builders (no prose
+  slotting, no `DocumentProse`), and made every document byte-for-byte
+  reproducible again. Cut.
+* **A15 / H1 narration — AI quality narrative.** The QA report's executive
+  summary was AI-written from the deterministic metrics. A deterministic
+  headline ("scored 92/100 with three warnings and no blocking errors") plus
+  the Form Quality Index and Survey Design Score tables carry the same
+  information; the narrative was cosmetic. Cut (the Survey Health Score, H1,
+  now reads straight from D4 + S1).
+* **Variable-name suggestions (`ai/naming.py`).** The deterministic namer is
+  stable, reproducible and standards-compliant by design; an AI alternative
+  introduced a second naming option most teams would never adopt, and a
+  stable name is exactly what version history and diffs need. Renaming stays
+  available — manually, in the review panel, with automatic `${...}`
+  reference rewriting — without a suggestion engine. Cut.
 * **A11 — pack-aware domain plausibility.** Survey-context grounding,
   domain packs (D7), and the completeness review (A4) already cover the
   practical need — flagging a plausibly missing question or an
@@ -66,8 +87,7 @@ finished halfway, to keep the roadmap matching what's actually delivered:
 * **H3 — smart assumption-log explanations.** The assumption log already
   records every automatic decision in plain language at the point it is
   made (`app/artifacts.py`). A second AI pass to re-explain entries that
-  are already human-readable was redundant with A15's narrative summary
-  and H4's finding explainer. Cut.
+  are already human-readable was redundant with H4's finding explainer. Cut.
 * **D2 — SVG/PNG rendering.** The DOT and Mermaid sources already ship in
   every output package and render natively (Mermaid on GitHub/GitLab/most
   wikis; DOT in any Graphviz viewer or the in-app chart). Shelling out to

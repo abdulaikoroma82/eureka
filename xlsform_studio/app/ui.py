@@ -14,7 +14,7 @@ workbook is written in that platform's column dialect (e.g. SurveyCTO's
 Authoring is AI-first: the model (DeepSeek) drafts every field, so a
 ``DEEPSEEK_API_KEY`` is required and generation is blocked without one. The
 sidebar also exposes optional enrichment passes (translation, quality
-review, narrative, advisory suggestions) that refine the authored draft.
+review, advisory suggestions) that refine the authored draft.
 
 Run
 ---
@@ -87,12 +87,9 @@ _AI_FEATURE_LABELS = {
     "translate": "Generate translations (only fills gaps you haven't already supplied)",
     "review": "AI quality review (semantics, naming clarity, respondent experience)",
     "explain_findings": "Explain validation findings in plain English",
-    "narrative": "Write an executive summary of the quality metrics for the QA report",
-    "documents": "Co-write the supporting documents' prose (guide, plan, logic map) in better English",
     "group": "Suggest logical question sections (accept/reject after generating)",
     "rewrite": "Suggest clearer question wording (accept/reject after generating)",
     "order": "Suggest logical choice-list ordering (accept/reject after generating)",
-    "naming": "Suggest clearer variable names (accept/reject after generating)",
     "instructions": "Draft enumerator instructions as device hints (accept/reject after generating)",
     "completeness": "Flag questions the survey probably needs but doesn't have",
     "coverage": "Check the form covers your study objectives (coverage matrix)",
@@ -287,8 +284,7 @@ def _ai_sidebar():
 
         st.divider()
         st.caption("Optional enrichment passes — refine the AI-authored draft "
-                   "(translation, quality review, plain-English narrative, "
-                   "advisory suggestions):")
+                   "(translation, quality review, advisory suggestions):")
         enabled = st.checkbox("Enable enrichment passes", value=False,
                               disabled=not api_key)
 
@@ -548,8 +544,7 @@ def _render_result(result, target: str) -> None:
         else:
             st.caption("No skip logic in this form — every question is "
                        "always shown.")
-        st.markdown(ArtifactBuilder(_kb()).logic_map_markdown(
-            qn, overview=result.document_prose.logic_overview))
+        st.markdown(ArtifactBuilder(_kb()).logic_map_markdown(qn))
 
     with tabs[6]:
         _render_quality(result)
@@ -609,12 +604,6 @@ def _render_quality(result) -> None:
     if quality is None:
         st.caption("Quality metrics were not computed for this run.")
         return
-
-    if result.report.narrative:
-        st.markdown(f"> {result.report.narrative}")
-        st.caption("🤖 Executive summary written by AI from the audited "
-                   "metrics below — advisory only.")
-        st.divider()
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Form Quality Index", f"{quality.overall}/100",

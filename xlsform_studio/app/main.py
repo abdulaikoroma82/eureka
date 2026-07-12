@@ -142,7 +142,6 @@ def build_parser() -> argparse.ArgumentParser:
             ("--ai-review", "review", "run the AI quality review"),
             ("--ai-explain", "explain_findings",
              "explain validation findings in plain English"),
-            ("--ai-name", "naming", "suggest clearer variable names"),
             ("--ai-instructions", "instructions",
              "draft enumerator instructions as device hints")):
         ai.add_argument(flag, dest=f"ai_flag_{feature}", action="store_true",
