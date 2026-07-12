@@ -64,6 +64,43 @@ def test_slash_bulleted_option_split():
     assert qn.questions[0].raw_choices == ["Male", "Female"]
 
 
+def test_required_marker_does_not_hide_question_mark():
+    """Regression: '? *' must still classify as a question, not fall
+    through as an option on the preceding question (the trailing '*'
+    used to hide the '?' from the question detector)."""
+    text = ("Is the respondent literate?\n"
+            "Yes\n"
+            "No\n"
+            "Do you agree? *\n"
+            "Yes\n"
+            "No\n")
+    qn = QuestionnaireParser().parse_text(text)
+    assert len(qn.questions) == 2
+    assert qn.questions[0].raw_choices == ["Yes", "No"]
+    q2 = qn.questions[1]
+    assert q2.raw_label == "Do you agree?"
+    assert q2.required is True
+    assert q2.raw_choices == ["Yes", "No"]
+
+
+def test_required_marker_on_numbered_question_line():
+    """Same hole via the numbered-line disambiguator: 'N. text? *' under
+    an open question must still be recognised as a new question."""
+    text = ("1. Are you attending?\n"
+            "1. Yes\n"
+            "2. No\n"
+            "2. Do you agree to participate? *\n"
+            "1. Yes\n"
+            "2. No\n")
+    qn = QuestionnaireParser().parse_text(text)
+    assert len(qn.questions) == 2
+    assert qn.questions[0].raw_choices == ["Yes", "No"]
+    q2 = qn.questions[1]
+    assert q2.raw_label == "Do you agree to participate?"
+    assert q2.required is True
+    assert q2.raw_choices == ["Yes", "No"]
+
+
 # --- excel design grid ------------------------------------------------------
 def test_excel_design_grid(tmp_path):
     df = pd.DataFrame([

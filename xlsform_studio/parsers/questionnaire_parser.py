@@ -242,10 +242,16 @@ class QuestionnaireParser:
         return (cleaned or line).title() if cleaned.isupper() or cleaned == "" \
             else (cleaned.title() if cleaned.islower() else cleaned)
 
+    @staticmethod
+    def _strip_required(text: str) -> str:
+        """Strip a trailing required marker ("... ?  *", "... (required)")
+        so it doesn't hide the "?" that identifies a question."""
+        return _REQUIRED_MARK.sub("", text)
+
     def _is_question(self, line: str) -> bool:
         if _FORCED_QUESTION.match(line):
             return True
-        if line.endswith("?"):
+        if self._strip_required(line).endswith("?"):
             return True
         if _QUESTION_NUM.match(line):
             return True
@@ -271,7 +277,7 @@ class QuestionnaireParser:
         continues the *question* sequence with a multi-word text is a
         question. Single non-topic words ("No") always stay options.
         """
-        if text.endswith("?") or self._looks_like_topic(text) \
+        if self._strip_required(text).endswith("?") or self._looks_like_topic(text) \
                 or self._is_imperative(text):
             return True
         n = int(number)
@@ -322,7 +328,7 @@ class QuestionnaireParser:
 
     def _looks_like_option(self, text: str, current: Question) -> bool:
         # Options are generally short and not themselves questions.
-        return not text.endswith("?") and len(text) <= 80
+        return not self._strip_required(text).endswith("?") and len(text) <= 80
 
     def _short_wordset(self, line: str) -> bool:
         # A plausible bare option: few words, no sentence punctuation.
