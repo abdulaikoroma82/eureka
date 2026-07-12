@@ -25,6 +25,21 @@ What is checked
   and predicates (``[...]``) are accepted as first-class grammar, not just
   the flat comparison expressions ``relevant``/``constraint`` use
 
+What is intentionally *not* claimed as checked
+-----------------------------------------------
+The XPath union operator (``|``), e.g.
+``instance('a')/root/item | instance('b')/root/item``, is valid XLSForm
+syntax this validator does not fully model (each side is itself a path
+expression, and there are XPath-spec constraints on where a union may
+legally appear). Rather than reject it outright - which would be a false
+positive on a form pyxform accepts - or silently claim it is fully
+checked, each side of the ``|`` is validated with the same grammar as
+everything else, and if every side is syntactically clean the expression
+is reported as an **info**-level, ``unsupported``-confidence finding
+("not fully checked; passed through unchanged") instead of an error. A
+malformed expression on either side of the ``|`` is still a hard error -
+the downgrade only ever widens what is accepted, never what is caught.
+
 Inputs
 ------
 A compiled :class:`~xlsform_studio.models.Questionnaire`.
@@ -92,6 +107,7 @@ _TOKEN = re.compile(r"""
     | (?P<rbracket>\])
     | (?P<at>@)
     | (?P<slash>//?)
+    | (?P<pipe>\|)
     | (?P<dots>\.\.|\.)
     | (?P<name>[A-Za-z][A-Za-z0-9_:-]*)
 """, re.VERBOSE)
@@ -109,12 +125,20 @@ class ExpressionValidator:
                 expr = (getattr(q, column, "") or "").strip()
                 if not expr:
                     continue
-                error, unknown_funcs = self.check(expr)
+                error, unknown_funcs, unsupported = self.check_detailed(expr)
                 if error:
                     findings.append(Finding(
                         "error", "expression",
                         f"Malformed {column} on '{q.name}': {error} "
                         f"(expression: `{expr}`)", q.name))
+                elif unsupported:
+                    findings.append(Finding(
+                        "info", "expression",
+                        f"{column.capitalize()} on '{q.name}' uses {unsupported} - "
+                        f"not fully checked by this tool; passed through "
+                        f"unchanged (expression: `{expr}`). Confirm it "
+                        f"manually or via pyxform.", q.name,
+                        confidence="unsupported"))
                 for fn in unknown_funcs:
                     findings.append(Finding(
                         "warning", "expression",
@@ -125,16 +149,60 @@ class ExpressionValidator:
 
     # ------------------------------------------------------------------
     def check(self, expr: str) -> Tuple[Optional[str], List[str]]:
-        """Return (error_message_or_None, unknown_function_names)."""
+        """Return (error_message_or_None, unknown_function_names).
+
+        Backward-compatible 2-tuple wrapper over :meth:`check_detailed`;
+        callers that only care whether an expression is malformed (not
+        whether it used syntax this tool doesn't fully validate) can keep
+        using this.
+        """
+        error, unknown, _ = self.check_detailed(expr)
+        return error, unknown
+
+    def check_detailed(self, expr: str) -> Tuple[Optional[str], List[str], str]:
+        """Return (error_message_or_None, unknown_function_names,
+        unsupported_reason). *unsupported_reason* is "" for a fully-checked
+        expression (whether valid or malformed) and a short description
+        when the expression used syntax this tool intentionally does not
+        fully validate (currently: XPath union, ``|``) but every part of
+        it that *can* be checked came back clean.
+        """
         # Unbalanced quotes are unrecoverable for the tokenizer - check first.
         if expr.count("'") % 2 or expr.count('"') % 2:
-            return "unbalanced quote", []
+            return "unbalanced quote", [], ""
 
         tokens = self._tokenize(expr)
         if isinstance(tokens, str):        # tokenizer error message
-            return tokens, []
+            return tokens, [], ""
 
-        return self._parse(tokens, expr)
+        if any(kind == "pipe" for kind, _ in tokens):
+            return self._check_union(tokens, expr)
+
+        error, unknown = self._parse(tokens, expr)
+        return error, unknown, ""
+
+    # ------------------------------------------------------------------
+    def _check_union(self, tokens: list, expr: str) -> Tuple[Optional[str], List[str], str]:
+        """Validate each side of a ``|`` (XPath union) independently with
+        the normal grammar; a malformed side is still a hard error. If
+        every side is clean, the union as a whole is reported as
+        "not fully checked" rather than claimed as fully validated."""
+        segments: List[list] = [[]]
+        for tok in tokens:
+            if tok[0] == "pipe":
+                segments.append([])
+            else:
+                segments[-1].append(tok)
+
+        all_unknown: List[str] = []
+        for seg in segments:
+            if not seg:
+                return "empty operand around '|'", [], ""
+            error, unknown = self._parse(seg, expr)
+            if error:
+                return error, unknown, ""
+            all_unknown.extend(unknown)
+        return None, all_unknown, "XPath union ('|') syntax"
 
     # ------------------------------------------------------------------
     def _tokenize(self, expr: str):

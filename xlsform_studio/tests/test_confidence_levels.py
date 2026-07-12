@@ -113,6 +113,64 @@ def test_unrecognised_function_is_unsupported():
     assert any(f.confidence == "unsupported" for f in findings)
 
 
+# --- XPath union ('|'): valid-but-unmodeled syntax, downgraded not rejected -
+def test_valid_union_expression_is_info_not_error():
+    """A valid-but-unsupported XPath union must not block validation: it
+    is an info-level, unsupported-confidence finding, not an error."""
+    qn = Questionnaire(
+        settings=FormSettings(form_title="T", form_id="t"),
+        questions=[Question(
+            name="city", xlsform_type="select_one cities", label="City",
+            list_name="cities",
+            choice_filter="instance('a')/root/item | instance('b')/root/item")])
+    findings = ExpressionValidator().validate(qn)
+    assert not any(f.level == "error" for f in findings)
+    union_findings = [f for f in findings if "union" in f.message.lower()]
+    assert union_findings
+    assert all(f.level == "info" and f.confidence == "unsupported"
+              for f in union_findings)
+
+
+def test_malformed_expression_inside_union_is_still_an_error():
+    """The union downgrade must never mask a genuinely malformed side."""
+    qn = Questionnaire(
+        settings=FormSettings(form_title="T", form_id="t"),
+        questions=[Question(name="a", xlsform_type="integer", label="A",
+                            relevant="${a} >< 5 | ${b}")])
+    findings = ExpressionValidator().validate(qn)
+    assert any(f.level == "error" and f.confidence == "checked"
+              for f in findings)
+    assert not any("not fully checked" in f.message for f in findings)
+
+
+def test_plain_malformed_expression_unaffected_by_union_support():
+    """Regression guard: adding '|' handling must not change the outcome
+    for expressions that don't use '|' at all."""
+    qn = Questionnaire(
+        settings=FormSettings(form_title="T", form_id="t"),
+        questions=[Question(name="s", xlsform_type="integer", label="S",
+                            constraint=". >< 5")])
+    findings = ExpressionValidator().validate(qn)
+    assert any(f.level == "error" and f.confidence == "checked"
+              for f in findings)
+
+
+def test_check_detailed_reports_union_reason():
+    v = ExpressionValidator()
+    error, unknown, unsupported = v.check_detailed("${a} | ${b}")
+    assert error is None
+    assert unsupported and "union" in unsupported.lower()
+
+
+def test_check_two_tuple_stays_backward_compatible_for_union():
+    """check() must remain a plain (error, unknown_funcs) 2-tuple even for
+    union expressions - existing callers unpack exactly two values."""
+    v = ExpressionValidator()
+    error, unknown = v.check("${a} | ${b}")
+    assert error is None
+    assert unknown == []
+
+
 # --- pyxform (real toolchain): "confirmed" or "unsupported" ----------------
 def test_pyxform_success_is_confirmed():
     v = PyxformValidator()
