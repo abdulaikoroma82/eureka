@@ -1,6 +1,6 @@
 # XLSForm Studio
 
-**XLSForm Studio is an offline-first survey engineering platform that compiles,
+**XLSForm Studio is an AI-first survey engineering platform that drafts,
 validates, documents, and quality-assures questionnaires for the entire XLSForm
 ecosystem.**
 
@@ -9,17 +9,22 @@ questionnaire of **any kind** (Word, Excel, PDF, CSV or JSON) and get back a
 complete, validated XLSForm package — the spreadsheet plus a data dictionary,
 QA report, assumption log, logic map and version history. It applies the
 **standard rules of the XLSForm specification**; it is not tied to any
-particular survey domain. *(Under the hood, it works as a deterministic
-questionnaire compiler — see [Architecture](#architecture).)*
+particular survey domain.
 
-> **AI is optional, not required.** The core pipeline — parsing, type
-> classification, naming, logic, constraints, calculations, validation,
-> export — is 100% deterministic and runs fully offline with zero API
-> dependency. An **optional AI-assist layer** (DeepSeek) can be switched on
-> for the handful of things a rule engine genuinely cannot do (see
-> [AI-assisted features](#ai-assisted-features-optional) below). It is off by
-> default; nothing leaves your computer unless you explicitly enable it and
-> supply an API key.
+> **AI drafts the form; deterministic rules keep it on-standard.** The model
+> (DeepSeek) interprets the questionnaire and authors every field — types,
+> machine names, labels, hints, relevance/skip logic, constraints,
+> calculations and choice lists. Deterministic rules bracket the AI on both
+> sides: the parser lays out the platform scaffold (sheets and columns), and
+> the standards enforcer plus validators check the draft against the XLSForm
+> specification and the target platform's rules. You then **review and edit
+> the AI draft** before download.
+>
+> **AI is essential, not optional.** A run requires a configured DeepSeek API
+> key (`DEEPSEEK_API_KEY`); there is no offline authoring fallback. See
+> [AI-assisted features](#ai-assisted-features-optional) for the optional
+> enrichment passes (translation, quality review, narrative) that refine the
+> draft.
 
 > 🟢 **New to this / non-technical?** Start with the plain-language
 > [Getting Started guide](docs/GETTING_STARTED.md) — no coding needed.
@@ -36,12 +41,12 @@ Studio standardises that work and catches the errors before deployment.
 
 ## Architecture
 
-Structurally, XLSForm Studio is a deterministic **compiler**: a parser turns
-a source questionnaire into an intermediate representation, a rule engine
-transforms and validates it against the XLSForm specification, and an
-exporter emits target artefacts (the XLSForm workbook plus its supporting
-documentation). The "survey engineering platform" framing in the intro is
-what that compiler is *for* — this section is how it works.
+Structurally, XLSForm Studio is an **AI-first compiler with deterministic
+guardrails**: a parser turns a source questionnaire into an intermediate
+representation and lays out the platform scaffold, the AI author drafts every
+field into that scaffold, and deterministic rules then enforce standards and
+validate against the XLSForm specification before an exporter emits the target
+artefacts (the XLSForm workbook plus its supporting documentation).
 
 ```
               User Interface  (Streamlit UI  /  CLI)
@@ -50,12 +55,13 @@ what that compiler is *for* — this section is how it works.
                       |
       ---------------------------------------------
       |                  |                        |
-   Parser            Rule Engine              Validator
- (parsers/)          (engine/)              (validation/)
+   Parser           AI Author               Validator
+ (parsers/)     (ai/form_author.py)        (validation/)
+   scaffold      drafts every field       enforces standards
       |                  |                        |
       ---------------------------------------------
                       |
-           [optional]  AI Assist  (ai/)  — DeepSeek, off by default
+           Standards enforcement  (engine/)  — rules keep the AI on-standard
                       |
               XLSForm Generator  (xlsform/)
                       |
@@ -66,10 +72,13 @@ what that compiler is *for* — this section is how it works.
 
 All stages communicate through one intermediate representation
 (`xlsform_studio/models.py`): a `Questionnaire` of `Question`, `Choice` and
-`ChoiceList` objects. A parser only has to produce a `Questionnaire`; everything
-downstream then works unchanged. The `ai/` package is the **only** part of
-the codebase that makes a network call, and only when explicitly enabled —
-see [AI-assisted features](#ai-assisted-features-optional).
+`ChoiceList` objects. A parser only has to produce a raw `Questionnaire`; the
+AI author then fills every XLSForm field and everything downstream works
+unchanged. The `ai/` package is the **only** part of the codebase that makes a
+network call; because authoring is AI-first, a run requires a `DEEPSEEK_API_KEY`.
+The legacy fully-deterministic compiler (`engine/rule_engine.py`) remains as an
+internal standards/test seam (`authoring="deterministic"` / `XLSFS_AUTHORING`),
+never selected by the UI or CLI.
 
 ### Project layout
 
@@ -77,8 +86,8 @@ see [AI-assisted features](#ai-assisted-features-optional).
 xlsform_studio/
 ├── app/            # controller, config, CLI (main.py) and Streamlit UI (ui.py)
 ├── parsers/        # DOCX / XLSX / PDF / CSV / JSON / text parsers
-├── engine/         # classifier, naming, logic, constraint, calculation
-├── ai/             # optional AI-assist layer (DeepSeek) — off by default
+├── engine/         # standards enforcer + legacy deterministic compiler (seam)
+├── ai/             # AI author (form_author.py) + enrichment layer (DeepSeek)
 ├── xlsform/        # survey / choices / settings builders + exporter
 ├── validation/     # structure / logic / deployment validators + report
 ├── knowledge/      # editable YAML rule packs
@@ -323,18 +332,18 @@ In the app: **"3 · Form details" → Domain rule packs**.
 
 ---
 
-## AI-assisted features (optional)
+## AI authoring & enrichment
 
-The deterministic pipeline above solves the vast majority of what a
-questionnaire needs. A small number of things are inherently language/
-reasoning problems that no rule engine can solve — for those, an **optional**
-AI layer using [DeepSeek](https://api-docs.deepseek.com/) is available.
+Authoring is **AI-first**: the model ([DeepSeek](https://api-docs.deepseek.com/))
+drafts every field of the form, and deterministic rules enforce standards and
+validate the result. This is essential — a run requires a `DEEPSEEK_API_KEY`
+and there is no offline authoring fallback.
 
-**This layer is off by default.** With no flag/checkbox and no
-`DEEPSEEK_API_KEY`, the tool behaves exactly as if `xlsform_studio/ai/`
-did not exist — no network calls, no new dependency (the client uses only
-the Python standard library), identical output. It only activates when you
-explicitly enable it **and** provide an API key.
+On top of authoring, a set of **optional enrichment passes** refine the AI
+draft — translation into additional languages, a holistic quality/naming
+review, a plain-English narrative of the validator's findings, and advisory
+grouping/rewording suggestions. These stay off unless you enable them, and
+they only ever annotate or refine the authored form, never re-author it.
 
 | Feature | What it does | Why it can't be deterministic |
 | --- | --- | --- |

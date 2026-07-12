@@ -2,9 +2,13 @@
 
 Purpose
 -------
-Tie the whole pipeline together end-to-end:
+Tie the whole pipeline together end-to-end (AI-first):
 
-    parse -> compile (rule engine) -> [optional AI enrichment] -> validate
+    parse (deterministic scaffold)
+          -> author with AI (drafts every field: type, name, label, logic,
+             constraints, choices)
+          -> enforce standards (deterministic: choice normalisation)
+          -> [optional AI enrichment] -> validate (deterministic)
           -> export XLSForm -> build the supporting artefacts (data
              dictionary, assumption log, logic map, validation report,
              version history)
@@ -12,11 +16,20 @@ Tie the whole pipeline together end-to-end:
 This is the single entry point used by both the CLI (``main.py``) and the
 Streamlit UI, so behaviour is identical across interfaces.
 
-The optional AI enrichment step (translation, skip-logic inversion, type
-reclassification, quality review) only runs when an
-:class:`~xlsform_studio.ai.config.AIConfig` with ``enabled=True`` is
-passed in AND a DeepSeek API key is configured; otherwise this workflow's
-behaviour is unchanged from the fully deterministic pipeline.
+AI authoring is essential, not optional: the model drafts the whole form
+and the deterministic rules bracket it - the parser lays out the scaffold,
+and the standards enforcer plus validators check the AI stayed on-standard.
+A run therefore requires a configured DeepSeek API key and fails loudly
+(:class:`~xlsform_studio.ai.client.AIError`) without one; there is no
+offline authoring fallback in the shipped product. The legacy deterministic
+rule-engine compiler survives only as a standards/test seam, reachable via
+``authoring="deterministic"`` (or ``XLSFS_AUTHORING``), never selected by
+the UI or CLI.
+
+The optional AI enrichment step (translation, quality review, narrative,
+advisory suggestions) still runs only when an
+:class:`~xlsform_studio.ai.config.AIConfig` with the relevant feature
+enabled is passed in; it refines the AI-authored form, never re-authors it.
 
 Inputs
 ------
@@ -41,12 +54,14 @@ True
 from __future__ import annotations
 
 import datetime as _dt
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from ..ai.client import DeepSeekClient
 from ..ai.config import AIConfig
+from ..ai.form_author import AIFormAuthor
 from ..ai.pipeline import AIPipeline
 from ..ai.suggestions import AISuggestion, apply_suggestions
 from ..analysis.duration import DurationEstimate, DurationEstimator
@@ -65,17 +80,23 @@ from .logic_flow import LogicFlowBuilder
 from .review import ReviewRow, apply_review_edits, build_review_table
 from .verification_checklist import VerificationChecklistBuilder
 
-# Step labels surfaced to the UI.  The AI step
-# always fires (so the UI can show it) but completes instantly as a no-op
-# when AI is disabled or unconfigured - see AIPipeline.run.
+# Step labels surfaced to the UI. In the AI-first pipeline the AI author
+# drafts the whole form; deterministic rules then enforce standards and
+# validate.
 STEP_LABELS = [
     "Reading questionnaire",
-    "Identifying questions",
-    "Applying rules",
-    "Applying AI enrichment",
+    "Drafting the XLSForm with AI",
+    "Enforcing standards",
     "Building XLSForm",
     "Validating output",
 ]
+
+#: Authoring strategy. "ai" (the product default) requires a DeepSeek client
+#: and drafts every field with the model; "deterministic" runs the legacy
+#: rule-engine compiler instead and exists only as a test/standards seam
+#: (the shipped UI and CLI never select it, so the product has no offline
+#: authoring fallback). Overridable per-run or via ``XLSFS_AUTHORING``.
+DEFAULT_AUTHORING = "ai"
 
 ProgressCallback = Callable[[str, str], None]  # (step_label, status)
 
@@ -170,6 +191,8 @@ class Workflow:
              source_name: str = "questionnaire",
              ai_config: Optional[AIConfig] = None,
              ai_client: Optional[DeepSeekClient] = None,
+             authoring: Optional[str] = None,
+             survey_context: str = "",
              path_analysis: bool = True,
              progress: Optional[ProgressCallback] = None) -> WorkflowResult:
 
@@ -184,32 +207,49 @@ class Workflow:
             questionnaire.category = category
         target = (target or "").lower() or None
 
-        # --- compile (rule engine) -------------------------------------
+        ai_config = ai_config or AIConfig.disabled()
+        client = ai_client if ai_client is not None else self.ai_client
+        mode = (authoring or os.environ.get("XLSFS_AUTHORING")
+                or DEFAULT_AUTHORING).lower()
+
+        # --- author the XLSForm ----------------------------------------
+        # AI-first (the product default): the model drafts every field
+        # (type, name, label, logic, constraints, choices). The legacy
+        # deterministic rule engine is only reachable via ``authoring=
+        # "deterministic"`` and exists as a standards/test seam - the
+        # shipped UI and CLI never select it, so a run without a configured
+        # DeepSeek key fails loudly rather than silently degrading.
         self._emit(progress, STEP_LABELS[1], "running")
+        if mode == "deterministic":
+            questionnaire, notes = self.engine.compile(questionnaire)
+        else:
+            notes = AIFormAuthor(client).author(
+                questionnaire, target=target, survey_context=survey_context)
         self._emit(progress, STEP_LABELS[1], "done")
+
+        # --- deterministic standards enforcement -----------------------
+        # Rules keep the AI on-standard: consolidate exactly-duplicate
+        # choice lists (provably safe; logged). Remaining standards checks
+        # are reported by the validator below.
         self._emit(progress, STEP_LABELS[2], "running")
-        questionnaire, notes = self.engine.compile(questionnaire)
-        # Consolidate exactly-duplicate choice lists (provably safe; logged).
         notes.extend(ChoiceNormalizer().normalize(questionnaire))
         self._emit(progress, STEP_LABELS[2], "done")
 
-        # --- optional AI enrichment (no-op unless explicitly enabled) ---
-        self._emit(progress, STEP_LABELS[3], "running")
-        ai_config = ai_config or AIConfig.disabled()
-        client = ai_client if ai_client is not None else self.ai_client
+        # --- optional AI enrichment (translation, quality review, ...) --
+        # These supplementary passes stay opt-in via ai_config; they only
+        # ever annotate or refine the AI-authored form, never re-author it.
         ai_pipeline = AIPipeline(client)
         questionnaire, ai_notes, ai_findings = ai_pipeline.run(
             questionnaire, ai_config)
         notes.extend(ai_notes)
-        self._emit(progress, STEP_LABELS[3], "done")
 
         # --- build XLSForm (in the target platform's dialect) -----------
-        self._emit(progress, STEP_LABELS[4], "running")
+        self._emit(progress, STEP_LABELS[3], "running")
         xls_bytes = self.exporter.export_bytes(questionnaire, target=target)
-        self._emit(progress, STEP_LABELS[4], "done")
+        self._emit(progress, STEP_LABELS[3], "done")
 
         # --- validate (generic + the chosen platform's standards) -------
-        self._emit(progress, STEP_LABELS[5], "running")
+        self._emit(progress, STEP_LABELS[4], "running")
         report = self.validator.validate(questionnaire, target=target,
                                          path_analysis=path_analysis)
         report.findings.extend(ai_findings)
@@ -224,7 +264,7 @@ class Workflow:
         duration = DurationEstimator().estimate(questionnaire)
         notes.extend(ai_pipeline.narrate(questionnaire, quality, duration,
                                          report, ai_config))
-        self._emit(progress, STEP_LABELS[5], "done")
+        self._emit(progress, STEP_LABELS[4], "done")
 
         result = WorkflowResult(questionnaire=questionnaire, report=report,
                                 assumptions=notes, xlsform_bytes=xls_bytes,

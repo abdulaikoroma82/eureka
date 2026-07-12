@@ -34,6 +34,7 @@ strictly additive and never affects the deterministic exit code semantics.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -179,8 +180,16 @@ def main(argv=None) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 2
 
+    # AI authoring is essential (the model drafts every form field), so a
+    # DeepSeek client is created up front and reused for any enrichment. The
+    # deterministic rule-engine seam (XLSFS_AUTHORING=deterministic) is the
+    # only way to run without a key, and is not a documented product mode.
+    authoring_mode = os.environ.get("XLSFS_AUTHORING", "ai").lower()
+    ai_client = DeepSeekClient()
+    if not ai_client.available:
+        ai_client = None
+
     ai_config = AIConfig.disabled()
-    ai_client = None
     flag_features = [f for f in AI_FEATURES
                      if getattr(args, f"ai_flag_{f}", False)]
     if args.ai or flag_features:
@@ -205,10 +214,12 @@ def main(argv=None) -> int:
                              translate_languages=_parse_languages(args.ai_languages),
                              survey_context=args.ai_context,
                              objectives=objectives)
-        ai_client = DeepSeekClient()
-        if not ai_client.available:
-            print("warning: AI enrichment was requested but DEEPSEEK_API_KEY "
-                 "is not set; continuing without it.", file=sys.stderr)
+
+    if authoring_mode != "deterministic" and ai_client is None:
+        print("error: a DeepSeek API key is required (set DEEPSEEK_API_KEY). "
+              "XLSForm Studio drafts every form with AI and has no offline "
+              "authoring mode.", file=sys.stderr)
+        return 2
 
     workflow = Workflow(knowledge=knowledge, ai_client=ai_client)
     print(f"Processing: {input_path}")
@@ -220,6 +231,7 @@ def main(argv=None) -> int:
         target=args.target,
         output_dir=args.output,
         ai_config=ai_config,
+        survey_context=args.ai_context,
         path_analysis=not args.no_path_analysis,
         progress=None if args.quiet else _progress,
     )

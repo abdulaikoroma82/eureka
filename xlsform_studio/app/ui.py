@@ -230,11 +230,17 @@ def _sidebar():
 
 
 def _ai_sidebar():
-    """AI-assist controls. Off by default; requires a DeepSeek API key."""
-    with st.expander("4 · 🤖 AI assist (optional, uses DeepSeek)"):
-        st.caption("Sends question labels to DeepSeek's API when enabled. "
-                   "Off by default — the rest of this tool never leaves "
-                   "your computer.")
+    """AI engine controls. AI is essential: a DeepSeek API key is required to
+    generate a form. The model drafts every field; the optional enrichment
+    passes below only refine that AI-authored draft."""
+    with st.expander("4 · 🤖 AI engine (required — uses DeepSeek)",
+                     expanded=True):
+        st.caption("XLSForm Studio drafts your form with AI: it interprets the "
+                   "questionnaire and writes every field — types, names, "
+                   "labels, skip logic, constraints, calculations and choices "
+                   "— which you then review before download. Deterministic "
+                   "rules check the draft against platform standards. A "
+                   "DeepSeek API key is required.")
 
         env_key = DeepSeekClient().api_key
         api_key = env_key
@@ -246,29 +252,30 @@ def _ai_sidebar():
                 help="Kept only for this browser session; never written to disk. "
                      "Set the DEEPSEEK_API_KEY environment variable instead to "
                      "avoid entering it here.")
-
-        enabled = st.checkbox("Enable AI assist", value=False,
-                              disabled=not api_key)
         if not api_key:
-            st.caption("Enter an API key above to enable AI features.")
-            return AIConfig.disabled(), None
+            st.warning("A DeepSeek API key is required to generate a form.")
+
+        # Always collected — it grounds the AI's authoring (interpretation,
+        # constraints, review) in the survey's actual domain.
+        survey_context = st.text_input(
+            "What is this survey about? (optional)",
+            placeholder="e.g. child nutrition survey in rural districts",
+            help="Grounds the AI's interpretation, constraints and review in "
+                 "your survey's actual domain — a 'temperature' means "
+                 "something different in a health survey than a weather one.")
+
+        st.divider()
+        st.caption("Optional enrichment passes — refine the AI-authored draft "
+                   "(translation, quality review, plain-English narrative, "
+                   "advisory suggestions):")
+        enabled = st.checkbox("Enable enrichment passes", value=False,
+                              disabled=not api_key)
 
         features = []
         if enabled:
             for key, label in _AI_FEATURE_LABELS.items():
                 if st.checkbox(label, value=True, key=f"ai_feat_{key}"):
                     features.append(key)
-
-        survey_context = ""
-        if enabled and ({"domain_constraints", "review", "completeness",
-                         "indicators"} & set(features)):
-            survey_context = st.text_input(
-                "What is this survey about? (optional)",
-                placeholder="e.g. child nutrition survey in rural districts",
-                help="Grounds the AI's value-bound and review suggestions in "
-                     "your survey's actual domain — a 'temperature' means "
-                     "something different in a health survey than a weather "
-                     "one.")
 
         objectives = ""
         if enabled and "coverage" in features:
@@ -303,7 +310,10 @@ def _ai_sidebar():
                           translate_languages=languages,
                           survey_context=survey_context,
                           objectives=objectives)
-        client = DeepSeekClient(api_key=api_key) if enabled else None
+        # The client is ALWAYS created when a key is present: AI authoring
+        # needs it regardless of the optional enrichment toggle. Without a
+        # key it is None, and generation is blocked upstream.
+        client = DeepSeekClient(api_key=api_key) if api_key else None
         return config, client
 
 
@@ -828,6 +838,16 @@ def main() -> None:
                 f"sidebar and click **Generate XLSForm**.", icon="📄")
         return
 
+    if generate and ai_client is None:
+        # AI authoring is essential and has no offline fallback: block the
+        # run with a clear message rather than letting it fail mid-pipeline.
+        st.title("🧩 XLSForm Studio")
+        st.error("A DeepSeek API key is required to generate a form. "
+                 "Add your key under **4 · 🤖 AI engine** in the sidebar "
+                 "(or set the DEEPSEEK_API_KEY environment variable), then "
+                 "click **Generate XLSForm** again.", icon="🔑")
+        return
+
     if generate:
         # Persist the upload to a temp file so parsers can read it.
         suffix = Path(uploaded.name).suffix
@@ -854,6 +874,7 @@ def main() -> None:
                 target=target,
                 source_name=uploaded.name,
                 ai_config=ai_config,
+                survey_context=ai_config.survey_context,
                 progress=progress,
                 output_dir=_session_output_dir(),
             )
