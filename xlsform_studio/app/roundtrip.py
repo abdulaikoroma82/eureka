@@ -20,11 +20,19 @@ made in Excel is treated identically to one made in the UI:
   strongest possible signal, and it is never re-drafted by AI.
 * **New question** (absent from the prior model) - flagged *low-confidence*
   for review, so nothing silently arrives unaudited.
+* **Renamed question** - a question whose ``name`` is new but whose label
+  matches a question that has otherwise disappeared is recognised as a
+  rename (the same heuristic the D3 diff engine uses). Its provenance
+  transfers to the new name, and the rename itself is recorded as a
+  high-confidence human decision.
 * **Removed question** (present before, gone now) - logged.
 
-Matching is by variable ``name``. A rename therefore reads as a delete plus
-an add; treating it as a genuine rename is a future refinement (the D3 diff
-engine already has the heuristic).
+Matching is by variable ``name`` first, then by label for renames. Unlike
+the in-app rename (:func:`~xlsform_studio.app.review.apply_review_edits`),
+round-trip does **not** rewrite ``${old}`` references: the edited workbook is
+authoritative for every field, so if the human renamed a variable but left a
+reference dangling, the validator flags it honestly rather than the tool
+silently "fixing" what the file actually says.
 """
 
 from __future__ import annotations
@@ -71,48 +79,92 @@ def reconcile(edited: Questionnaire,
     notes: List[str] = []
     prior_by_name = {q.name: q for q in prior.questions
                      if q.name and not q.is_structural}
-    seen: set = set()
+    matched_prior: set = set()
 
-    for q in edited.questions:
-        # begin/end group & repeat markers carry no authored provenance;
-        # they are layout, re-derived on export, not questions to reconcile.
-        if q.is_structural:
-            continue
-        ident = q.name or q.label or "(unnamed)"
+    # begin/end group & repeat markers carry no authored provenance; they are
+    # layout, re-derived on export, not questions to reconcile.
+    edited_questions = [q for q in edited.questions if not q.is_structural]
+
+    # Pass 1: consume every exact name-match, so a later rename-by-label can
+    # never steal a prior question that a real name-match still needs.
+    unmatched: List[Question] = []
+    for q in edited_questions:
         pj = prior_by_name.get(q.name) if q.name else None
+        if pj is not None:
+            matched_prior.add(q.name)
+            notes.extend(_carry_and_diff(q, pj, q.name or q.label))
+        else:
+            unmatched.append(q)
 
-        if pj is None:
-            notes.append(
-                f"[{ident}] New question introduced in the re-imported "
-                f"XLSForm; review its type and logic before deployment.")
+    # Pass 2: each leftover is either a rename (label matches a now-missing
+    # prior question) or genuinely new.
+    for q in unmatched:
+        ident = q.name or q.label or "(unnamed)"
+        old_name = _find_rename(q, prior_by_name, matched_prior)
+        if old_name is not None:
+            pj = prior_by_name[old_name]
+            matched_prior.add(old_name)
+            q.assumptions = list(pj.assumptions)
+            q.decisions = list(pj.decisions)
             q.add_decision(
-                _DECISION_FIELD.get("xlsform_type", "type"),
-                q.xlsform_type or "", "low",
-                f"[{ident}] Added directly in an edited XLSForm - the tool "
-                f"has no prior record of it, so please confirm the type.")
+                "name", q.name, "high",
+                f"[{q.name}] Renamed from '{old_name}' in the re-imported "
+                f"XLSForm; recorded as reviewed by a human. Note: any "
+                f"${{{old_name}}} references are taken from the workbook "
+                f"as-is and validated, not auto-rewritten.")
+            notes.append(
+                f"[{q.name}] Renamed from '{old_name}' in the re-imported "
+                f"XLSForm; confidence and assumptions carried over.")
+            notes.extend(_apply_field_changes(q, pj, ident))
             continue
 
-        seen.add(q.name)
-        # Carry the prior provenance forward first; edited fields then append
-        # a newer, authoritative decision on top of it.
-        q.assumptions = list(pj.assumptions)
-        q.decisions = list(pj.decisions)
-
-        changed = _apply_field_changes(q, pj, ident)
-        notes.extend(changed)
-        if not changed:
-            notes.append(
-                f"[{ident}] Unchanged in the re-imported XLSForm; original "
-                f"confidence and assumptions carried forward.")
+        notes.append(
+            f"[{ident}] New question introduced in the re-imported "
+            f"XLSForm; review its type and logic before deployment.")
+        q.add_decision(
+            _DECISION_FIELD.get("xlsform_type", "type"),
+            q.xlsform_type or "", "low",
+            f"[{ident}] Added directly in an edited XLSForm - the tool "
+            f"has no prior record of it, so please confirm the type.")
 
     for name, pj in prior_by_name.items():
-        if name not in seen:
+        if name not in matched_prior:
             label = pj.label or name
             notes.append(
                 f"[{name}] Question '{label}' was present in the previous "
                 f"version but removed in the re-imported XLSForm.")
 
     return edited, notes
+
+
+def _carry_and_diff(q: Question, pj: Question, ident: str) -> List[str]:
+    """Carry prior provenance onto a name-matched question, then record any
+    field-level edits."""
+    # Carry the prior provenance forward first; edited fields then append a
+    # newer, authoritative decision on top of it.
+    q.assumptions = list(pj.assumptions)
+    q.decisions = list(pj.decisions)
+    changed = _apply_field_changes(q, pj, ident)
+    if changed:
+        return changed
+    return [f"[{ident}] Unchanged in the re-imported XLSForm; original "
+            f"confidence and assumptions carried forward."]
+
+
+def _find_rename(q: Question, prior_by_name: Dict[str, Question],
+                 matched_prior: set) -> "str | None":
+    """The old name of an unconsumed prior question sharing this label, or
+    None. Labels must be non-empty to match, so two blank-label questions
+    never collapse into a spurious rename."""
+    label = (q.label or q.raw_label or "").strip()
+    if not label:
+        return None
+    for name, pj in prior_by_name.items():
+        if name in matched_prior:
+            continue
+        if (pj.label or pj.raw_label or "").strip() == label:
+            return name
+    return None
 
 
 def _apply_field_changes(q: Question, prior: Question,

@@ -138,6 +138,49 @@ def test_reconcile_flags_new_question_low_confidence():
     assert any("New question introduced" in n for n in notes)
 
 
+def test_reconcile_detects_rename_and_carries_provenance():
+    prior = _prior()
+    edited = _prior()
+    for q in edited.questions:
+        q.decisions = []
+        q.assumptions = []
+    # 'age' renamed to 'age_years' (same label) - a rename, not delete+add.
+    edited.questions[0].name = "age_years"
+
+    merged, notes = reconcile(edited, prior)
+
+    renamed = next(q for q in merged.questions if q.name == "age_years")
+    # the original type/constraint confidence transferred to the new name
+    assert any(d.field_name == "type" and d.confidence == "high"
+               for d in renamed.decisions)
+    # and the rename itself is a high-confidence human decision
+    assert any(d.field_name == "name" and d.confidence == "high"
+               and "age" in d.reason for d in renamed.decisions)
+    assert any("Renamed from 'age'" in n for n in notes)
+    # not misreported as an add or a removal
+    assert not any("New question introduced" in n for n in notes)
+    assert not any("removed in the re-imported" in n for n in notes)
+
+
+def test_reconcile_name_match_wins_over_label_rename():
+    """An exact name-match must never be stolen by a rename-by-label, even
+    when another question shares the label."""
+    prior = _prior()
+    # give 'adult' the same label as 'age' to bait the rename heuristic
+    prior.questions[1].label = "Age"
+    edited = _prior()
+    edited.questions[1].label = "Age"
+    for q in edited.questions:
+        q.decisions = []
+    edited.questions[0].name = "age_years"      # genuine rename of 'age'
+
+    merged, notes = reconcile(edited, prior)
+
+    # 'adult' matched by name and survived; the rename resolved to 'age'
+    assert any("Renamed from 'age'" in n for n in notes)
+    assert not any("removed in the re-imported" in n for n in notes)
+
+
 def test_reconcile_logs_removed_question():
     prior = _prior()
     edited = _prior()

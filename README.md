@@ -721,14 +721,29 @@ and reconciled field by field against the snapshot:
   human"* decision — exactly how an edit made in the in-app review panel is
   recorded, so an edit in Excel and an edit in the UI are indistinguishable
   downstream;
+* a **renamed** variable (new `name`, same label) is recognised as a rename,
+  not a delete-plus-add, so its confidence and assumptions carry over to the
+  new name — though, unlike an in-app rename, round-trip takes the workbook
+  literally and does **not** auto-rewrite `${old}` references: if you renamed a
+  variable but left a reference dangling, the validator flags it honestly;
 * a **new** question is flagged low-confidence for review, and a **removed**
   one is logged.
 
 The full documentation package (and a refreshed sidecar) is then rebuilt from
 the merged model. Because nothing is authored, round-trip re-import needs **no
-API key**. In library code the same flow is
-`Workflow().run_roundtrip(edited_path, model_json_path)`. This is what makes
-XLSForm Studio a *canonical editor* for a form, not just a one-shot generator.
+API key**.
+
+You can do this two ways:
+
+* **In the app** — sidebar section **5 · ♻️ Re-import an edited XLSForm**:
+  drop in the edited `.xlsx` and its `*_model.json`, click **Re-import &
+  rebuild**, and the reconciled form flows into the same review panel, tabs
+  and downloads as a fresh run.
+* **In library code** —
+  `Workflow().run_roundtrip(edited_path, model_json_path)`.
+
+This is what makes XLSForm Studio a *canonical editor* for a form, not just a
+one-shot generator.
 
 ---
 

@@ -223,8 +223,31 @@ def _sidebar():
         if uploaded is None:
             st.caption("Upload a questionnaire to enable generation.")
 
+        roundtrip = _roundtrip_sidebar(target)
+
     return (uploaded, target, form_title, form_id, version, packs,
-            ai_config, ai_client, generate)
+            ai_config, ai_client, generate, roundtrip)
+
+
+def _roundtrip_sidebar(target: str):
+    """Advanced flow: re-import an edited XLSForm against the model sidecar
+    from the run that produced it, keeping per-field confidence for anything
+    the editor didn't change. Authors nothing, so it needs no API key."""
+    with st.expander("5 · ♻️ Re-import an edited XLSForm"):
+        st.caption("Edited the workbook in Excel or a form builder? Bring it "
+                   "back without losing the tool's confidence and assumptions. "
+                   "Pair it with the `*_model.json` sidecar from the run that "
+                   "produced it.")
+        edited = st.file_uploader("Edited XLSForm (.xlsx)", type=["xlsx"],
+                                  key="rt_xlsx")
+        model = st.file_uploader("Model sidecar (*_model.json)", type=["json"],
+                                 key="rt_model")
+        clicked = st.button("♻️ Re-import & rebuild", use_container_width=True,
+                            disabled=not (edited and model))
+        if not (edited and model):
+            st.caption("Provide both files to enable re-import. "
+                       "No API key needed — nothing is re-authored.")
+    return edited, model, clicked, target
 
 
 def _ai_sidebar():
@@ -858,12 +881,54 @@ def _render_platform_guide(target: str) -> None:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+def _run_roundtrip(edited_file, model_file, target: str) -> bool:
+    """Persist both uploads, reconcile the edited XLSForm against the model
+    sidecar, and stash the rebuilt result. Returns True on success."""
+    st.title("🧩 XLSForm Studio")
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tx:
+        tx.write(edited_file.getbuffer())
+        xls_path = Path(tx.name)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tm:
+        tm.write(model_file.getbuffer())
+        model_path = Path(tm.name)
+    try:
+        result = Workflow(knowledge=_kb()).run_roundtrip(
+            xls_path, model_path,
+            target=target,
+            source_name=edited_file.name,
+            output_dir=_session_output_dir(),
+        )
+    except Exception as exc:  # pragma: no cover - surfaced to the user
+        st.error(f"Could not re-import **{edited_file.name}**: {exc}", icon="⚠️")
+        return False
+    finally:
+        xls_path.unlink(missing_ok=True)
+        model_path.unlink(missing_ok=True)
+    st.session_state["last_result"] = result
+    st.session_state["last_target"] = target
+    st.success(f"Re-imported **{edited_file.name}** and rebuilt the package — "
+               f"confidence and assumptions preserved for every field you "
+               f"didn't change. See the review panel and assumption log below.",
+               icon="♻️")
+    return True
+
+
 def main() -> None:
     st.set_page_config(page_title="XLSForm Studio", page_icon="🧩",
                        layout="wide")
 
     (uploaded, target, form_title, form_id, version, packs,
-     ai_config, ai_client, generate) = _sidebar()
+     ai_config, ai_client, generate, roundtrip) = _sidebar()
+
+    # Round-trip re-import is its own entry point: it authors nothing (the
+    # form was drafted on a prior run), so it needs no primary upload and no
+    # API key. Handle it before the normal generate flow.
+    rt_edited, rt_model, rt_clicked, rt_target = roundtrip
+    if rt_clicked and rt_edited is not None and rt_model is not None:
+        if _run_roundtrip(rt_edited, rt_model, rt_target):
+            _render_result(st.session_state["last_result"],
+                           st.session_state.get("last_target", rt_target))
+        return
 
     if uploaded is None:
         _render_landing()
