@@ -120,7 +120,7 @@ class ExpressionValidator:
                         "warning", "expression",
                         f"Unrecognised function '{fn}()' in {column} on "
                         f"'{q.name}' - check it is supported on your target "
-                        f"platform.", q.name))
+                        f"platform.", q.name, confidence="unsupported"))
         return findings
 
     # ------------------------------------------------------------------

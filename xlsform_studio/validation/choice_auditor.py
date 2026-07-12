@@ -152,7 +152,7 @@ class ChoiceAuditor:
                     f"{'y' if len(missing) == 1 else 'ies'}: "
                     f"{', '.join(m.title() for m in missing)}. An "
                     f"unbalanced scale biases responses toward the "
-                    f"remaining options.", name))
+                    f"remaining options.", name, confidence="heuristic"))
             break   # a list matches at most one scale meaningfully
         return findings
 
@@ -181,7 +181,8 @@ class ChoiceAuditor:
                 f"Choice list '{name}' contains {seq_name} out of their "
                 f"logical order: listed as "
                 f"{', '.join(l.title() for l in labels)}; expected "
-                f"{', '.join(l.title() for l in expected)}.", name)]
+                f"{', '.join(l.title() for l in expected)}.", name,
+                confidence="heuristic")]
 
         # Numeric-prefixed labels ("1-5 years", "6-10 years") - checked on
         # the raw labels, since normalization strips the digits.
@@ -192,7 +193,7 @@ class ChoiceAuditor:
                     "warning", "choice_quality",
                     f"Choice list '{name}' has numeric labels that are not "
                     f"in ascending order - respondents and analysts expect "
-                    f"ranges to run low to high.", name)]
+                    f"ranges to run low to high.", name, confidence="heuristic")]
         return []
 
     # ------------------------------------------------------------------
@@ -287,7 +288,7 @@ class ChoiceAuditor:
             f"({', '.join(str(v) for v in values)}) for categorical "
             f"labels with no obvious encoding scheme - valid, but "
             f"analysts often assume sequential coding; confirm this is "
-            f"intentional.", name)]
+            f"intentional.", name, confidence="heuristic")]
 
     # ------------------------------------------------------------------
     # Check 5: unbalanced value ranges
@@ -311,7 +312,8 @@ class ChoiceAuditor:
                 f"Choice list '{name}' has codes {cluster} plus a distant "
                 f"outlier {outliers} - if {outliers} is a "
                 f"don't-know/refused code, confirm your analysis plan "
-                f"treats it as missing rather than a value.", name)]
+                f"treats it as missing rather than a value.", name,
+                confidence="heuristic")]
         return []
 
     # ------------------------------------------------------------------

@@ -58,6 +58,9 @@ from xlsform_studio.app.logic_flow import LogicFlowBuilder
 from xlsform_studio.app.workflow import STEP_LABELS, Workflow
 from xlsform_studio.engine.knowledge_base import KnowledgeBase
 from xlsform_studio.logging_config import configure_logging
+from xlsform_studio.validation.report_generator import (CONFIDENCE_ICONS,
+                                                         CONFIDENCE_LABELS,
+                                                         CONFIDENCE_LEVELS)
 from xlsform_studio.xlsform.choices_builder import ChoicesBuilder
 from xlsform_studio.xlsform.survey_builder import SurveyBuilder
 
@@ -413,10 +416,15 @@ def _render_result(result, target: str) -> None:
     with tabs[2]:
         if not report.findings:
             st.success("No issues found — a completely clean run.")
+        else:
+            st.caption(" · ".join(
+                f"{CONFIDENCE_ICONS[c]} {CONFIDENCE_LABELS[c]}"
+                for c in CONFIDENCE_LEVELS))
         for f in report.sorted_findings():
-            icon = "🤖" if f.category == "ai_review" else _LEVEL_ICONS.get(f.level, "🔵")
+            level_icon = "🤖" if f.category == "ai_review" else _LEVEL_ICONS.get(f.level, "🔵")
+            conf_icon = CONFIDENCE_ICONS.get(f.confidence, "")
             loc = f" — `{f.location}`" if f.location else ""
-            st.markdown(f"{icon} **{f.category}**{loc}: {f.message}")
+            st.markdown(f"{level_icon}{conf_icon} **{f.category}**{loc}: {f.message}")
             if f.explanation:
                 st.caption(f"💬 {f.explanation}")
 

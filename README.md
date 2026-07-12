@@ -484,6 +484,27 @@ The validator runs in layers:
 > expressions), but every platform still runs its own validation when you
 > upload — treat that as the final authoritative check.
 
+### Confidence levels
+
+A "warning" and a "confirmed" fact are not the same kind of claim, so every
+finding is also tagged with **how sure the tool is**, independent of its
+error/warning/info severity:
+
+| Icon | Confidence | Meaning |
+| --- | --- | --- |
+| ✅ | **Confirmed** | Verified by an actual platform toolchain — pyxform converted the form to a real ODK XForm, or refused to. |
+| 🔎 | **Checked** | This tool's own deterministic rule or grammar checked it exactly (structure, logic, references, expression syntax, path analysis). |
+| 🧭 | **Heuristic** | A pattern-matched inference or AI suggestion about likely intent — useful, but not a proof. Review it. |
+| ❔ | **Unsupported** | The tool could not check this (an unrecognised function, deep validation unavailable or incomplete) and passed it through unchanged rather than guessing or rejecting it. |
+
+The principle: **never reject or silently accept something this tool
+genuinely can't verify — say so.** An unrecognised XPath function in a
+`choice_filter` is a warning tagged ❔ *unsupported*, not a hard error and
+not a silent pass; a pyxform conversion failure is an error tagged ✅
+*confirmed*, because that came from the real toolchain, not a guess. The
+CLI, the Streamlit Findings tab, and the Markdown/PDF QA report all show
+the confidence icon next to every finding.
+
 Results are written to `QA_Report.pdf` in the output package.
 
 ---

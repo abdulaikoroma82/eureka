@@ -82,14 +82,15 @@ class AICompletenessReviewer:
                 max_tokens=max(800, len(rows) * 20))
         except AIError as exc:
             return [Finding("info", "ai_review",
-                            f"AI completeness review could not run: {exc}")]
+                            f"AI completeness review could not run: {exc}",
+                            confidence="unsupported")]
 
         findings: List[Finding] = []
         items = response.get("missing", [])
         if not isinstance(items, list):
             return [Finding("info", "ai_review",
                             "AI completeness response was not in the "
-                            "expected shape.")]
+                            "expected shape.", confidence="unsupported")]
         for item in items:
             if not isinstance(item, dict):
                 continue
@@ -102,5 +103,6 @@ class AICompletenessReviewer:
                 message += f" — {reason}"
             message += (" (Advisory only — the tool never adds questions; "
                         "add it in your source document if it belongs.)")
-            findings.append(Finding("warning", "ai_review", message))
+            findings.append(Finding("warning", "ai_review", message,
+                                    confidence="heuristic"))
         return findings

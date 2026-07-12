@@ -29,11 +29,38 @@ from __future__ import annotations
 import datetime as _dt
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, List, Tuple, Union
 
 from ..models import Questionnaire
 
 _LEVEL_ORDER = {"error": 0, "warning": 1, "info": 2}
+
+#: How sure the tool is about a finding, independent of its error/warning/
+#: info *level*. A "warning" can be rock-solid (an exact reference-count
+#: fact) or a shot in the dark (an LLM suggestion) - level says how bad it
+#: would be if true, confidence says how sure we are it's true.
+#:
+#: * ``confirmed``   - verified by an actual platform toolchain (pyxform
+#:   converted the form to a real ODK XForm, or failed to)
+#: * ``checked``      - this tool's own deterministic rule/grammar checked
+#:   it exactly (structure, logic, references, syntax, path analysis)
+#: * ``heuristic``    - a pattern-matched inference or AI suggestion about
+#:   likely intent - correct enough to be useful, not a proof; review it
+#: * ``unsupported``  - this tool could not check it (unrecognised
+#:   function, deep validation unavailable/incomplete) and passed it
+#:   through unchanged rather than guessing or rejecting
+CONFIDENCE_LEVELS: Tuple[str, ...] = ("confirmed", "checked", "heuristic",
+                                      "unsupported")
+_CONFIDENCE_ORDER = {c: i for i, c in enumerate(CONFIDENCE_LEVELS)}
+CONFIDENCE_LABELS: Dict[str, str] = {
+    "confirmed": "Confirmed by platform toolchain",
+    "checked": "Syntax/rule checked by this tool",
+    "heuristic": "Heuristically inferred - review needed",
+    "unsupported": "Unsupported / passed through unchanged",
+}
+CONFIDENCE_ICONS: Dict[str, str] = {
+    "confirmed": "✅", "checked": "🔎", "heuristic": "🧭", "unsupported": "❔",
+}
 
 
 @dataclass
@@ -49,6 +76,10 @@ class Finding:
         field is purely additive commentary, set only by the optional AI
         "explain findings" pass (never changes what was found, only how it
         is described to a reader).
+    confidence: one of :data:`CONFIDENCE_LEVELS`. Defaults to ``"checked"``,
+        the modal case for this tool's own deterministic rule validators;
+        set explicitly wherever a finding is toolchain-confirmed, a fuzzy
+        inference, or something the tool passed through unchecked.
     """
 
     level: str
@@ -56,11 +87,18 @@ class Finding:
     message: str
     location: str = ""
     explanation: str = ""
+    confidence: str = "checked"
+
+    def __post_init__(self) -> None:
+        if self.confidence not in CONFIDENCE_LEVELS:
+            raise ValueError(
+                f"Finding.confidence must be one of {CONFIDENCE_LEVELS}, "
+                f"got {self.confidence!r}")
 
     def to_dict(self) -> Dict[str, str]:
         return {"level": self.level, "category": self.category,
                 "message": self.message, "location": self.location,
-                "explanation": self.explanation}
+                "explanation": self.explanation, "confidence": self.confidence}
 
 
 @dataclass
@@ -95,7 +133,16 @@ class ValidationReport:
 
     def sorted_findings(self) -> List[Finding]:
         return sorted(self.findings,
-                      key=lambda f: (_LEVEL_ORDER.get(f.level, 9), f.category))
+                      key=lambda f: (_LEVEL_ORDER.get(f.level, 9), f.category,
+                                     _CONFIDENCE_ORDER.get(f.confidence, 9)))
+
+
+def _finding_line(f: Finding, label_field: str = "category") -> str:
+    """One markdown bullet for a finding, tagged with its confidence icon."""
+    loc = f" [`{f.location}`]" if f.location else ""
+    icon = CONFIDENCE_ICONS.get(f.confidence, "")
+    label = f.category if label_field == "category" else f.level
+    return f"- {icon} **{label}**{loc}: {f.message}"
 
 
 class ReportGenerator:
@@ -162,6 +209,11 @@ class ReportGenerator:
                          f"standards (plus the generic XLSForm spec)  ")
         lines.append(report.summary())
         lines.append("")
+        if report.findings:
+            lines.append("**Confidence key:** " + " · ".join(
+                f"{CONFIDENCE_ICONS[c]} {CONFIDENCE_LABELS[c]}"
+                for c in CONFIDENCE_LEVELS) + "  ")
+            lines.append("")
         deep = ("Deep validation via pyxform (the ODK/Kobo engine) was run."
                 if report.deep_ran else
                 "Deep validation via pyxform was NOT run (pyxform not installed); "
@@ -191,8 +243,7 @@ class ReportGenerator:
             lines.append(f"## {level.capitalize()}s ({len(group)})")
             lines.append("")
             for f in group:
-                loc = f" [`{f.location}`]" if f.location else ""
-                lines.append(f"- **{f.category}**{loc}: {f.message}")
+                lines.append(_finding_line(f, "category"))
                 if f.explanation:
                     lines.append(f"  - _{f.explanation}_")
             lines.append("")
@@ -209,8 +260,7 @@ class ReportGenerator:
             lines.append("")
             for f in sorted(path_group,
                             key=lambda f: _LEVEL_ORDER.get(f.level, 9)):
-                loc = f" [`{f.location}`]" if f.location else ""
-                lines.append(f"- **{f.level}**{loc}: {f.message}")
+                lines.append(_finding_line(f, "level"))
                 if f.explanation:
                     lines.append(f"  - _{f.explanation}_")
             lines.append("")
@@ -226,8 +276,7 @@ class ReportGenerator:
             lines.append("")
             for f in sorted(choice_group,
                             key=lambda f: _LEVEL_ORDER.get(f.level, 9)):
-                loc = f" [`{f.location}`]" if f.location else ""
-                lines.append(f"- **{f.level}**{loc}: {f.message}")
+                lines.append(_finding_line(f, "level"))
                 if f.explanation:
                     lines.append(f"  - _{f.explanation}_")
             lines.append("")
@@ -241,8 +290,7 @@ class ReportGenerator:
                          "never block deployment._")
             lines.append("")
             for f in ai_group:
-                loc = f" [`{f.location}`]" if f.location else ""
-                lines.append(f"- **{f.level}**{loc}: {f.message}")
+                lines.append(_finding_line(f, "level"))
                 if f.explanation:
                     lines.append(f"  - _{f.explanation}_")
             lines.append("")

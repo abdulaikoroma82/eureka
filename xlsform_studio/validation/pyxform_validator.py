@@ -70,14 +70,16 @@ class PyxformValidator:
             return [Finding(
                 "info", "deployment",
                 "Deep validation skipped: pyxform is not installed "
-                "(pip install pyxform) - relying on the standard checks.")]
+                "(pip install pyxform) - relying on the standard checks.",
+                confidence="unsupported")]
 
         findings: List[Finding] = []
         try:
             xls_bytes = self.exporter.export_bytes(questionnaire)
         except Exception as exc:  # pragma: no cover - defensive
             return [Finding("error", "deployment",
-                            f"Could not build the workbook for deep validation: {exc}")]
+                            f"Could not build the workbook for deep validation: {exc}",
+                            confidence="confirmed")]
 
         warnings: List[str] = []
         try:
@@ -85,23 +87,26 @@ class PyxformValidator:
         except self._error_types as exc:
             findings.append(Finding(
                 "error", "deployment",
-                f"pyxform (ODK/Kobo engine) rejected the form: {self._clean(exc)}"))
+                f"pyxform (ODK/Kobo engine) rejected the form: {self._clean(exc)}",
+                confidence="confirmed"))
             return findings
         except Exception as exc:  # unexpected pyxform failure
             findings.append(Finding(
                 "warning", "deployment",
-                f"Deep validation could not complete: {self._clean(exc)}"))
+                f"Deep validation could not complete: {self._clean(exc)}",
+                confidence="unsupported"))
             return findings
 
         # Conversion succeeded: surface any advisory warnings.
         for w in warnings:
             findings.append(Finding("warning", "deployment",
-                                    f"pyxform warning: {self._clean(w)}"))
+                                    f"pyxform warning: {self._clean(w)}",
+                                    confidence="confirmed"))
         if not findings:
             findings.append(Finding(
                 "info", "deployment",
                 "Deep validation passed: pyxform converted the form to a valid "
-                "ODK XForm (ODK/Kobo compatible)."))
+                "ODK XForm (ODK/Kobo compatible).", confidence="confirmed"))
         return findings
 
     # ------------------------------------------------------------------

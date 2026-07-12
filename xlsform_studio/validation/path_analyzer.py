@@ -141,7 +141,8 @@ class PathAnalyzer:
                 f"The form's skip logic implies more than {MAX_PATHS:,} "
                 f"distinct paths; path analysis used a conservative "
                 f"approximation (reference errors are still fully checked; "
-                f"some warnings below may be over-cautious)."))
+                f"some warnings below may be over-cautious).",
+                confidence="heuristic"))
             findings.extend(self._conservative(qs, names))
             return findings
 
@@ -400,6 +401,6 @@ class PathAnalyzer:
                         f"which may be empty when the {kind} runs "
                         f"(conservative check - path enumeration was "
                         f"skipped on this large form). Verify manually.",
-                        q.name))
+                        q.name, confidence="heuristic"))
         return findings
 

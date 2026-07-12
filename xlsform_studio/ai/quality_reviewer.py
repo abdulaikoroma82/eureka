@@ -142,7 +142,8 @@ class AIQualityReviewer:
                 max_tokens=max(1500, len(rows) * 60))
         except AIError as exc:
             return [Finding("info", "ai_review",
-                            f"AI quality review could not run: {exc}")]
+                            f"AI quality review could not run: {exc}",
+                            confidence="unsupported")]
 
         return self._to_findings(response)
 
@@ -173,7 +174,8 @@ class AIQualityReviewer:
         items = response.get("findings", [])
         if not isinstance(items, list):
             return [Finding("info", "ai_review",
-                            "AI review response was not in the expected shape.")]
+                            "AI review response was not in the expected shape.",
+                            confidence="unsupported")]
 
         for item in items:
             if not isinstance(item, dict):
@@ -184,5 +186,6 @@ class AIQualityReviewer:
             if not issue:
                 continue
             message = issue if not explanation else f"{issue} — {explanation}"
-            findings.append(Finding("warning", "ai_review", message, name))
+            findings.append(Finding("warning", "ai_review", message, name,
+                                    confidence="heuristic"))
         return findings

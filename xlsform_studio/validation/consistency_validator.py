@@ -231,5 +231,5 @@ class ConsistencyValidator:
                     f"Choice lists '{name_a}' and '{name_b}' share "
                     f"{overlap:.0%} of their options - if the difference is "
                     f"accidental, merge them so analysis sees one scale.",
-                    name_a))
+                    name_a, confidence="heuristic"))
         return findings

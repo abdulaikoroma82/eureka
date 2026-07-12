@@ -40,6 +40,7 @@ from pathlib import Path
 from ..ai.client import DeepSeekClient
 from ..ai.config import AI_FEATURES, AIConfig, normalize_features
 from ..logging_config import configure_logging
+from ..validation.report_generator import CONFIDENCE_ICONS
 from .config import CONFIG, DEPLOYMENT_TARGETS
 from .workflow import Workflow
 
@@ -250,9 +251,14 @@ def main(argv=None) -> int:
     print()
     print("Validation:", "PASSED" if report.is_valid else "FAILED")
     print(" ", report.summary())
+    if report.findings:
+        print("  Confidence: ✅ confirmed by toolchain   🔎 checked by this "
+              "tool   🧭 heuristic - review needed   ❔ unsupported/passed "
+              "through")
     for f in report.sorted_findings():
         loc = f" [{f.location}]" if f.location else ""
-        print(f"   - {f.level.upper():7} {f.category}{loc}: {f.message}")
+        icon = CONFIDENCE_ICONS.get(f.confidence, "")
+        print(f"   - {f.level.upper():7} {icon} {f.category}{loc}: {f.message}")
         if f.explanation:
             print(f"             → {f.explanation}")
 

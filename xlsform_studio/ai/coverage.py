@@ -136,7 +136,7 @@ class AICoverageReviewer:
                     "warning", "ai_review",
                     f"Objective not fully covered ({rating}): "
                     f"'{objective}'"
-                    + (f" — {gap}" if gap else "")))
+                    + (f" — {gap}" if gap else ""), confidence="heuristic"))
 
         notes.append(f"[AI coverage] Mapped {len(objectives)} objective(s); "
                     f"{uncovered} not fully covered - see "
