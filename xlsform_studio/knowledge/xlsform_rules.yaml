@@ -136,7 +136,7 @@ logic_tokens:
 
 # --- Module 3: Variable naming ----------------------------------------------
 naming:
-  max_length: 40           # ODK/XLSForm safe identifier length
+  max_length: 32           # safe identifier length across platforms (Stata truncates names over 32)
   stopwords: ["the", "a", "an", "of", "is", "are", "to", "in", "on", "for",
               "please", "what", "which", "did", "do", "does", "was", "were",
               "how", "your", "you", "this", "that", "record", "enter",

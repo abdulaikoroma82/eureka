@@ -223,7 +223,7 @@ class Workflow:
         if mode == "deterministic":
             questionnaire, notes = self.engine.compile(questionnaire)
         else:
-            notes = AIFormAuthor(client).author(
+            notes = AIFormAuthor(client, self.kb).author(
                 questionnaire, target=target, survey_context=survey_context)
         self._emit(progress, STEP_LABELS[1], "done")
 

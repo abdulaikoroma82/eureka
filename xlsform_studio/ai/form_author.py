@@ -25,6 +25,12 @@ columns/sheets exist, in which platform dialect) and *verify* the result.
 The model can only write into fields this module recognises - it cannot
 invent columns or sheets - which is how "rules keep the AI on-standard".
 
+Before authoring, this module *reads* the deterministic naming rule
+(``naming.max_length`` in the knowledge base) and states it in the prompt, so
+the model is told the exact identifier limit up front; the same limit caps
+the names this module accepts. AI and rules therefore agree by construction
+rather than the rules having to reject and re-request oversized names.
+
 Essential, not optional
 -----------------------
 Unlike the older enrichment modules, this one is required: a run cannot
@@ -56,10 +62,16 @@ import json
 import re
 from typing import Dict, List, Optional
 
+from ..engine.knowledge_base import KnowledgeBase
 from ..models import (Choice, ChoiceList, DECISION_CONFIDENCE_LEVELS,
                       Questionnaire, Question)
 from .client import AIError, DeepSeekClient, MAX_QUESTIONS_FOR_AI
 from .prompt_safety import INJECTION_GUARD, frame_untrusted
+
+#: Fallback identifier length if the knowledge base names none. The
+#: authoritative value is the deterministic ``naming.max_length`` rule in
+#: ``knowledge/xlsform_rules.yaml``, which the author reads at construction.
+_DEFAULT_MAX_NAME_LENGTH = 32
 
 # The exact survey-sheet columns the model must populate, mirroring
 # app.config.SURVEY_COLUMNS. Kept as a literal here so the prompt states the
@@ -89,7 +101,9 @@ _SYSTEM_PROMPT = (
     "row, and for every choice question you also define the choice list it "
     "references.\n\n"
     "Survey row fields you must set: " + ", ".join(_SURVEY_FIELDS) + ".\n\n"
-    "Rules (these ARE the standards - follow them exactly):\n"
+    "Read these deterministic standards FIRST. A rule engine re-checks every "
+    "row after you author it and rejects anything that breaks them (sending "
+    "it back for slow human review), so comply exactly up front:\n"
     "- type: one valid XLSForm type. For choice questions use "
     "'select_one <list>' or 'select_multiple <list>', where <list> is a "
     "lowercase snake_case name you also define under \"choices\". Other "
@@ -97,8 +111,8 @@ _SYSTEM_PROMPT = (
     "geopoint, geotrace, geoshape, image, audio, video, barcode, calculate, "
     "note, range, acknowledge.\n"
     "- name: a UNIQUE, lowercase snake_case identifier (a-z, 0-9, underscore; "
-    "must start with a letter). Derive it from the item's meaning; keep it "
-    "concise. Never reuse a name.\n"
+    "must start with a letter) of AT MOST {max_name} characters. Derive it "
+    "from the item's meaning; keep it concise. Never reuse a name.\n"
     "- label: the respondent-facing wording, cleaned up for clarity and "
     "consistency. Preserve the original meaning and language.\n"
     "- hint: a short clarifying instruction for the enumerator, or \"\".\n"
@@ -138,8 +152,15 @@ class AIFormAuthor:
     essential, so failing loudly is correct.
     """
 
-    def __init__(self, client: Optional[DeepSeekClient]) -> None:
+    def __init__(self, client: Optional[DeepSeekClient],
+                 knowledge: Optional[KnowledgeBase] = None) -> None:
         self.client = client
+        # Read the deterministic naming rule the standards layer enforces, so
+        # the model is told the exact identifier length up front and this
+        # module caps names to the same limit - AI and rules agree by design.
+        kb = knowledge or KnowledgeBase.load()
+        self._max_name_length = int(
+            kb.naming_rules().get("max_length", _DEFAULT_MAX_NAME_LENGTH))
 
     # ------------------------------------------------------------------
     def author(self, questionnaire: Questionnaire, *,
@@ -167,7 +188,8 @@ class AIFormAuthor:
                  survey_context: str) -> dict:
         platform = (target or "a generic ODK-compatible platform").strip() \
             or "a generic ODK-compatible platform"
-        system_prompt = _SYSTEM_PROMPT.format(platform=platform) + INJECTION_GUARD
+        system_prompt = _SYSTEM_PROMPT.format(
+            platform=platform, max_name=self._max_name_length) + INJECTION_GUARD
 
         payload = []
         for idx, q in enumerate(items):
@@ -315,13 +337,12 @@ class AIFormAuthor:
                         f"they are empty and need review.")
 
     # ------------------------------------------------------------------
-    @classmethod
-    def _unique_name(cls, proposed: str, fallback_label: str,
+    def _unique_name(self, proposed: str, fallback_label: str,
                      used: set) -> str:
         """Sanitise *proposed* to a valid XLSForm identifier, deriving one
         from *fallback_label* if blank, then guarantee uniqueness within
         *used* (which this method updates)."""
-        name = cls._sanitize(proposed) or cls._sanitize(fallback_label) or "q"
+        name = self._sanitize(proposed) or self._sanitize(fallback_label) or "q"
         base = name
         n = 2
         while name in used:
@@ -330,13 +351,12 @@ class AIFormAuthor:
         used.add(name)
         return name
 
-    @staticmethod
-    def _sanitize(text: str) -> str:
+    def _sanitize(self, text: str) -> str:
         s = _NAME_RE.sub("_", str(text).strip().lower())
         s = re.sub(r"_+", "_", s).strip("_")
         if s and s[0].isdigit():
             s = "q_" + s
-        return s[:60]
+        return s[:self._max_name_length]
 
 
 def _short(text: str, limit: int = 40) -> str:

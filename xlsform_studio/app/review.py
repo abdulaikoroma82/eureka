@@ -43,6 +43,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
 
+from ..engine.knowledge_base import KnowledgeBase
 from ..models import (DECISION_CONFIDENCE_LEVELS, Decision, Question,
                       Questionnaire)
 from ..validation.ai_validators import check_variable_name
@@ -71,7 +72,12 @@ FIELD_LABELS: Dict[str, str] = {
 #: only ones :func:`build_review_table` (the "needs attention" view) covers.
 _DECISION_FIELDS = ("type", "choice_list", "relevant", "constraint")
 
-_MAX_NAME_LENGTH = 40
+#: The identifier-length limit, read from the same deterministic naming rule
+#: (``naming.max_length``) the AI author obeys, so a human rename in the
+#: review panel is capped exactly where the drafted names were - one source
+#: of truth, no 40-vs-60 drift between the author and the editor.
+_MAX_NAME_LENGTH = int(
+    KnowledgeBase.load().naming_rules().get("max_length", 32))
 
 
 @dataclass(frozen=True)

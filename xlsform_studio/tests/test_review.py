@@ -262,6 +262,16 @@ def test_apply_review_rename_sanitises_free_text():
     assert q.name == "household_size_persons"
 
 
+def test_apply_review_rename_truncates_to_naming_rule_limit():
+    """A human rename is capped at the same 32-char deterministic rule the
+    AI author obeys - no drift between the author and the editor."""
+    q = Question(name="q1", label="Q", xlsform_type="text")
+    qn = Questionnaire(questions=[q])
+    apply_review_edits(qn, {("q1", "name"): "a" * 50})
+    assert len(q.name) <= 32
+    assert q.name == "a" * 32
+
+
 def test_apply_review_rename_rejects_duplicate():
     q1 = Question(name="age", xlsform_type="integer")
     q2 = Question(name="sex", xlsform_type="text")

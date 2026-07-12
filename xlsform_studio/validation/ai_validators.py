@@ -119,7 +119,7 @@ def check_placeholders_preserved(original: str, suggested: str) -> Optional[str]
 # Name / severity checks (naming suggestions, review findings)
 # ---------------------------------------------------------------------------
 def check_variable_name(name: str, existing: Set[str],
-                        max_length: int = 40) -> Optional[str]:
+                        max_length: int = 32) -> Optional[str]:
     """Platform rules: starts with a letter, identifier chars only, unique,
     within the safe length limit."""
     if not name:

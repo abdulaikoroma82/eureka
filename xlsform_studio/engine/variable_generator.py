@@ -45,7 +45,7 @@ class VariableGenerator:
     def __init__(self, knowledge: Optional[KnowledgeBase] = None) -> None:
         self.kb = knowledge or KnowledgeBase.load()
         naming = self.kb.naming_rules()
-        self.max_length: int = int(naming.get("max_length", 40))
+        self.max_length: int = int(naming.get("max_length", 32))
         self.stopwords: Set[str] = set(naming.get("stopwords", []))
         self.abbreviations: Dict[str, str] = dict(naming.get("abbreviations", {}))
         self._used: Set[str] = set()

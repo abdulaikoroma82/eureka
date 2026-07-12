@@ -153,6 +153,27 @@ def test_author_frames_survey_context_in_prompt():
     assert "user-supplied DATA" in client.last_user
 
 
+def test_author_states_deterministic_naming_rule_in_prompt():
+    """The AI is told the deterministic identifier limit up front, so it
+    authors within the rule rather than having names rejected afterwards."""
+    qn = _raw_qn()
+    client = FakeClient(_three_item_payload())
+    AIFormAuthor(client).author(qn)
+    assert "Read these deterministic standards FIRST" in client.last_system
+    assert "AT MOST 32 characters" in client.last_system
+
+
+def test_author_caps_name_to_naming_rule_length():
+    qn = Questionnaire()
+    qn.questions = [Question(raw_label="X")]
+    payload = {"questions": [
+        {"index": 0, "type": "text", "label": "X",
+         "name": "an_extremely_long_variable_name_well_over_the_limit"}],
+        "choices": {}}
+    AIFormAuthor(FakeClient(payload)).author(qn)
+    assert len(qn.questions[0].name) <= 32
+
+
 # ---------------------------------------------------------------------------
 # Workflow (AI-first path)
 # ---------------------------------------------------------------------------
