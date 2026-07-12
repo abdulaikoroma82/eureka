@@ -262,6 +262,32 @@ def test_apply_review_rename_sanitises_free_text():
     assert q.name == "household_size_persons"
 
 
+def test_apply_review_rename_leaves_substring_references_intact():
+    """Renaming 'age' must not corrupt '${respondent_age}': the rewrite
+    matches whole ${...} references, never substrings of a longer name."""
+    q0 = Question(name="age", xlsform_type="integer")
+    q1 = Question(name="respondent_age", xlsform_type="integer")
+    q2 = Question(name="c", xlsform_type="text",
+                  relevant="${age} > 0 and ${respondent_age} > 0")
+    qn = Questionnaire(questions=[q0, q1, q2])
+    apply_review_edits(qn, {("age", "name"): "years"})
+    assert q2.relevant == "${years} > 0 and ${respondent_age} > 0"
+
+
+def test_apply_review_rename_rewrites_every_occurrence_across_fields():
+    """Every ${old} occurrence is rewritten, across all reference-bearing
+    fields of every question."""
+    q0 = Question(name="n", xlsform_type="integer")
+    q1 = Question(name="c", xlsform_type="calculate",
+                  calculation="${n} + ${n}", constraint=". < ${n}",
+                  relevant="${n} > 0")
+    qn = Questionnaire(questions=[q0, q1])
+    apply_review_edits(qn, {("n", "name"): "count"})
+    assert q1.calculation == "${count} + ${count}"
+    assert q1.constraint == ". < ${count}"
+    assert q1.relevant == "${count} > 0"
+
+
 def test_apply_review_rename_truncates_to_naming_rule_limit():
     """A human rename is capped at the same 32-char deterministic rule the
     AI author obeys - no drift between the author and the editor."""

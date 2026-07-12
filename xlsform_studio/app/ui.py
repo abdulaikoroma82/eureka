@@ -707,6 +707,32 @@ def _render_sim_state(state) -> None:
 _DECISION_BADGE = {"high": "🟢 High", "medium": "🟡 Medium", "low": "🔴 Low"}
 
 
+def _render_field_edit(fe, key: str) -> str:
+    """Render one editable field of a question and return its current value.
+
+    A checkbox for a yes/no field, a text area for a long one, a text input
+    otherwise. The confidence badge, the "needs attention" flag and the AI's
+    reason are shown alongside so the reviewer sees why the AI chose it.
+    """
+    badge = ("  " + _DECISION_BADGE.get(fe.confidence, fe.confidence)
+             if fe.confidence else "")
+    flag = " 🛑" if fe.needs_attention else ""
+    lbl = f"{fe.label}{flag}{badge}"
+    if fe.kind == "bool":
+        checked = st.checkbox(lbl, value=(fe.value == "yes"), key=key,
+                              help=fe.help or None)
+        new_value = "yes" if checked else "no"
+    elif fe.kind == "long":
+        new_value = st.text_area(lbl, value=fe.value, key=key,
+                                 help=fe.help or None, height=68)
+    else:
+        new_value = st.text_input(lbl, value=fe.value, key=key,
+                                  help=fe.help or None)
+    if fe.reason:
+        st.caption(f"💬 {fe.reason}")
+    return str(new_value)
+
+
 def _render_review_table(result) -> None:
     """The full AI-draft editor: every authored survey-row field, grouped by
     question, editable before export.
@@ -743,23 +769,8 @@ def _render_review_table(result) -> None:
         with st.expander(header, expanded=qr.needs_attention):
             for fe in qr.fields:
                 key = f"rev_{nonce}_{qi}_{fe.field_name}"
-                badge = ("  " + _DECISION_BADGE.get(fe.confidence, fe.confidence)
-                         if fe.confidence else "")
-                flag = " 🛑" if fe.needs_attention else ""
-                lbl = f"{fe.label}{flag}{badge}"
-                if fe.kind == "bool":
-                    checked = st.checkbox(lbl, value=(fe.value == "yes"),
-                                          key=key, help=fe.help or None)
-                    new_value = "yes" if checked else "no"
-                elif fe.kind == "long":
-                    new_value = st.text_area(lbl, value=fe.value, key=key,
-                                             help=fe.help or None, height=68)
-                else:
-                    new_value = st.text_input(lbl, value=fe.value, key=key,
-                                              help=fe.help or None)
-                if fe.reason:
-                    st.caption(f"💬 {fe.reason}")
-                if str(new_value) != str(fe.value):
+                new_value = _render_field_edit(fe, key)
+                if new_value != str(fe.value):
                     edits[(qr.name, fe.field_name)] = new_value
 
     changed = len(edits)
