@@ -1,0 +1,26 @@
+# Streamlit configuration for XLSForm Studio
+# This config optimizes performance and reliability for hosted deployments
+
+[theme]
+primaryColor = "#0066cc"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f0f2f6"
+textColor = "#262730"
+font = "sans serif"
+
+[server]
+# Hosting platforms like Hugging Face Spaces inject PORT and require 0.0.0.0 binding
+# These defaults allow the launcher to override them via environment variables
+maxUploadSize = 1000  # 1000 MB limit for input files
+enableCORS = true
+enableXsrfProtection = true
+headless = true
+
+[client]
+# Optimize for lower-bandwidth / unstable connections
+showErrorDetails = true
+toolbarMode = "minimal"
+
+[logger]
+# Reduce log verbosity in production
+level = "warning"
