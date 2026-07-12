@@ -22,9 +22,9 @@ particular survey domain.
 >
 > **AI is essential, not optional.** A run requires a configured DeepSeek API
 > key (`DEEPSEEK_API_KEY`); there is no offline authoring fallback. See
-> [AI-assisted features](#ai-assisted-features-optional) for the optional
-> enrichment passes (translation, quality review, narrative) that refine the
-> draft.
+> [AI authoring & enrichment](#ai-authoring--enrichment) for the optional
+> enrichment passes (translation, quality review, narrative, document
+> co-writing) that refine the draft and its documentation.
 
 > 🟢 **New to this / non-technical?** Start with the plain-language
 > [Getting Started guide](docs/GETTING_STARTED.md) — no coding needed.
@@ -210,12 +210,21 @@ print(result.outputs["xlsform"])       # path to the .xlsx
 }
 ```
 
-Only `question` is mandatory. The engine fills in the type, variable name,
-choice list, relevance, constraint and any derived calculations.
+Only `question` is mandatory. The AI author fills in the type, variable
+name, choice list, relevance, constraint and any derived calculations; the
+deterministic rules then enforce standards and validate the result.
 
 ---
 
-## What the rule engine does (deterministically)
+## What the deterministic layer does
+
+In the AI-first pipeline the model authors every field; the deterministic
+layer brackets it — the parser lays out the **scaffold** and its structural
+intelligence, the rules encode the **standards** the draft must meet, and the
+validators **verify** it. That same deterministic engine also remains a
+complete offline compiler, reachable as an internal standards/test seam
+(`authoring="deterministic"`), and it is what powers the checks below. These
+are the standards and structural transforms the deterministic layer owns:
 
 | Module | Behaviour | Example |
 | --- | --- | --- |
@@ -250,47 +259,44 @@ Every decision is recorded in the **assumption log** so it can be reviewed.
 
 ---
 
-## Reviewable parsing
+## Reviewing the AI draft
 
-The tool optimises for **transparent assistance, not automatic
-correctness**: heuristic parsing at the boundary between natural-language
+The tool optimises for **transparent assistance, not blind trust**: the AI
+drafts the whole form, but authoring at the boundary between natural-language
 questionnaires and precise XLSForm/XPath semantics will sometimes be wrong,
-so every inference stays visible and editable instead of being silently
-trusted.
+so every authored field stays visible and editable before you export.
 
-Each of the four judgment calls the engine makes per question — **type**,
-**choice list**, **relevance**, **constraint** — is recorded as a
-structured decision with a confidence:
+Four of the authored fields — **type**, **choice list**, **relevance**,
+**constraint** — also carry a structured confidence so genuine ambiguity
+surfaces first:
 
 | Confidence | Meaning |
 | --- | --- |
-| 🟢 High | An exact, unambiguous signal (a keyword match, a Yes/No pair). |
-| 🟡 Medium | A reasonable rule-based reading that could be wrong (a compiled skip condition, a semantic constraint template match). |
-| 🔴 Low | A generic fallback with no real signal (defaulted to `text`, a generic per-type constraint) — or nothing could be inferred at all. |
+| 🟢 High | An exact, unambiguous choice (a clear type, an explicit Yes/No pair). |
+| 🟡 Medium | A reasonable reading that could be wrong (a compiled skip condition, a plausible constraint bound). |
+| 🔴 Low | A generic fallback with no real signal — or nothing could be settled at all. |
 
-**Conservative natural-language compilation.** When an instruction is too
-ambiguous to compile safely — an unparseable compound condition, a "skip to
-question N" jump XLSForm has no construct for — the tool does **not**
-produce a plausible-but-possibly-wrong expression. It leaves the field
-blank, records it as a low-confidence decision, and surfaces it as an
-explicit review item instead.
+**Conservative compilation.** When something is too ambiguous to settle
+safely — an unparseable compound condition, a "skip to question N" jump
+XLSForm has no construct for — the tool does **not** emit a
+plausible-but-possibly-wrong expression. It leaves the field blank, records
+it as a low-confidence decision, and surfaces it for a human instead.
 
-**The review panel.** In the Streamlit app, every decision appears in a
-"🧐 Review parser decisions" panel before the download buttons — expanded
-automatically whenever something needs your input. Each row shows the
-question, the field, the inferred (or blank) value, its confidence, and the
-reason; edit the value or leave it as shown, tick **Reviewed**, and apply —
-the XLSForm is rebuilt and re-validated from your reviewed values, the same
-"compile → review → rebuild" pattern the AI-suggestions panel uses. In the
-CLI, the same information prints as a summary (decisions needing input are
-listed explicitly; the rest are in `assumptions_to_verify.md`) — the CLI
-never blocks or guesses on your behalf, since batch/CI runs are
-non-interactive by design.
+**The review panel.** In the Streamlit app, a "🧐 Review the AI draft" panel
+appears before the download buttons — grouped one expander per question, with
+any question that has an unsettled field expanded automatically. **Every
+authored field is editable inline** (name, type, choice list, label, hint,
+required, relevance, constraint + message, calculation, choice filter,
+appearance, default), each shown with the AI's confidence and reason. Change
+anything and apply — only changed fields are written, and the XLSForm is
+rebuilt and re-validated from your reviewed version. Renaming a variable
+rewrites every `${...}` reference to it automatically. In the CLI, the same
+information prints as a summary (fields needing input are listed explicitly;
+the rest are in `assumptions_to_verify.md`) — batch/CI runs are
+non-interactive by design, so the CLI never blocks or guesses on your behalf.
 
-An AI-assisted reclassification (`--ai`) adds a *new* decision on top of the
-rule engine's original rather than erasing it, so the review panel always
-shows the latest and most-informed guess — with its own confidence, still
-subject to your review.
+Every human edit is recorded as a fresh, high-confidence "reviewed by a
+human" decision, so a later export shows the review happened.
 
 ---
 
@@ -348,13 +354,11 @@ they only ever annotate or refine the authored form, never re-author it.
 | Feature | What it does | Why it can't be deterministic |
 | --- | --- | --- |
 | **Translation** | Generates `label::French (fr)`-style columns from your English labels — **only for labels you haven't already translated yourself**; finished translations are cached locally (`.translation_cache.json`) so regenerating a form doesn't re-pay for unchanged text | Translation is language generation, not pattern matching |
-| **Logic fallback** | Resolves both "skip to question 20" jumps *and* complex conditions the compiler's pattern matching couldn't parse, into a proper `relevant` expression, each tagged with the model's own confidence (high/medium) | Both require understanding the whole form's structure or unanticipated phrasing — genuine reasoning, not lookup |
-| **Domain constraints** | Proposes realistic single-field bounds for numeric/date/text questions the rule templates left unconstrained, grounded in your optional survey description (`--ai-context`) — a "temperature" means something different in a health survey than a weather one | The bundled templates are deliberately domain-neutral; realistic domain bounds require knowing what the value *means* |
-| **Cross-field constraints** | Suggests constraints that depend on another question, e.g. "end date must be on/after start date" — **combined with `and`** if the field already has a rule-authored constraint | The constraint engine only ever looks at one question at a time — it structurally cannot see the relationship between two |
-| **Type-classification fallback** | Reclassifies a question that keyword rules defaulted to `text`, when the phrasing wasn't anticipated | Keyword lists always have blind spots; a model classifies by meaning |
+| **Cross-field constraints** | Suggests constraints that depend on another question, e.g. "end date must be on/after start date" — **combined with `and`** if the field already has an authored constraint | A per-question check only ever looks at one question at a time — it structurally cannot see the relationship between two |
 | **AI quality review** | A holistic second pass flagging things structural checks can't see — semantic contradictions, unclear names, and respondent-experience traps (ambiguous phrasing, contradictory option lists, redundant questions, incoherent skip chains); advisory only | Requires reasoning across multiple fields' relationship to each other |
 | **Explain findings** | Adds a one-sentence plain-English explanation to the validator's own findings, after validation runs | Rules own every fact (level, category, message); AI only makes them easier to read |
 | **Quality narrative** | Writes the QA report's executive summary from the deterministic Form Quality Index, duration estimate, readiness findings and finding counts — it is sent only the audited metrics, never asked to re-judge the form | Turning seven scores and a risk rating into two readable sentences is prose generation; the numbers themselves stay 100% rules |
+| **Document co-writing** | Rewrites the *framing prose* of the supporting documents (enumerator guide, collection plan, logic map, printable instrument, assumptions checklist) in better natural language, slotted under a labelled "AI-written" block; the deterministic builders still author every fact and render unchanged when it's off | Polishing an orientation paragraph is prose; the counts, names, logic and checklist tiers it frames stay 100% rules |
 | **Missing-question detection** | Infers the survey's purpose and flags questions it probably needs but lacks (weight + MUAC with no height blocks weight-for-height) — advisory findings only, the tool **never adds questions** | Recognising that a set of questions implies an absent member is domain reasoning, not pattern matching |
 | **Objective coverage matrix** | You list your study objectives; it maps each to the questions that inform it and flags gaps (`coverage_matrix.md` + Quality tab). Every cited question name is verified to exist — invalid references are discarded | Judging that two questions together measure "access to safe water" is semantics; the question inventory and reference checks stay 100% rules |
 | **Indicator matrix** | Drafts an M&E reporting framework from the compiled questions: indicator, source questions (verified to exist), aggregation level, means of verification (`indicator_matrix.md`) | Which questions feed which indicator is meaning, not matching |
@@ -401,18 +405,18 @@ improve them slightly:
   `naming` feature only ever *stores a suggestion* for you to accept, and
   an accepted rename deterministically rewrites every `${...}` reference so
   nothing dangles.
-* **Standard single-field constraints and all structural/type/deployment
-  validation.** These are enumerable, must be exactly right, and run on
-  every question in every form — exactly what rule engines are for. AI only
-  supplements them where rules structurally cannot reach: the *cross-field*
-  case, and *domain-specific* bounds for questions the domain-neutral
-  templates deliberately leave unconstrained.
+* **All structural / type / deployment validation.** These checks are
+  enumerable, must be exactly right, and run on every question in every form
+  — exactly what rule engines are for. The AI author drafts each question's
+  single-field constraint as part of authoring the form; the deterministic
+  validators then verify it. AI *enrichment* only adds what a per-question
+  check structurally cannot reach: the *cross-field* case — a constraint that
+  depends on another question's answer.
 
 If a cross-field AI suggestion targets a question that already has a
-constraint (very common — a date field usually already got a generic "not in
-the future" rule from the deterministic engine), the two are **combined with
-`and`**, not one discarded — both the rule engine's contribution and AI's
-stay enforced.
+constraint (very common — a date field is usually authored with a "not in
+the future" rule already), the two are **combined with `and`**, not one
+discarded — both constraints stay enforced.
 
 ### Setup
 
@@ -658,6 +662,14 @@ Each run writes a timestamped folder under `output/` containing:
    variables, logic/constraint changes, choice-list edits), with breaking
    changes for longitudinal analysis flagged explicitly
 
+Every document above is authored **deterministically** and owns every fact
+(variable names, types, logic, counts, checklist tiers). With the optional
+`documents` AI feature enabled, the model additionally **co-writes the
+framing prose** of the enumerator guide, collection plan, logic map,
+printable instrument and assumptions checklist — slotted under a labelled
+"AI-written" block, never replacing a fact. Turn it off and every document is
+byte-for-byte the deterministic version.
+
 ### Reverse engineering an existing XLSForm
 
 The pipeline runs in both directions: feed a **deployed XLSForm** (`.xlsx`
@@ -813,7 +825,7 @@ which validator is dominant before assuming it's the AI layer.
 
 **"How do I trust an AI suggestion?"**
 You don't have to — every AI mutation is validated deterministically at
-apply time (see [AI-assisted features](#ai-assisted-features-optional)),
+apply time (see [AI authoring & enrichment](#ai-authoring--enrichment)),
 advisory suggestions are never applied without explicit accept, and every
 applied change is tagged "AI-suggested" in the assumption log with the
 original value preserved. Run `xlsform-studio ... --log-level DEBUG` to
