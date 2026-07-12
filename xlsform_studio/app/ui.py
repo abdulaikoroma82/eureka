@@ -84,9 +84,6 @@ _COMMON_LANGUAGES = [
 ]
 
 _AI_FEATURE_LABELS = {
-    "classify": "Improve type detection (reclassify ambiguous questions)",
-    "skip_logic": "Resolve skip-to-question jumps and unparseable conditions",
-    "domain_constraints": "Suggest realistic value bounds for unconstrained questions",
     "cross_constraints": "Suggest cross-field constraints (e.g. end date after start date)",
     "translate": "Generate translations (only fills gaps you haven't already supplied)",
     "review": "AI quality review (semantics, naming clarity, respondent experience)",

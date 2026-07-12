@@ -15,13 +15,10 @@ import pytest
 from xlsform_studio.ai.client import AIError, DeepSeekClient
 from xlsform_studio.ai.config import AI_FEATURES, AIConfig
 from xlsform_studio.ai.constraint_reviewer import AICrossFieldConstraintReviewer
-from xlsform_studio.ai.domain_constraints import AIDomainConstraintSynthesizer
 from xlsform_studio.ai.finding_explainer import AIFindingExplainer
 from xlsform_studio.ai.pipeline import AIPipeline
 from xlsform_studio.ai.quality_reviewer import AIQualityReviewer
-from xlsform_studio.ai.skip_logic import AISkipLogicResolver
 from xlsform_studio.ai.translator import AITranslator
-from xlsform_studio.ai.type_classifier import AITypeClassifier
 from xlsform_studio.models import Choice, ChoiceList, FormSettings, Question, Questionnaire
 from xlsform_studio.validation.report_generator import Finding, ValidationReport
 
@@ -144,145 +141,6 @@ def test_translator_per_language_independence():
     AITranslator(client).translate(qn, [("French", "fr"), ("Spanish", "es")])
     assert qn.questions[0].extra["label::French (fr)"] == "Âge"
     assert qn.questions[0].extra["label::Spanish (es)"] == "Edad"  # untouched
-
-
-# --- AISkipLogicResolver -----------------------------------------------------
-def _questionnaire_with_skip():
-    q1 = Question(name="enrolled", label="Enrolled?", xlsform_type="select_one yes_no")
-    q2 = Question(name="q20", label="Final notes", xlsform_type="text",
-                 logic="if no, skip to question 20")
-    q2.add_assumption("Skip pattern detected ('if no, skip to question 20'). "
-                      "XLSForm expresses skips as 'relevant' conditions...")
-    return Questionnaire(questions=[q1, q2])
-
-
-def test_skip_logic_applies_valid_suggestion():
-    qn = _questionnaire_with_skip()
-    reply = {"suggestions": [{"question_name": "q20",
-                              "relevant": "${enrolled}='1'",
-                              "rationale": "shown only if enrolled"}]}
-    notes = AISkipLogicResolver(_client(reply)).resolve(qn)
-    assert qn.questions[1].relevant == "${enrolled}='1'"
-    assert any("Applied suggested relevant" in n for n in notes)
-    assert any("AI-suggested" in a for a in qn.questions[1].assumptions)
-
-
-def test_skip_logic_rejects_unknown_reference():
-    qn = _questionnaire_with_skip()
-    reply = {"suggestions": [{"question_name": "q20",
-                              "relevant": "${ghost_field}='1'"}]}
-    AISkipLogicResolver(_client(reply)).resolve(qn)
-    assert qn.questions[1].relevant == ""
-
-
-def test_skip_logic_rejects_unknown_target_question():
-    qn = _questionnaire_with_skip()
-    reply = {"suggestions": [{"question_name": "does_not_exist",
-                              "relevant": "${enrolled}='1'"}]}
-    notes = AISkipLogicResolver(_client(reply)).resolve(qn)
-    assert any("unknown question" in n for n in notes)
-
-
-def test_skip_logic_does_not_overwrite_existing_relevant():
-    qn = _questionnaire_with_skip()
-    qn.questions[1].relevant = "${enrolled}='0'"
-    reply = {"suggestions": [{"question_name": "q20", "relevant": "${enrolled}='1'"}]}
-    AISkipLogicResolver(_client(reply)).resolve(qn)
-    assert qn.questions[1].relevant == "${enrolled}='0'"
-
-
-def test_skip_logic_noop_when_nothing_pending():
-    qn = Questionnaire(questions=[Question(name="a", xlsform_type="text")])
-    notes = AISkipLogicResolver(_client({"suggestions": []})).resolve(qn)
-    assert notes == []
-
-
-def test_logic_fallback_also_handles_unparseable_condition_on_same_question():
-    """The broadened resolver must also catch generic compile failures, not
-    just 'skip to' phrasing, and can target the SAME question."""
-    q1 = Question(name="hh_size", label="Household size", xlsform_type="integer")
-    q2 = Question(name="crowding", label="Crowding index", xlsform_type="text",
-                 logic="only if household has more than 3 members and a child under 5")
-    q2.add_assumption("Logic 'only if household has more than 3 members and "
-                      "a child under 5' could not be auto-compiled; please "
-                      "review the relevant column.")
-    qn = Questionnaire(questions=[q1, q2])
-    reply = {"suggestions": [{"question_name": "crowding",
-                              "relevant": "${hh_size}>3",
-                              "rationale": "same-question complex condition"}]}
-    notes = AISkipLogicResolver(_client(reply)).resolve(qn)
-    assert qn.questions[1].relevant == "${hh_size}>3"
-    assert any("Applied suggested relevant" in n for n in notes)
-
-
-def test_logic_fallback_request_includes_both_kinds():
-    """Both a skip and an unparseable condition in the same form are batched
-    into a single request."""
-    q1 = Question(name="enrolled", xlsform_type="select_one yes_no")
-    q2 = Question(name="notes", xlsform_type="text", logic="if no, skip to question 20")
-    q2.add_assumption("Skip pattern detected ('if no, skip to question 20').")
-    q3 = Question(name="crowding", xlsform_type="text", logic="complex phrase")
-    q3.add_assumption("Logic 'complex phrase' could not be auto-compiled; "
-                      "please review the relevant column.")
-    qn = Questionnaire(questions=[q1, q2, q3])
-
-    captured = {}
-    client = DeepSeekClient(api_key="k")
-
-    def fake_complete(system, user, **kw):
-        captured["user"] = user
-        return {"suggestions": []}
-    client.complete_json = fake_complete
-
-    AISkipLogicResolver(client).resolve(qn)
-    compact = captured["user"].replace(" ", "")
-    assert '"kind":"skip"' in compact
-    assert '"kind":"condition"' in compact
-
-
-# --- AITypeClassifier ---------------------------------------------------------
-def _questionnaire_with_fallback():
-    q = Question(name="misc", label="Preferred appointment slot", xlsform_type="text")
-    q.add_assumption("No rule matched; defaulted to 'text'.")
-    return Questionnaire(questions=[q])
-
-
-def test_classifier_applies_recognised_type():
-    qn = _questionnaire_with_fallback()
-    reply = {"classifications": [{"name": "misc", "type": "time", "confidence": "high"}]}
-    notes = AITypeClassifier(_client(reply)).classify(qn)
-    assert qn.questions[0].xlsform_type == "time"
-    assert any("misc" in n for n in notes)
-
-
-def test_classifier_rejects_unrecognised_type():
-    qn = _questionnaire_with_fallback()
-    reply = {"classifications": [{"name": "misc", "type": "select_one", "confidence": "low"}]}
-    AITypeClassifier(_client(reply)).classify(qn)
-    assert qn.questions[0].xlsform_type == "text"
-
-
-def test_classifier_leaves_text_when_ai_agrees():
-    qn = _questionnaire_with_fallback()
-    reply = {"classifications": [{"name": "misc", "type": "text", "confidence": "high"}]}
-    AITypeClassifier(_client(reply)).classify(qn)
-    assert qn.questions[0].xlsform_type == "text"
-
-
-def test_classifier_reapplies_constraints_for_new_type():
-    q = Question(name="age_q", raw_label="Respondent age", label="Respondent age",
-                xlsform_type="text")
-    q.add_assumption("No rule matched; defaulted to 'text'.")
-    qn = Questionnaire(questions=[q])
-    reply = {"classifications": [{"name": "age_q", "type": "integer", "confidence": "high"}]}
-    AITypeClassifier(_client(reply)).classify(qn)
-    assert qn.questions[0].constraint  # age constraint template applied
-
-
-def test_classifier_noop_when_no_fallback_questions():
-    qn = Questionnaire(questions=[Question(name="a", xlsform_type="integer")])
-    notes = AITypeClassifier(_client({"classifications": []})).classify(qn)
-    assert notes == []
 
 
 # --- AIQualityReviewer --------------------------------------------------------
@@ -427,124 +285,6 @@ def test_cross_constraint_degrades_gracefully_on_error():
     assert qn.questions[1].constraint == ""
 
 
-# --- AIDomainConstraintSynthesizer -----------------------------------------------
-def _questionnaire_with_unbounded_measurement():
-    q1 = Question(name="child_temp", label="Child's temperature (Celsius)",
-                  xlsform_type="decimal")
-    q2 = Question(name="muac_mm", label="MUAC measurement (mm)",
-                  xlsform_type="decimal", constraint=". > 0",
-                  constraint_message="Must be positive.")
-    return Questionnaire(questions=[q1, q2])
-
-
-def test_domain_constraint_applied_when_valid():
-    qn = _questionnaire_with_unbounded_measurement()
-    reply = {"suggestions": [{"question_name": "child_temp",
-                              "constraint": ". >= 30 and . <= 45",
-                              "constraint_message": "Temperature must be 30-45 °C.",
-                              "rationale": "plausible human body temperature"}]}
-    notes = AIDomainConstraintSynthesizer(_client(reply)).suggest(
-        qn, survey_context="child health survey")
-    assert qn.questions[0].constraint == ". >= 30 and . <= 45"
-    assert qn.questions[0].constraint_message == "Temperature must be 30-45 °C."
-    assert any("Applied suggested" in n for n in notes)
-    assert any("AI-suggested domain constraint" in a
-              for a in qn.questions[0].assumptions)
-
-
-def test_domain_constraint_never_touches_existing_constraint():
-    """A constraint the deterministic engine (or user) set is authoritative:
-    the question isn't even sent, and a suggestion for it is rejected."""
-    qn = _questionnaire_with_unbounded_measurement()
-    captured = {}
-    client = DeepSeekClient(api_key="k")
-
-    def fake(system, user, **kw):
-        captured["user"] = user
-        return {"suggestions": [{"question_name": "muac_mm",
-                                 "constraint": ". >= 50 and . <= 350"}]}
-    client.complete_json = fake
-
-    notes = AIDomainConstraintSynthesizer(client).suggest(qn)
-    assert "muac_mm" not in captured["user"]     # not offered to the model
-    assert qn.questions[1].constraint == ". > 0"  # and left untouched
-    assert any("stays authoritative" in n for n in notes)
-
-
-def test_domain_constraint_rejects_cross_field_reference():
-    """${...} references are the cross-field reviewer's job, not this one's."""
-    qn = _questionnaire_with_unbounded_measurement()
-    reply = {"suggestions": [{"question_name": "child_temp",
-                              "constraint": ". <= ${muac_mm}"}]}
-    notes = AIDomainConstraintSynthesizer(_client(reply)).suggest(qn)
-    assert qn.questions[0].constraint == ""
-    assert any("references another field" in n for n in notes)
-
-
-def test_domain_constraint_rejects_malformed_expression():
-    """AI output must pass the deterministic syntax validator first."""
-    qn = _questionnaire_with_unbounded_measurement()
-    reply = {"suggestions": [{"question_name": "child_temp",
-                              "constraint": ". >< 45"}]}
-    notes = AIDomainConstraintSynthesizer(_client(reply)).suggest(qn)
-    assert qn.questions[0].constraint == ""
-    assert any("failed syntax validation" in n for n in notes)
-
-
-def test_domain_constraint_rejects_unknown_target():
-    qn = _questionnaire_with_unbounded_measurement()
-    reply = {"suggestions": [{"question_name": "ghost", "constraint": ". >= 0"}]}
-    notes = AIDomainConstraintSynthesizer(_client(reply)).suggest(qn)
-    assert any("unknown question" in n for n in notes)
-
-
-def test_domain_constraint_sends_survey_context():
-    qn = _questionnaire_with_unbounded_measurement()
-    captured = {}
-    client = DeepSeekClient(api_key="k")
-
-    def fake(system, user, **kw):
-        captured["user"] = user
-        return {"suggestions": []}
-    client.complete_json = fake
-
-    AIDomainConstraintSynthesizer(client).suggest(
-        qn, survey_context="child nutrition survey in Sierra Leone")
-    assert "child nutrition survey in Sierra Leone" in captured["user"]
-
-
-def test_domain_constraint_noop_when_everything_constrained():
-    """No API call at all when every eligible question already has a rule."""
-    qn = Questionnaire(questions=[
-        Question(name="age", label="Age", xlsform_type="integer",
-                 constraint=". >= 0 and . <= 120")])
-    calls = []
-    client = DeepSeekClient(api_key="k")
-    client.complete_json = lambda *a, **kw: calls.append(1) or {}
-    notes = AIDomainConstraintSynthesizer(client).suggest(qn)
-    assert calls == []
-    assert notes == []
-
-
-def test_domain_constraint_skips_select_questions():
-    """Choice answers get validity from their list, not a range constraint."""
-    qn = Questionnaire(questions=[
-        Question(name="sex", label="Sex", xlsform_type="select_one sexes",
-                 list_name="sexes")])
-    calls = []
-    client = DeepSeekClient(api_key="k")
-    client.complete_json = lambda *a, **kw: calls.append(1) or {}
-    assert AIDomainConstraintSynthesizer(client).suggest(qn) == []
-    assert calls == []
-
-
-def test_domain_constraint_degrades_gracefully_on_error():
-    qn = _questionnaire_with_unbounded_measurement()
-    notes = AIDomainConstraintSynthesizer(_failing_client("timeout")).suggest(qn)
-    assert any("Skipped" in n for n in notes)
-    assert qn.questions[0].constraint == ""
-
-
 # --- AIFindingExplainer -----------------------------------------------------------
 def test_explainer_adds_explanation_without_changing_the_finding():
     report = ValidationReport(findings=[
@@ -636,56 +376,22 @@ def test_pipeline_noop_when_no_client_but_enabled():
 
 
 def test_pipeline_runs_only_requested_features():
-    qn = _questionnaire_with_fallback()
-    config = AIConfig(enabled=True, features=["classify"])
-    reply = {"classifications": [{"name": "misc", "type": "time", "confidence": "high"}]}
-    AIPipeline(client=_client(reply)).run(qn, config)
-    assert qn.questions[0].xlsform_type == "time"
-
-
-def test_pipeline_default_features_include_cross_constraints():
-    """A default AIConfig() must include the new feature without any code
-    needing to know about it explicitly - proves the wiring is data-driven."""
-    assert "cross_constraints" in AI_FEATURES
-    assert "cross_constraints" in AIConfig(enabled=True).features
-
-
-def test_pipeline_default_features_include_domain_constraints():
-    assert "domain_constraints" in AI_FEATURES
-    assert "domain_constraints" in AIConfig(enabled=True).features
-
-
-def test_pipeline_runs_domain_constraints_with_context():
-    qn = _questionnaire_with_unbounded_measurement()
-    config = AIConfig(enabled=True, features=["domain_constraints"],
-                      survey_context="child health survey")
-    reply = {"suggestions": [{"question_name": "child_temp",
-                              "constraint": ". >= 30 and . <= 45"}]}
-    AIPipeline(client=_client(reply)).run(qn, config)
-    assert qn.questions[0].constraint == ". >= 30 and . <= 45"
-
-
-def test_pipeline_domain_runs_before_cross_constraints():
-    """A domain bound and a cross-field rule on the same question must both
-    survive: domain fills the empty constraint first, then the cross-field
-    reviewer combines with it rather than being blocked."""
+    """Only the enabled enrichment feature fires; others are left alone."""
     q1 = Question(name="start_date", label="Start date", xlsform_type="date")
     q2 = Question(name="end_date", label="End date", xlsform_type="date")
     qn = Questionnaire(questions=[q1, q2])
-    config = AIConfig(enabled=True,
-                      features=["domain_constraints", "cross_constraints"])
+    config = AIConfig(enabled=True, features=["cross_constraints"])
+    reply = {"suggestions": [{"question_name": "end_date",
+                              "constraint": ". >= ${start_date}"}]}
+    AIPipeline(client=_client(reply)).run(qn, config)
+    assert qn.questions[1].constraint == ". >= ${start_date}"
 
-    replies = iter([
-        {"suggestions": [{"question_name": "end_date",
-                          "constraint": ". <= today()"}]},       # domain pass
-        {"suggestions": [{"question_name": "end_date",
-                          "constraint": ". >= ${start_date}"}]},  # cross pass
-    ])
-    client = DeepSeekClient(api_key="k")
-    client.complete_json = lambda *a, **kw: next(replies)
 
-    AIPipeline(client=client).run(qn, config)
-    assert qn.questions[1].constraint == "(. <= today()) and (. >= ${start_date})"
+def test_pipeline_default_features_include_cross_constraints():
+    """A default AIConfig() must include the feature without any code needing
+    to know about it explicitly - proves the wiring is data-driven."""
+    assert "cross_constraints" in AI_FEATURES
+    assert "cross_constraints" in AIConfig(enabled=True).features
 
 
 def test_pipeline_review_receives_survey_context():

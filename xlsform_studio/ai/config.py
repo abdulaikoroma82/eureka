@@ -23,18 +23,22 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Tuple
 
-#: All AI sub-features, by key. Used to validate CLI/UI input.
-#: The first group mutates the form (each change validated + logged); the
-#: second group ("group", "rewrite", "order", "naming") is advisory-only -
-#: it produces accept/reject suggestions and never changes the form itself.
-AI_FEATURES = ("translate", "skip_logic", "domain_constraints",
-              "cross_constraints", "classify", "review", "explain_findings",
+#: All AI sub-features, by key. Used to validate CLI/UI input. These are
+#: enrichment passes that run ON TOP of AI authoring (which drafts the whole
+#: form); they refine or review the authored draft. The advisory-only group
+#: ("group", "rewrite", "order", "naming") produces accept/reject suggestions
+#: and never changes the form itself.
+#:
+#: Note: type classification, skip-logic resolution and single-field domain
+#: constraints are no longer enrichment features - the AI author produces all
+#: three as part of drafting the form, so re-doing them here would be
+#: redundant.
+AI_FEATURES = ("translate", "cross_constraints", "review", "explain_findings",
               "narrative", "group", "rewrite", "order", "naming",
               "instructions", "completeness", "coverage", "indicators")
 
 #: Accepted alternative spellings for feature keys (CLI convenience).
 FEATURE_ALIASES = {
-    "logic_fallback": "skip_logic",
     "explain": "explain_findings",
     "cross": "cross_constraints",
 }
@@ -59,8 +63,9 @@ class AIConfig:
     #: (language name, ISO 639-1 code) pairs, e.g. [("French", "fr")].
     translate_languages: List[Tuple[str, str]] = field(default_factory=list)
     #: Optional free-text description of the survey's domain and setting
-    #: (e.g. "child nutrition survey in rural Sierra Leone"). Used by the
-    #: domain-constraint and quality-review features to ground suggestions.
+    #: (e.g. "child nutrition survey in rural Sierra Leone"). Grounds AI
+    #: authoring and the quality-review / completeness features in the
+    #: survey's actual domain.
     survey_context: str = ""
     #: Where the translator caches finished translations between runs so a
     #: regenerated form doesn't re-pay for unchanged labels. Empty string

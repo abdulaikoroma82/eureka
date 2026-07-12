@@ -119,7 +119,7 @@ def build_parser() -> argparse.ArgumentParser:
     ai.add_argument("--ai-context", default="",
                     help="Free-text description of the survey's domain, e.g. "
                          "'child nutrition survey in rural districts'; grounds "
-                         "the 'domain_constraints' and 'review' features")
+                         "AI authoring and the 'review'/'completeness' features")
     ai.add_argument("--ai-objectives", default="",
                     help="Study objectives for the 'coverage' feature: either "
                          "inline text (';'-separated) or a path to a text "

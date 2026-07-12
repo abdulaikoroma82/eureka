@@ -14,7 +14,6 @@ from xlsform_studio.ai.grouping import AIGroupingSuggester
 from xlsform_studio.ai.naming import AINamingSuggester
 from xlsform_studio.ai.pipeline import AIPipeline
 from xlsform_studio.ai.rewording import AIRewordingSuggester
-from xlsform_studio.ai.skip_logic import AISkipLogicResolver
 from xlsform_studio.ai.suggestions import AISuggestion, apply_suggestions
 from xlsform_studio.ai.translator import AITranslator
 from xlsform_studio.models import (Choice, ChoiceList, FormSettings,
@@ -320,22 +319,6 @@ def test_naming_apply_renames_and_rewrites_references():
     assert qn.questions[1].relevant == "${is_resident}='1'"
 
 
-# --- skip-logic confidence -------------------------------------------------------
-def test_skip_logic_confidence_is_reported():
-    q1 = Question(name="enrolled", xlsform_type="select_one yes_no")
-    q2 = Question(name="notes", xlsform_type="text",
-                  logic="if no, skip to question 20")
-    q2.add_assumption("Skip pattern detected ('if no, skip to question 20').")
-    qn = Questionnaire(questions=[q1, q2])
-    reply = {"suggestions": [{"question_name": "notes",
-                              "relevant": "${enrolled}='1'",
-                              "confidence": "high",
-                              "rationale": "single sensible reading"}]}
-    notes = AISkipLogicResolver(_client(reply)).resolve(qn)
-    assert any("confidence: high" in n for n in notes)
-    assert any("confidence: high" in a for a in q2.assumptions)
-
-
 # --- translation cache ------------------------------------------------------------
 def _translatable() -> Questionnaire:
     return Questionnaire(questions=[
@@ -387,9 +370,8 @@ def test_new_features_registered():
 
 
 def test_feature_aliases_normalize():
-    assert normalize_features(["logic_fallback", "explain", "cross",
-                               "group"]) == \
-        ["skip_logic", "explain_findings", "cross_constraints", "group"]
+    assert normalize_features(["explain", "cross", "group"]) == \
+        ["explain_findings", "cross_constraints", "group"]
 
 
 # --- pipeline orchestration -----------------------------------------------------------

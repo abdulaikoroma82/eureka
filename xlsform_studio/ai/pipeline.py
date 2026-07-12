@@ -1,34 +1,29 @@
-"""AI pipeline orchestrator (optional AI layer).
+"""AI pipeline orchestrator (enrichment layer).
 
 Purpose
 -------
-Run the enabled AI-assisted features over a compiled questionnaire, in two
-stages that mirror the two moments AI can usefully contribute:
+Run the enabled AI *enrichment* passes over the already AI-authored form, in
+two stages. Authoring itself (type, name, label, logic, constraints, choices)
+happens earlier in :mod:`xlsform_studio.ai.form_author`; this module only
+refines or reviews that draft, so it never re-does authoring work (type
+classification, skip-logic resolution and single-field constraints are all
+produced by the author and are deliberately absent here).
 
 **Stage 1 - :meth:`run`, before export/validation:**
 
-    1. Type-classification fallback (may change a question's type, so it
-       runs first - everything downstream should see the corrected type)
-    2. Skip/condition logic fallback (adds ``relevant`` conditions)
-    3. Domain-aware constraint synthesis (adds single-field ``constraint``
-       bounds to questions the deterministic engine left unconstrained,
-       guided by the user's optional survey-context description; runs
-       before the cross-field pass so cross-field additions can combine
-       on top of these)
-    4. Cross-field constraint suggestions (adds ``constraint`` conditions
-       spanning two questions - a job the deterministic constraint engine
-       structurally cannot do, since it only ever looks at one question)
-    5. Translation (labels are final by now, so translations are accurate;
+    1. Cross-field constraint suggestions (adds ``constraint`` conditions
+       spanning two questions - e.g. an end date after a start date)
+    2. Translation (labels are final by now, so translations are accurate;
        never overwrites a translation you already supplied; previously-
        translated labels are served from a local cache)
-    6. Advisory suggestion features - question grouping, question
+    3. Advisory suggestion features - question grouping, question
        rewording, choice-list ordering, variable-name suggestions. These
        NEVER mutate the questionnaire: each produces
        :class:`~xlsform_studio.ai.suggestions.AISuggestion` objects
        (collected on :attr:`suggestions`) for a human to accept or reject;
        accepted ones are applied by :func:`~xlsform_studio.ai.
        suggestions.apply_suggestions`.
-    7. Quality review (reads the fully-settled form last; advisory findings
+    4. Quality review (reads the fully-settled form last; advisory findings
        only, never mutates the questionnaire)
 
 **Stage 2 - :meth:`explain_findings`, after validation:** adds a plain-
@@ -77,7 +72,6 @@ from .completeness import AICompletenessReviewer
 from .config import AIConfig
 from .coverage import AICoverageReviewer
 from .constraint_reviewer import AICrossFieldConstraintReviewer
-from .domain_constraints import AIDomainConstraintSynthesizer
 from .enumerator_notes import AIEnumeratorNoteSuggester
 from .finding_explainer import AIFindingExplainer
 from .grouping import AIGroupingSuggester
@@ -85,10 +79,8 @@ from .indicators import AIIndicatorMapper
 from .naming import AINamingSuggester
 from .quality_reviewer import AIQualityReviewer
 from .rewording import AIRewordingSuggester
-from .skip_logic import AISkipLogicResolver
 from .suggestions import AISuggestion
 from .translator import AITranslator
-from .type_classifier import AITypeClassifier
 
 _log = get_logger("ai.pipeline")
 
@@ -144,16 +136,6 @@ class AIPipeline:
 
         _log.info("run start: features=%s questions=%d",
                  ", ".join(config.features), question_count)
-
-        if self._wants(config, "classify"):
-            notes.extend(AITypeClassifier(self.client).classify(questionnaire))
-
-        if self._wants(config, "skip_logic"):
-            notes.extend(AISkipLogicResolver(self.client).resolve(questionnaire))
-
-        if self._wants(config, "domain_constraints"):
-            notes.extend(AIDomainConstraintSynthesizer(self.client)
-                        .suggest(questionnaire, config.survey_context))
 
         if self._wants(config, "cross_constraints"):
             notes.extend(AICrossFieldConstraintReviewer(self.client)

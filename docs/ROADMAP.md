@@ -26,7 +26,7 @@ Legend: ✅ shipped · 🚫 descoped
 | A7 | Bias Detection | ✅ | `ai/rewording.py` (leading/double-barreled/jargon, with reasons) |
 | A10 | Choice Quality Review | ✅ | `ai/quality_reviewer.py` + `ai/choice_ordering.py` |
 | A12 | Survey Structure Optimization | ✅ | `ai/grouping.py` (suggestion-only sections) |
-| A13 | Semantic Constraint Suggestions | ✅ | `ai/domain_constraints.py` + `ai/constraint_reviewer.py` |
+| A13 | Semantic Constraint Suggestions | ✅ | Single-field bounds now produced by `ai/form_author.py` (AI authoring); cross-field via `ai/constraint_reviewer.py` |
 | A15 | Survey Quality Narrative | ✅ | `ai/narrative.py` |
 | H1 | Survey Health Score | ✅ | D4 metrics + A15 narration (`narrative` feature) |
 | H3 | Smart Assumption Log | 🚫 | descoped — see *Descoped items* below |
