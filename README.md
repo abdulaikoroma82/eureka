@@ -368,7 +368,7 @@ they only ever annotate or refine the authored form, never re-author it.
 | **Variable-name suggestions** *(suggestion-only)* | Offers a more natural name where the deterministic one reads awkwardly; accepting a rename also rewrites every `${...}` reference to it | Judging what an analyst will find readable is a language call |
 | **Enumerator instructions** *(suggestion-only)* | Drafts per-question field guidance (probing technique, common misunderstandings) as device `hint` text — only for questions with no author-written hint, which always wins | Anticipating how respondents misunderstand a question is survey-methodology judgement |
 
-The four **suggestion-only** features never touch the form by themselves:
+The five **suggestion-only** features never touch the form by themselves:
 each produces an original-vs-suggested pair you accept or reject (in the
 app's *AI suggestions* panel, which rebuilds and re-validates the workbook
 with your accepted changes; on the CLI they are printed for manual review).
