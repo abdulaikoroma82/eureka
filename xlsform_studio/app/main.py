@@ -294,6 +294,13 @@ def main(argv=None) -> int:
         print(f"Estimated interview: ~{d.typical_minutes:.0f} min "
               f"(range {d.low_minutes:.0f}-{d.high_minutes:.0f}); "
               f"burden risk: {d.burden_risk}")
+    if result.design is not None:
+        print()
+        print(f"Survey Design Score: {result.design.overall}/100 "
+              f"({result.design.rating})")
+        for dim in result.design.dimensions:
+            sc = f"{dim.score}/100" if dim.assessed else "not assessed"
+            print(f"   {dim.name.replace('_', ' '):26} {sc}")
 
     print()
     print("Validation:", "PASSED" if report.is_valid else "FAILED")

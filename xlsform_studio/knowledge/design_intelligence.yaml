@@ -1,0 +1,111 @@
+# Survey Design Intelligence - methodology vocabularies (editable, no code).
+#
+# These lists drive the deterministic Survey Design Score
+# (analysis/design_intelligence.py). They encode *survey-methodology* judgement
+# - the kind a principal investigator or M&E specialist would tune - separately
+# from the XLSForm *engineering* rules in xlsform_rules.yaml. Edit freely; the
+# Python code reads whatever is here (and falls back to sane built-ins if a
+# section is missing).
+
+# Topics that best practice places LATE in an instrument (after rapport is
+# built), and that need a "don't know / refused" escape. Matched as
+# whole-word, case-insensitive substrings of the question label/hint.
+sensitive_terms:
+  - income
+  - salary
+  - earnings
+  - wealth
+  - savings
+  - debt
+  - hiv
+  - aids
+  - sexual
+  - sex partners
+  - contraception
+  - abortion
+  - religion
+  - religious
+  - ethnicity
+  - tribe
+  - caste
+  - political
+  - vote
+  - immigration
+  - disability
+  - mental health
+  - drug
+  - alcohol
+  - violence
+  - abuse
+  - arrest
+
+# Screening / consent items that belong FIRST, not buried mid-form.
+screening_terms:
+  - consent
+  - eligible
+  - eligibility
+  - do you agree to participate
+  - are you willing
+  - assent
+
+# Recall windows: regex -> the window length in days. Used to flag recall-bias
+# risk (very long windows on behaviour/frequency questions) and unstandardised
+# recall (many different windows across one instrument).
+recall_patterns:
+  - {pattern: '\btoday\b', days: 0}
+  - {pattern: '\byesterday\b', days: 1}
+  - {pattern: 'last 24 hours|past 24 hours', days: 1}
+  - {pattern: 'last (7|seven) days|past (7|seven) days|last week|past week|last 7 days', days: 7}
+  - {pattern: 'last (2|two) weeks|past (2|two) weeks|last 14 days|last fortnight', days: 14}
+  - {pattern: 'last month|past month|last 30 days|past 30 days|last 4 weeks', days: 30}
+  - {pattern: 'last (2|two) months|past (2|two) months', days: 60}
+  - {pattern: 'last (3|three) months|past (3|three) months|last quarter|last 90 days', days: 90}
+  - {pattern: 'last (6|six) months|past (6|six) months', days: 180}
+  - {pattern: 'last (12|twelve) months|past (12|twelve) months|last year|past year|last 12 months', days: 365}
+  - {pattern: 'last (2|two) years|past (2|two) years', days: 730}
+  - {pattern: 'last (5|five) years|past (5|five) years', days: 1825}
+  - {pattern: 'ever|in your lifetime|in your life', days: 9999}
+
+# The longest recall window (days) considered methodologically safe for a
+# behaviour/frequency question before recall bias becomes a serious risk.
+recall_max_safe_days: 365
+
+# Ordinal answer-scale families. Each family lists the words that mark a choice
+# list as belonging to it; the scorer then checks that scales of the same
+# family are used consistently (same point count, same direction, present
+# neutral midpoint). Case-insensitive whole-list matching.
+scale_families:
+  agreement: [strongly agree, agree, disagree, strongly disagree]
+  satisfaction: [very satisfied, satisfied, dissatisfied, very dissatisfied]
+  frequency: [always, often, sometimes, rarely, never]
+  likelihood: [very likely, likely, unlikely, very unlikely]
+  quality: [excellent, very good, good, fair, poor]
+
+# Neutral-midpoint tokens; an opinion scale with an even point count and none
+# of these forces a direction and is flagged for measurement validity.
+neutral_tokens: [neutral, neither, undecided, no opinion, average, moderate]
+
+# "Don't know / refused" escape tokens; their presence satisfies the
+# measurement-validity check for sensitive and knowledge questions.
+dont_know_tokens: [don't know, dont know, do not know, not sure, refused,
+                   prefer not to say, no response, decline]
+
+# Leading / loaded phrasings that bias the respondent toward an answer.
+leading_phrases:
+  - don't you agree
+  - dont you agree
+  - wouldn't you agree
+  - wouldn't you say
+  - isn't it true
+  - how good
+  - how bad
+  - how excellent
+  - obviously
+  - clearly
+  - as you know
+  - most people
+
+# Coordinating words that, joining two askable clauses, mark a double-barreled
+# question ("access to clean water and sanitation"). The scorer only flags when
+# both sides look like distinct askable things.
+double_barrel_joins: [' and ', ' or ', '/', ' as well as ', ' along with ']

@@ -7,7 +7,7 @@ preserve: **deterministic-first** (rules are the authority), **offline-first**
 (assumption log + deterministic outputs), **YAML-driven rules**, **platform
 neutrality**.
 
-Legend: ✅ shipped · 🚫 descoped
+Legend: ✅ shipped · 🚫 descoped · ⭐ signature capability
 
 ---
 
@@ -45,6 +45,7 @@ Legend: ✅ shipped · 🚫 descoped
 | A8 | Indicator Mapping Engine | ✅ | `ai/indicators.py` → `indicator_matrix.md` + Quality tab; question refs verified deterministically |
 | A14 | Semantic Logic Review | ✅ | D5 owns decidable defects; `ai/quality_reviewer.py` category 5 reviews conceptual pathways |
 | D1 | Reverse Engineering Engine | ✅ | `parsers/excel_parser.py` reads XLSForms (incl. SurveyCTO dialect); importing one regenerates the full documentation package; printable `*_survey_instrument.docx` in every package |
+| S1 | ⭐ Survey Design Intelligence | ✅ | `analysis/design_intelligence.py` — deterministic **Survey Design Score** (0–100) across ten methodological dimensions: question order, module flow, cognitive burden, recall-period consistency, scale consistency, enumerator/respondent burden, objective coverage, redundancy, measurement validity. Rating gated by the weakest dimension; folds in AI-reviewer findings when present but never requires them; vocabularies in `knowledge/design_intelligence.yaml`. Renders in QA report, Quality tab, CLI, and `survey_design_report.md`. Moves the tool from form *generation* into survey **methodology assistance**. |
 | D11 | Round-trip editing | ✅ | `app/provenance.py` (model sidecar `*_model.json`, written every run) + `app/roundtrip.py` (field-level reconcile, incl. rename detection by label) + `Workflow.run_roundtrip`, CLI `--from-model`, UI sidebar "5 · ♻️ Re-import an edited XLSForm"; re-imports an edited XLSForm without losing per-field confidence or the assumptions log, never re-authoring — makes the tool a canonical editor, not just a generator |
 | A11 | Domain Plausibility Review | 🚫 | descoped — see *Descoped items* below |
 | D2 | Visual mapper extensions (SVG/PNG) | 🚫 | descoped — see *Descoped items* below |

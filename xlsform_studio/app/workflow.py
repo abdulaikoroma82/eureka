@@ -65,6 +65,8 @@ from ..ai.document_writer import DocumentProse
 from ..ai.form_author import AIFormAuthor
 from ..ai.pipeline import AIPipeline
 from ..ai.suggestions import AISuggestion, apply_suggestions
+from ..analysis.design_intelligence import (DesignIntelligence,
+                                            SurveyDesignScore)
 from ..analysis.duration import DurationEstimate, DurationEstimator
 from ..analysis.quality_score import QualityIndex, QualityScorer
 from ..engine.choice_normalizer import ChoiceNormalizer
@@ -128,6 +130,10 @@ class WorkflowResult:
     quality: Optional[QualityIndex] = None
     #: Deterministic interview-duration / burden estimate (always computed).
     duration: Optional[DurationEstimate] = None
+    #: Deterministic Survey Design Score - the methodological/scientific-
+    #: quality assessment (always computed; folds in AI-reviewer findings when
+    #: those features ran, but never requires them).
+    design: Optional[SurveyDesignScore] = None
     #: Objective-coverage matrix (markdown; "" unless the AI "coverage"
     #: feature ran with objectives supplied).
     coverage_matrix: str = ""
@@ -324,6 +330,12 @@ class Workflow:
         document_prose, doc_notes = ai_pipeline.write_documents(
             questionnaire, quality, duration, report, ai_config)
         notes.extend(doc_notes)
+        # Survey Design Score: the deterministic methodological assessment.
+        # Folds in the coverage matrix (if the AI coverage feature ran) and
+        # any AI-reviewer findings already in the report, but needs neither.
+        design = DesignIntelligence().score(
+            questionnaire, report, duration=duration,
+            coverage_matrix=ai_pipeline.coverage_matrix)
         self._emit(progress, STEP_LABELS[4], "done")
 
         result = WorkflowResult(questionnaire=questionnaire, report=report,
@@ -333,6 +345,7 @@ class Workflow:
                                            and ai_config.any_feature_enabled),
                                 ai_suggestions=list(ai_pipeline.suggestions),
                                 quality=quality, duration=duration,
+                                design=design,
                                 coverage_matrix=ai_pipeline.coverage_matrix,
                                 indicator_matrix=ai_pipeline.indicator_matrix,
                                 review_table=build_review_table(questionnaire),
@@ -344,7 +357,8 @@ class Workflow:
                                               out_dir, source_name, target,
                                               quality=quality,
                                               duration=duration,
-                                              prose=document_prose)
+                                              prose=document_prose,
+                                              design=design)
             if result.coverage_matrix:
                 matrix_path = result.outputs["folder"] / "coverage_matrix.md"
                 matrix_path.write_text(result.coverage_matrix,
@@ -386,6 +400,9 @@ class Workflow:
         result.report.narrative = narrative
         result.quality = QualityScorer().score(qn, result.report)
         result.duration = DurationEstimator().estimate(qn)
+        result.design = DesignIntelligence().score(
+            qn, result.report, duration=result.duration,
+            coverage_matrix=result.coverage_matrix)
         # A "naming" suggestion can rename a question referenced by a
         # review row; rebuild rather than risk a stale question name.
         result.review_table = build_review_table(qn)
@@ -397,7 +414,8 @@ class Workflow:
                                               source_name, result.target or None,
                                               quality=result.quality,
                                               duration=result.duration,
-                                              prose=result.document_prose)
+                                              prose=result.document_prose,
+                                              design=result.design)
         return result
 
     # ------------------------------------------------------------------
@@ -429,6 +447,9 @@ class Workflow:
         result.report.narrative = narrative
         result.quality = QualityScorer().score(qn, result.report)
         result.duration = DurationEstimator().estimate(qn)
+        result.design = DesignIntelligence().score(
+            qn, result.report, duration=result.duration,
+            coverage_matrix=result.coverage_matrix)
 
         if write_outputs:
             out_dir = Path(output_dir) if output_dir else CONFIG.output_dir
@@ -437,7 +458,8 @@ class Workflow:
                                               source_name, result.target or None,
                                               quality=result.quality,
                                               duration=result.duration,
-                                              prose=result.document_prose)
+                                              prose=result.document_prose,
+                                              design=result.design)
         return result
 
     # ------------------------------------------------------------------
@@ -446,7 +468,8 @@ class Workflow:
                    target: Optional[str] = None,
                    quality: Optional[QualityIndex] = None,
                    duration: Optional[DurationEstimate] = None,
-                   prose: Optional[DocumentProse] = None
+                   prose: Optional[DocumentProse] = None,
+                   design: Optional[SurveyDesignScore] = None
                    ) -> Dict[str, Path]:
         prose = prose or DocumentProse()
         stamp = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -465,7 +488,7 @@ class Workflow:
         # 3. Validation report (PDF), incl. quality index + duration estimate.
         outputs["validation_report"] = self.reporter.to_pdf(
             report, qn, folder / "QA_Report.pdf", quality=quality,
-            duration=duration)
+            duration=duration, design=design)
         # 4. Assumption log + its prioritized verification checklist (the
         #    checklist reorganises the same entries by review priority; the
         #    log remains the complete ordered record).
@@ -518,6 +541,11 @@ class Workflow:
         #    Workflow.run_roundtrip).
         outputs["model_snapshot"] = write_model_sidecar(
             qn, folder / f"{base}{SIDECAR_SUFFIX}")
+        # 9. Survey Design Score report (methodological assessment).
+        if design is not None:
+            design_path = folder / "survey_design_report.md"
+            design_path.write_text(design.to_markdown(), encoding="utf-8")
+            outputs["survey_design_report"] = design_path
 
         outputs["folder"] = folder
         return outputs

@@ -558,6 +558,52 @@ def _render_result(result, target: str) -> None:
         _render_simulator(result)
 
 
+_DESIGN_TITLES = {
+    "question_order": "Question order", "module_flow": "Module flow",
+    "cognitive_burden": "Cognitive burden",
+    "recall_period_consistency": "Recall period consistency",
+    "scale_consistency": "Scale consistency",
+    "enumerator_burden": "Enumerator burden",
+    "respondent_burden": "Respondent burden",
+    "objective_coverage": "Objective coverage",
+    "redundancy_detection": "Redundancy detection",
+    "measurement_validity": "Measurement validity",
+}
+
+
+def _render_design_score(design) -> None:
+    """The Survey Design Score: methodological/scientific quality, distinct
+    from the engineering-focused Form Quality Index above."""
+    if design is None:
+        return
+    st.divider()
+    st.markdown("#### 🔬 Survey Design Score")
+    st.caption("Beyond *does it compile* — will the instrument produce valid "
+               "data? A deterministic methodology assessment for PIs, M&E "
+               "specialists and survey methodologists.")
+    st.metric("Survey Design Score", f"{design.overall}/100", design.rating)
+    for d in design.dimensions:
+        title = _DESIGN_TITLES.get(d.name, d.name)
+        if not d.assessed:
+            st.markdown(f"◻️ **{title}** — _{d.basis}_")
+            continue
+        st.progress(d.score / 100.0, text=f"{title} — {d.score}/100")
+    flagged = [(d, ob) for d in design.dimensions for ob in d.observations
+               if d.assessed and d.score < 100]
+    if flagged:
+        with st.expander("Methodological findings", expanded=False):
+            current = None
+            for d, ob in flagged:
+                if d.name != current:
+                    st.markdown(f"**{_DESIGN_TITLES.get(d.name, d.name)}**")
+                    current = d.name
+                st.markdown(f"- {ob}")
+    st.caption("Deterministic and offline; folds in the AI reviewers' "
+               "findings when those features are enabled, but never requires "
+               "them. Tune the methodology vocabulary in "
+               "`knowledge/design_intelligence.yaml`.")
+
+
 def _render_quality(result) -> None:
     quality, duration = result.quality, result.duration
     if quality is None:
@@ -598,6 +644,8 @@ def _render_quality(result) -> None:
     st.caption("All scores and estimates are deterministic — computed from "
                "the form's structure with documented formulas, identical on "
                "every re-run.")
+
+    _render_design_score(getattr(result, "design", None))
 
     if result.coverage_matrix:
         st.divider()

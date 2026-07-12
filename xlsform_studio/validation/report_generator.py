@@ -150,13 +150,15 @@ class ReportGenerator:
 
     def to_markdown(self, report: ValidationReport,
                     questionnaire: Questionnaire,
-                    quality=None, duration=None) -> str:
+                    quality=None, duration=None, design=None) -> str:
         """Render the QA report.
 
         *quality* (a :class:`~xlsform_studio.analysis.quality_score.
-        QualityIndex`) and *duration* (a :class:`~xlsform_studio.
-        analysis.duration.DurationEstimate`) are optional so existing
-        callers keep working; the workflow passes both.
+        QualityIndex`), *duration* (a :class:`~xlsform_studio.
+        analysis.duration.DurationEstimate`) and *design* (a
+        :class:`~xlsform_studio.analysis.design_intelligence.
+        SurveyDesignScore`) are optional so existing callers keep working;
+        the workflow passes all three.
         """
         s = questionnaire.settings
         lines: List[str] = []
@@ -203,6 +205,26 @@ class ReportGenerator:
             for note in duration.notes:
                 lines.append(f"- {note}")
             if duration.notes:
+                lines.append("")
+        if design is not None:
+            lines.append(f"## Survey Design Score: {design.overall}/100 "
+                         f"({design.rating})")
+            lines.append("")
+            lines.append("_Methodological quality — will the instrument "
+                         "produce valid data? Deterministic; folds in AI "
+                         "review findings when present._")
+            lines.append("")
+            lines.append("| Dimension | Score | Basis |")
+            lines.append("| --- | --- | --- |")
+            for d in design.dimensions:
+                title = d.name.replace("_", " ").capitalize()
+                sc = f"{d.score}/100" if d.assessed else "—"
+                lines.append(f"| {title} | {sc} | {d.basis} |")
+            lines.append("")
+            flagged = [ob for d in design.dimensions for ob in d.observations]
+            for ob in flagged:
+                lines.append(f"- {ob}")
+            if flagged:
                 lines.append("")
         if report.target:
             lines.append(f"**Validated against:** {report.target.upper()} "
@@ -301,12 +323,13 @@ class ReportGenerator:
 
     # ------------------------------------------------------------------
     def to_pdf(self, report: ValidationReport, questionnaire: Questionnaire,
-               path: Union[str, Path], quality=None, duration=None) -> Path:
+               path: Union[str, Path], quality=None, duration=None,
+               design=None) -> Path:
         """Write a QA report PDF.  Falls back to .txt if PyMuPDF is missing."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         markdown = self.to_markdown(report, questionnaire, quality=quality,
-                                    duration=duration)
+                                    duration=duration, design=design)
         try:
             return self._pdf_via_fitz(markdown, path)
         except Exception:  # pragma: no cover - defensive fallback

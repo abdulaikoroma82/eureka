@@ -566,6 +566,50 @@ Results are written to `QA_Report.pdf` in the output package.
 
 ---
 
+## Survey Design Score (methodology intelligence)
+
+Validation checks that a form is *well-formed*. The **Survey Design Score**
+checks something no XLSForm tool usually does: whether it is *well-designed
+as a measurement instrument* — the judgement a principal investigator, M&E
+specialist or survey methodologist brings. It answers "will this produce
+valid data?", not "will it compile?". This is XLSForm Studio's move from form
+*generation* into survey **methodology assistance**.
+
+It scores the form 0–100 across ten methodological dimensions:
+
+| Dimension | What it checks |
+| --- | --- |
+| **Question order** | Sensitive topics placed after rapport, screening/consent first, no forward dependencies |
+| **Module flow** | Coherent, balanced sections rather than one giant block or scattered singletons |
+| **Cognitive burden** | Open-ended load, over-long option lists, wordy stems, densely nested logic |
+| **Recall period consistency** | Recall windows present, bounded (beyond ~12 months invites recall bias), and standardised across questions |
+| **Scale consistency** | Answer scales of one family share point count and direction (no mixed 4-/5-point Likert for one construct) |
+| **Enumerator burden** | Skip/constraint density and roster load the interviewer must manage |
+| **Respondent burden** | Length and effort asked of the respondent (reuses the duration estimate) |
+| **Objective coverage** | Each stated study objective is measured (assessed only when objectives are supplied) |
+| **Redundancy detection** | Near-duplicate questions asking the same thing |
+| **Measurement validity** | Double-barreled, leading/loaded, or escape-less (no "don't know") items; forced-choice scales with no neutral midpoint |
+
+**It is deterministic and offline-first**, exactly like the Form Quality
+Index: every dimension is computed arithmetically from the form, so the same
+form always scores the same, and no API key is required. Where a dimension
+benefits from the AI reviewers, their *existing* findings are folded in — so
+enabling AI enriches the score but is never needed for it. The headline
+**rating** (`publication-ready` · `sound` · `needs methodological review` ·
+`high measurement risk`) is gated by the *weakest* dimension, so one serious
+flaw can't be diluted away by everything else being clean. A dimension the
+tool genuinely can't assess (objective coverage with no objectives supplied)
+is marked **not assessed** and excluded from the average rather than guessed.
+
+The methodology vocabularies it reads — sensitive topics, recall-window
+patterns, ordinal scale families, leading phrases — live in editable YAML
+(`xlsform_studio/knowledge/design_intelligence.yaml`), so a methodologist can
+tune what counts without touching Python. The score appears in the QA report,
+the app's **📊 Quality** tab, the CLI summary, and its own
+`survey_design_report.md` in every output package.
+
+---
+
 ## Interview simulation
 
 Static checks tell you the form is *well-formed*; the simulator tells you it
@@ -673,6 +717,10 @@ Each run writes a timestamped folder under `output/` containing:
    including every field's confidence and the assumptions behind it. This is
    what the workbook itself can't carry, and it's what makes round-trip
    editing possible (see below). Written on every run.
+17. `survey_design_report.md` — the **Survey Design Score**: a deterministic
+   methodological assessment across ten dimensions (question order, recall
+   consistency, measurement validity, …), with a per-dimension breakdown and
+   the specific findings behind each deduction. Written on every run.
 
 Every document above is authored **deterministically** and owns every fact
 (variable names, types, logic, counts, checklist tiers). With the optional
