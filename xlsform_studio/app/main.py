@@ -283,6 +283,11 @@ def main(argv=None) -> int:
         except AIError as exc:
             print(f"error: {_ai_error_message(exc)}", file=sys.stderr)
             return 2
+        except (ValueError, FileNotFoundError) as exc:
+            # Unreadable / unsupported / oversized input, or a malformed JSON
+            # form definition - report cleanly instead of dumping a traceback.
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
 
     report = result.report
     print()

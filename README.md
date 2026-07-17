@@ -832,7 +832,7 @@ it. That makes "host it online for a team" a matter of running the existing
 app on a public URL, not a rearchitecture.
 
 **Docker / CI (headless, CLI only).** A minimal container needs Python
-3.11+, the package, and nothing else for the deterministic pipeline:
+3.11+ and the package:
 
 ```dockerfile
 FROM python:3.11-slim
@@ -844,14 +844,18 @@ ENTRYPOINT ["xlsform-studio"]
 
 ```bash
 docker build -t xlsform-studio .
-docker run --rm -v "$PWD:/data" xlsform-studio /data/survey.docx -o /data/out
+# Authoring is AI-first, so the key (and egress to the DeepSeek API) is required:
+docker run --rm -e DEEPSEEK_API_KEY=sk-... -v "$PWD:/data" \
+    xlsform-studio /data/survey.docx -o /data/out
 ```
 
-In a CI pipeline, run `xlsform-studio survey.docx -o build/` as a build
-step and check its exit code: `0` means the form validated, `1` means
-validation found errors (see [Usage](#usage)). No network egress is
-required unless you explicitly pass `--ai` — the pipeline is airtight for
-regulated or offline environments by default.
+In a CI pipeline, run `xlsform-studio survey.docx -o build/` as a build step
+and check its exit code: `0` means the form validated, `1` means validation
+found errors, `2` means the run could not start (missing/rejected key, file
+too large, unsupported format) — see [Usage](#usage). The run needs network
+egress to the DeepSeek API to author the form; everything after authoring
+(standards enforcement, validation, export, all documentation) is
+deterministic and offline.
 
 **Server (Streamlit UI).** The repo root [`Dockerfile`](Dockerfile) builds
 and serves the graphical app:
@@ -889,18 +893,23 @@ none are set):
 
 | Variable | Purpose |
 | --- | --- |
-| `DEEPSEEK_API_KEY` | Enables the optional AI layer. Unset = fully deterministic, zero network calls. |
+| `DEEPSEEK_API_KEY` | **Required.** The model drafts every form; a run fails without a valid key (there is no offline authoring fallback). Also powers the optional enrichment passes. |
 | `XLSFS_OUTPUT_DIR` | Override the default output directory. |
+| `XLSFS_MAX_INPUT_MB` | Maximum accepted upload/input size in MB (default `25`); a larger file is rejected before parsing, so one huge upload can't exhaust memory on a shared deployment. |
 | `XLSFS_DEEPSEEK_BASE_URL` / `XLSFS_DEEPSEEK_MODEL` | Point the AI layer at a different DeepSeek-compatible endpoint/model. |
+| `XLSFS_AUTHORING` | Internal seam only. `deterministic` selects the legacy rule-engine compiler (no key, no network) — used by the test suite, never a product mode. |
 | `XLSFORM_STUDIO_LOG_LEVEL` | Diagnostic log verbosity for the Streamlit UI (`DEBUG`/`INFO`/`WARNING`/`ERROR`); the CLI uses `--log-level` instead. |
 
-**Error recovery.** Every step degrades independently rather than taking
-the whole run down:
+**Error recovery.** Steps degrade independently rather than taking the whole
+run down:
 - A parser failure on one file doesn't affect other files in a batch —
   each `xlsform-studio` invocation is one process, one exit code.
-- Any AI feature failure (network error, malformed response, missing key)
-  falls back to the deterministic result for that feature and logs a
-  `[AI] ...` note in the assumption log; it never aborts the run.
+- **Authoring** requires the model: if the key is missing or rejected the run
+  stops early with a clear message (a rejected key reports "DeepSeek rejected
+  the API key"), rather than silently producing a half-formed result.
+- Every **optional enrichment** pass, by contrast, fails open: a network
+  error, malformed response or rate-limit skips just that feature, logs an
+  `[AI] ...` note in the assumption log, and leaves the authored form intact.
 - Validation errors are reported, not thrown — the XLSForm and full
   documentation package are still written even when the form is invalid,
   so you always have something to inspect and fix.
@@ -909,18 +918,25 @@ the whole run down:
 
 ## Troubleshooting
 
-**"AI enrichment was skipped and the deterministic result stands."**
-Either `DEEPSEEK_API_KEY` isn't set, or the form exceeds the AI
-question-count ceiling (2,000 questions, to keep prompts inside the
-model's context window and bound per-run API cost). The deterministic
-output is complete and unaffected either way — AI is enrichment, not a
-dependency.
+**"A DeepSeek API key is required" / "DeepSeek rejected the API key".**
+Authoring is AI-first — the model drafts every field — so a run needs a
+valid `DEEPSEEK_API_KEY`. The first message means no key is configured; the
+second means the key was reached but refused (wrong key, or out of quota).
+There is no offline authoring mode in the shipped product (the
+`XLSFS_AUTHORING=deterministic` seam exists only for the test suite).
 
-**The AI API is down / rate-limited / times out.**
-Nothing to do — the run still completes. Each AI feature independently
-falls back to the deterministic result and logs why in the assumption
-log. Re-run later, or without `--ai`, to get the same form without the
-AI notes.
+**"AI enrichment was skipped."**
+An *optional enrichment* pass (translation, quality review, a suggestion
+pass, …) was requested but couldn't run — the API was unreachable, returned
+something unexpected, or the form exceeds the 2,000-question enrichment
+ceiling. The authored form and its documentation are complete and unaffected;
+only the extra annotation is missing. Re-run later to add it.
+
+**The AI API is down / rate-limited / times out mid-run.**
+Enrichment passes fail open — each one independently skips and logs why in
+the assumption log, and the authored form still finishes. If the *authoring*
+call itself can't reach the API, the run reports the failure rather than
+guessing; re-run when the API is reachable.
 
 **A form with 500+ questions feels slow.**
 The deterministic pipeline scales roughly linearly with question and
