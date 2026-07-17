@@ -29,10 +29,14 @@ True
 
 from __future__ import annotations
 
+import re
 from typing import List
 
 from ..models import Questionnaire
 from .report_generator import Finding
+
+#: A form id safe for every target platform's upload / URL / file naming.
+_VALID_FORM_ID = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class StructureValidator:
@@ -67,9 +71,16 @@ class StructureValidator:
         # Settings.
         if not questionnaire.settings.form_title:
             findings.append(Finding("warning", "structure", "Form title is empty."))
-        if not questionnaire.settings.form_id:
+        form_id = questionnaire.settings.form_id
+        if not form_id:
             findings.append(Finding("warning", "structure",
                                     "Form id is empty (a default will be generated)."))
+        elif not _VALID_FORM_ID.match(form_id):
+            findings.append(Finding(
+                "warning", "structure",
+                f"Form id '{form_id}' is not a safe identifier (letters, "
+                f"digits and underscores, starting with a letter). Survey "
+                f"platforms may reject or rewrite it on upload."))
 
         findings.extend(self._check_group_balance(questionnaire))
         return findings

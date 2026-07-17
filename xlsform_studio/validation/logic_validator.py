@@ -57,6 +57,27 @@ class LogicValidator:
                                         f"Duplicate variable name '{n}'.", n))
             seen.add(n)
 
+        # --- group/repeat name collisions ------------------------------
+        # Groups, repeats and questions share one ${...} namespace, so a
+        # begin-group/repeat name must not equal a question name or another
+        # group's name. (Only begin markers carry the authoritative name; the
+        # matching end marker repeats it and is skipped.)
+        seen_struct: Set[str] = set()
+        for q in questionnaire.questions:
+            if not (q.is_structural and q.base_type.startswith("begin") and q.name):
+                continue
+            if q.name in name_set:
+                findings.append(Finding(
+                    "error", "logic",
+                    f"Group/repeat name '{q.name}' collides with a question "
+                    f"of the same name; they share one ${{...}} namespace.",
+                    q.name))
+            if q.name in seen_struct:
+                findings.append(Finding(
+                    "error", "logic",
+                    f"Duplicate group/repeat name '{q.name}'.", q.name))
+            seen_struct.add(q.name)
+
         # --- broken references -----------------------------------------
         for q in questions:
             for expr in (q.relevant, q.constraint, q.calculation):
@@ -92,6 +113,24 @@ class LogicValidator:
                                             f"Choice list '{list_name}' has duplicate name '{ch.name}'.",
                                             list_name))
                 seen_c.add(ch.name)
+
+        # --- choice codes must not contain whitespace ------------------
+        # select_multiple / rank store answers as a space-separated list of
+        # codes, so a space inside a code silently splits it into two values.
+        # It's a hard error for those types and a warning elsewhere.
+        multi_lists = {q.choice_list_name for q in questions
+                       if q.base_type in ("select_multiple", "rank")
+                       and q.choice_list_name}
+        for list_name, cl in questionnaire.choice_lists.items():
+            for ch in cl.choices:
+                if ch.name and re.search(r"\s", ch.name):
+                    level = "error" if list_name in multi_lists else "warning"
+                    findings.append(Finding(
+                        level, "logic",
+                        f"Choice code '{ch.name}' in list '{list_name}' "
+                        f"contains whitespace; choice codes are space-separated "
+                        f"in select_multiple/rank answers, so a space corrupts "
+                        f"the stored value.", list_name))
 
         # --- compared choice values actually exist ----------------------
         findings.extend(self._check_choice_values(questionnaire, questions))

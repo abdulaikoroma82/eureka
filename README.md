@@ -486,11 +486,15 @@ XLSForm variant.
 The validator runs in layers:
 
 * **Structure** — survey/choices/settings present, every question typed and
-  named, and `begin/end group` & `begin/end repeat` markers balanced.
+  named, `begin/end group` & `begin/end repeat` markers balanced, and the
+  `form_id` a safe identifier (spaces or punctuation that platforms reject on
+  upload are flagged).
 * **Logic** — no duplicate names, no broken `${…}` references, no missing/empty
-  choice lists, and **no dead comparisons**: `${sex}='femalee'` (a typo) or a
-  value the referenced list can never hold is flagged, because it would
-  deploy fine and simply never fire.
+  choice lists, no **group/repeat name colliding** with a question (they share
+  one `${…}` namespace), no **whitespace in choice codes** (a space in a
+  `select_multiple` code silently splits the stored value), and **no dead
+  comparisons**: `${sex}='femalee'` (a typo) or a value the referenced list can
+  never hold is flagged, because it would deploy fine and simply never fire.
 * **Expression syntax** — every `relevant` / `constraint` / `calculation` /
   `choice_filter` expression is parsed for structural validity: unbalanced
   parentheses or quotes, doubled or dangling operators (`. >< 5`), missing
