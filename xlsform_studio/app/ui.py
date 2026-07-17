@@ -1018,7 +1018,13 @@ def main() -> None:
                 output_dir=_session_output_dir(),
             )
         except Exception as exc:  # pragma: no cover - surfaced to the user
-            st.error(f"Could not process **{uploaded.name}**: {exc}")
+            detail = str(exc)
+            if "HTTP 401" in detail or "HTTP 403" in detail:
+                st.error("DeepSeek rejected the API key. Check the key under "
+                         "**4 · 🤖 AI engine** (or `DEEPSEEK_API_KEY`) is "
+                         "correct and has quota.", icon="🔑")
+            else:
+                st.error(f"Could not process **{uploaded.name}**: {exc}")
             return
         finally:
             tmp_path.unlink(missing_ok=True)

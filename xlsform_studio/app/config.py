@@ -37,8 +37,24 @@ EXAMPLES_DIR: Path = PACKAGE_ROOT / "examples"
 DEPLOYMENT_TARGETS: List[str] = ["kobo", "surveycto", "odk", "ona", "commcare"]
 
 # --- supported input formats ----------------------------------------------
-SUPPORTED_INPUT_EXTENSIONS: List[str] = [".json", ".csv", ".xlsx", ".xls",
+# Note: legacy binary ``.xls`` is intentionally absent - openpyxl (our only
+# spreadsheet reader) handles ``.xlsx`` only, and pinning an end-of-life
+# ``xlrd`` for ``.xls`` is not worth the dependency. Convert ``.xls`` to
+# ``.xlsx`` first.
+SUPPORTED_INPUT_EXTENSIONS: List[str] = [".json", ".csv", ".xlsx",
                                          ".docx", ".pdf", ".txt", ".md"]
+
+# --- input safety limits ---------------------------------------------------
+def _env_int(name: str, default: int) -> int:
+    """Read a positive integer env override, falling back on empty/invalid."""
+    raw = os.environ.get(f"XLSFS_{name}", "").strip()
+    return int(raw) if raw.isdigit() and int(raw) > 0 else default
+
+
+#: Reject an input file larger than this before parsing, so a pathological
+#: upload can't exhaust memory on a shared/hosted deployment (PyMuPDF and
+#: pandas both load the whole file). Overridable via ``XLSFS_MAX_INPUT_MB``.
+MAX_INPUT_BYTES: int = _env_int("MAX_INPUT_MB", 25) * 1024 * 1024
 
 # --- XLSForm sheet definitions --------------------------------------------
 SURVEY_COLUMNS: List[str] = [

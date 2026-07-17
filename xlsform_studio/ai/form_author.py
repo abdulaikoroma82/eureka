@@ -343,13 +343,21 @@ class AIFormAuthor:
         from *fallback_label* if blank, then guarantee uniqueness within
         *used* (which this method updates)."""
         name = self._sanitize(proposed) or self._sanitize(fallback_label) or "q"
-        base = name
+        if name not in used:
+            used.add(name)
+            return name
+        # Append a uniqueness suffix WITHIN the length limit - trim the base so
+        # base+suffix still fits, or a collision on a max-length name would
+        # overflow the platform's identifier limit (e.g. SurveyCTO's 32).
         n = 2
-        while name in used:
-            name = f"{base}_{n}"
+        limit = self._max_name_length
+        while True:
+            suffix = f"_{n}"
+            candidate = f"{name[:max(1, limit - len(suffix))]}{suffix}"
+            if candidate not in used:
+                used.add(candidate)
+                return candidate
             n += 1
-        used.add(name)
-        return name
 
     def _sanitize(self, text: str) -> str:
         s = _NAME_RE.sub("_", str(text).strip().lower())

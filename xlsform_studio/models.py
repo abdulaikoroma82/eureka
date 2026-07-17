@@ -263,8 +263,22 @@ class Question:
             {"question": "...", "type": "select_one", "choices": ["Yes", "No"]}
         """
         data = dict(data)  # shallow copy; do not mutate caller's dict
-        raw_label = data.pop("question", data.pop("raw_label", data.pop("label", "")))
-        raw_choices = data.pop("choices", data.pop("raw_choices", [])) or []
+
+        def _pop_first(*keys, default):
+            # dict.pop evaluates its default eagerly, so the nested-pop idiom
+            # would drop a later key (e.g. "label") even when an earlier one
+            # ("question") wins. Consume only the first key that is present.
+            for key in keys:
+                if key in data:
+                    return data.pop(key)
+            return default
+
+        raw_label = _pop_first("question", "raw_label", default=None)
+        if raw_label is None:
+            # Last-resort source for the raw label, read WITHOUT consuming it
+            # so an explicit "label" still maps to the label attribute below.
+            raw_label = data.get("label", "")
+        raw_choices = _pop_first("choices", "raw_choices", default=[]) or []
         # Normalise choices that arrive as {"name","label"} dicts to plain labels.
         norm_choices: List[str] = []
         for ch in raw_choices:

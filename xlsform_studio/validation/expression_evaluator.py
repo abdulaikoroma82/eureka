@@ -145,6 +145,13 @@ def _arith(op: str, left: Value, right: Value) -> Value:
         return _UNKNOWN
 
 
+#: Hard ceilings so a hostile expression (from an imported XLSForm or an AI
+#: draft) can never exhaust the tokenizer's memory or blow the recursive
+#: descent parser's stack. A real XLSForm expression is far below these.
+_MAX_EXPR_LEN = 4000
+_MAX_PARSE_DEPTH = 100
+
+
 def _tokenize(expression: str) -> List[tuple]:
     tokens: List[tuple] = []
     pos = 0
@@ -310,6 +317,7 @@ class _Parser:
         self.tokens = tokens
         self.pos = 0
         self.resolver = resolver
+        self.depth = 0
 
     def peek(self) -> tuple:
         return self.tokens[self.pos] if self.pos < len(self.tokens) else ("eof", "")
@@ -360,6 +368,19 @@ class _Parser:
                 return left
 
     def parse_primary(self) -> Value:
+        # parse_primary is the sole re-entry into the grammar (via a
+        # parenthesised group, a unary minus, or a function call), so bounding
+        # its depth here bounds the whole recursion - turning a stack-blowing
+        # ``((((...))))`` into a clean ValueError the callers already handle.
+        self.depth += 1
+        if self.depth > _MAX_PARSE_DEPTH:
+            raise ValueError("expression nesting too deep")
+        try:
+            return self._parse_primary()
+        finally:
+            self.depth -= 1
+
+    def _parse_primary(self) -> Value:
         kind, text = self.next()
         if kind == "ref":
             return self.resolver.ref(text[2:-1])
@@ -404,6 +425,8 @@ def _combine_or(left: Value, right: Value) -> Tri:
 
 def _parse(expression: str, resolver) -> Value:
     """Tokenize + evaluate, or raise ValueError/IndexError on bad input."""
+    if len(expression) > _MAX_EXPR_LEN:
+        raise ValueError("expression too long to evaluate safely")
     tokens = _tokenize(expression)
     parser = _Parser(tokens, resolver)
     result = parser.parse_or()
@@ -430,7 +453,7 @@ class ExpressionEvaluator:
             return None
         try:
             return _truthy(_parse(expression, _StaticResolver(values)))
-        except (ValueError, IndexError):
+        except (ValueError, IndexError, RecursionError):
             return None
 
 
@@ -445,7 +468,7 @@ class RuntimeEvaluator:
             return ""
         try:
             result = _parse(expression, _RuntimeResolver(values, self_value))
-        except (ValueError, IndexError):
+        except (ValueError, IndexError, RecursionError):
             return ""
         return "" if result is _UNKNOWN else result
 
@@ -459,7 +482,7 @@ class RuntimeEvaluator:
             return default
         try:
             t = _truthy(_parse(expression, _RuntimeResolver(values, self_value)))
-        except (ValueError, IndexError):
+        except (ValueError, IndexError, RecursionError):
             return default
         return default if t is None else t
 

@@ -38,7 +38,7 @@ import os
 import sys
 from pathlib import Path
 
-from ..ai.client import DeepSeekClient
+from ..ai.client import AIError, DeepSeekClient
 from ..ai.config import AI_FEATURES, AIConfig, normalize_features
 from ..logging_config import configure_logging
 from ..validation.report_generator import CONFIDENCE_ICONS
@@ -159,6 +159,16 @@ def _parse_languages(raw: str) -> list:
     return languages
 
 
+def _ai_error_message(exc: "AIError") -> str:
+    """Turn a raw DeepSeek failure into an actionable one-liner, singling out
+    a rejected key (the most common misconfiguration) from other failures."""
+    text = str(exc)
+    if "HTTP 401" in text or "HTTP 403" in text:
+        return ("DeepSeek rejected the API key (check DEEPSEEK_API_KEY is "
+                "correct and has quota).")
+    return f"AI authoring failed: {text}"
+
+
 def _progress(step: str, status: str) -> None:
     if status == "done":
         print(f"  [x] {step}")
@@ -257,18 +267,22 @@ def main(argv=None) -> int:
             return 2
     else:
         print(f"Processing: {input_path}")
-        result = workflow.run_from_file(
-            input_path,
-            form_title=args.title,
-            form_id=args.form_id,
-            version=args.version,
-            target=args.target,
-            output_dir=args.output,
-            ai_config=ai_config,
-            survey_context=args.ai_context,
-            path_analysis=not args.no_path_analysis,
-            progress=None if args.quiet else _progress,
-        )
+        try:
+            result = workflow.run_from_file(
+                input_path,
+                form_title=args.title,
+                form_id=args.form_id,
+                version=args.version,
+                target=args.target,
+                output_dir=args.output,
+                ai_config=ai_config,
+                survey_context=args.ai_context,
+                path_analysis=not args.no_path_analysis,
+                progress=None if args.quiet else _progress,
+            )
+        except AIError as exc:
+            print(f"error: {_ai_error_message(exc)}", file=sys.stderr)
+            return 2
 
     report = result.report
     print()

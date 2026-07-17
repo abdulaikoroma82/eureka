@@ -3,8 +3,9 @@
 Purpose
 -------
 A minimal, dependency-free client for DeepSeek's OpenAI-compatible chat
-completions API, used by the optional AI-assisted features (translation,
-skip-logic inversion, type-classification fallback, quality review).
+completions API, used by AI form authoring and the optional enrichment
+features (translation, quality review, cross-field constraints, coverage
+and indicator matrices, and the advisory suggestion passes).
 
 This is the ONLY place in the codebase that talks to a network service.
 Every other module in :mod:`xlsform_studio` remains fully offline and

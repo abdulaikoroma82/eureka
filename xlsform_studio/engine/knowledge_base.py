@@ -29,6 +29,7 @@ Example
 
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -118,14 +119,17 @@ class KnowledgeBase:
         neutral ones. Dict sections shallow-merge with the pack's keys
         overriding. Anything else the pack defines replaces the section.
         """
-        merged = dict(rules)
+        # Deep-copy so a pack-merged knowledge base never aliases nested
+        # objects with the cached neutral rules (KnowledgeBase.load is reused);
+        # rule packs are tiny, so the copy cost is negligible.
+        merged = copy.deepcopy(rules)
         for key, value in pack.items():
             if key in ("type_keywords", "constraints"):
-                merged[key] = list(value or []) + list(merged.get(key, []))
+                merged[key] = copy.deepcopy(value or []) + list(merged.get(key, []))
             elif isinstance(value, dict) and isinstance(merged.get(key), dict):
-                merged[key] = {**merged[key], **value}
+                merged[key] = {**merged[key], **copy.deepcopy(value)}
             else:
-                merged[key] = value
+                merged[key] = copy.deepcopy(value)
         return merged
 
     # -- platform accessors ---------------------------------------------

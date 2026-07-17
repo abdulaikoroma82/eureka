@@ -42,6 +42,34 @@ from .survey_builder import SurveyBuilder
 _HEADER_FILL = PatternFill(start_color="FF1F4E78", end_color="FF1F4E78", fill_type="solid")
 _HEADER_FONT = Font(bold=True, color="FFFFFFFF")
 
+#: Leading characters that make Excel / LibreOffice treat a cell as a live
+#: formula on open - the CSV/formula-injection surface (``=cmd|...``,
+#: ``=WEBSERVICE(...)``, ``=HYPERLINK(...)``, ``@SUM``...). Source
+#: questionnaires and AI-authored text are untrusted, so we neutralise them.
+#:
+#: ``=`` ``@`` and control characters are never valid at the start of *any*
+#: XLSForm cell, so they are defused everywhere. ``+`` and ``-`` are defused
+#: only in free-text columns: in the expression columns a leading ``-`` is a
+#: legitimate unary minus (``-${x}``) or negative default, which must survive.
+_ALWAYS_DANGEROUS = ("=", "@", "\t", "\r", "\x00")
+_TEXT_DANGEROUS = _ALWAYS_DANGEROUS + ("+", "-")
+
+#: Columns holding arbitrary untrusted prose (plus any ``label::lang`` /
+#: ``media::*`` passthrough column, matched by the ``::`` separator).
+_FREE_TEXT_COLUMNS = frozenset({"label", "hint", "constraint_message"})
+
+
+def _defuse(value: object, column: str) -> object:
+    """Prefix a text-forcing apostrophe to a value that would otherwise be
+    executed as a spreadsheet formula. Excel/LibreOffice strip the apostrophe
+    on display but never evaluate the cell. Column-aware so legitimate XLSForm
+    expressions (a ``-${x}`` calculation, a ``-1`` default) are preserved."""
+    if not isinstance(value, str) or not value:
+        return value
+    leaders = (_TEXT_DANGEROUS if column in _FREE_TEXT_COLUMNS or "::" in column
+               else _ALWAYS_DANGEROUS)
+    return "'" + value if value[0] in leaders else value
+
 
 class XLSFormExporter:
     """Serialise a questionnaire to an XLSForm workbook.
@@ -123,14 +151,21 @@ class XLSFormExporter:
         for r_idx, row in enumerate(rows, start=2):
             for c_idx, col in enumerate(columns, start=1):
                 value = row.get(col, "")
-                ws.cell(row=r_idx, column=c_idx, value=value if value != "" else None)
+                ws.cell(row=r_idx, column=c_idx,
+                        value=_defuse(value, col) if value != "" else None)
         self._autosize(ws, columns, rows)
         ws.freeze_panes = "A2"
 
     @staticmethod
     def _autosize(ws, columns: List[str], rows: List[Dict[str, str]]) -> None:
+        # Single pass over the cells (columns x rows), stringifying each value
+        # exactly once, instead of one full row scan per column.
+        widths = {col: len(col) for col in columns}
+        for row in rows:
+            for col in columns:
+                value = row.get(col, "")
+                if value:
+                    widths[col] = max(widths[col], len(str(value)))
         for c_idx, col in enumerate(columns, start=1):
-            width = len(col)
-            for row in rows:
-                width = max(width, len(str(row.get(col, ""))))
-            ws.column_dimensions[get_column_letter(c_idx)].width = min(max(width + 2, 10), 60)
+            ws.column_dimensions[get_column_letter(c_idx)].width = \
+                min(max(widths[col] + 2, 10), 60)

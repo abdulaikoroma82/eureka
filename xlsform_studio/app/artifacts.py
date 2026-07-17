@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import os
 from pathlib import Path
 from typing import Dict, List, Union
 
@@ -448,6 +449,12 @@ class ArtifactBuilder:
             "errors": error_count,
         }
         history.append(entry)
-        path.write_text(json.dumps(history, indent=2), encoding="utf-8")
+        # Write atomically: a crash / disk-full mid-write must never leave a
+        # truncated file, which the next run would fail to parse and silently
+        # reset to [] - losing the whole append-only audit trail. os.replace
+        # is atomic on POSIX and Windows.
+        tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(history, indent=2), encoding="utf-8")
+        os.replace(tmp, path)
         return path
 
