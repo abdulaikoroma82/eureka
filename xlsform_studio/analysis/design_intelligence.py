@@ -602,10 +602,24 @@ class DesignIntelligence:
         return f"{round(days / 365)} year(s)"
 
     def _scale_family(self, cl) -> Optional[str]:
-        labels = " " + " ".join((c.label or "").lower() for c in cl.choices) + " "
+        """Classify a choice list as an ordinal scale family, or None.
+
+        A list belongs to a family when it carries both a positive-pole and a
+        negative-pole marker *word* (word-boundary matched, so "agree" never
+        matches inside "disagree"). Requiring both poles - rather than a fixed
+        hit count - detects 3-point scales (Agree / Neutral / Disagree) too,
+        while a one-sided list of options never trips it.
+        """
+        labels = " ".join((c.label or "").lower() for c in cl.choices)
         for fam, markers in self.v["scale_families"].items():
-            hits = sum(1 for m in markers if m in labels)
-            if hits >= max(2, len(markers) - 1):
+            # Ceiling split: the positive pole takes the upper half (and the
+            # midpoint of an odd scale, e.g. "good" in excellent..poor), the
+            # negative pole the rest - non-overlapping, so a two-option list
+            # like [Good, Bad] can't satisfy both poles by chance.
+            split = (len(markers) + 1) // 2
+            positive, negative = markers[:split], markers[split:]
+            if negative and self._matches_any(labels, positive) \
+                    and self._matches_any(labels, negative):
                 return fam
         return None
 

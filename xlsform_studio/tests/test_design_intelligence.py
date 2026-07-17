@@ -105,6 +105,32 @@ def test_mixed_point_count_scales_flagged():
     assert any("point counts" in o for o in scale.observations)
 
 
+def test_three_point_scale_detected_and_point_count_mix_flagged():
+    """A 3-point ordinal scale is now recognised (word-boundary, pole-based
+    detection), so mixing it with a 5-point scale of the same family is
+    caught - it was invisible under the old fixed-hit-count threshold."""
+    three = ChoiceList("a3", [Choice("1", "Agree"), Choice("2", "Neutral"),
+                              Choice("3", "Disagree")])
+    five = ChoiceList("a5", [Choice("1", "Strongly agree"), Choice("2", "Agree"),
+                             Choice("3", "Neutral"), Choice("4", "Disagree"),
+                             Choice("5", "Strongly disagree")])
+    s = _score([_q("q1", "I feel safe", "select_one a3", list_name="a3"),
+                _q("q2", "I feel heard", "select_one a5", list_name="a5")],
+               [three, five])
+    scale = s.dimension("scale_consistency")
+    assert scale.score < 100
+    assert any("point counts" in o for o in scale.observations)
+
+
+def test_non_scale_lists_not_misclassified():
+    """A plain option list must never be treated as an ordinal scale."""
+    di = DesignIntelligence()
+    for labels in (["Yes", "No"], ["Farming", "Fishing", "Trading"],
+                   ["Good", "Bad"]):
+        cl = ChoiceList("l", [Choice(str(i), t) for i, t in enumerate(labels)])
+        assert di._scale_family(cl) is None
+
+
 def test_mixed_scale_directions_flagged():
     """A normal (agree-first) and a reversed (disagree-first) Likert of the
     same family should be caught as running in both directions - the check
