@@ -613,12 +613,20 @@ class DesignIntelligence:
         markers = self.v["scale_families"][fam]
         first_label = (cl.choices[0].label or "").lower() if cl.choices else ""
         # markers are listed positive-pole first; if the list's first option
-        # matches an early marker it's "ascending", a late marker "descending".
-        for idx, m in enumerate(markers):
-            if m in first_label:
-                return "positive_first" if idx < len(markers) / 2 \
-                    else "negative_first"
-        return None
+        # matches an early marker the positive pole leads, a late marker the
+        # negative pole leads. Match longest marker first (so "strongly
+        # disagree" wins over "disagree") and on word boundaries (so "agree"
+        # never matches inside "disagree" - the bug that made every scale read
+        # as positive-first and silently killed this check).
+        matched = None
+        for idx, m in sorted(enumerate(markers), key=lambda kv: -len(kv[1])):
+            if re.search(r"\b" + re.escape(m) + r"\b", first_label):
+                matched = idx
+                break
+        if matched is None:
+            return None
+        return "positive_first" if matched < len(markers) / 2 \
+            else "negative_first"
 
     @staticmethod
     def _tokens(text: str) -> set:

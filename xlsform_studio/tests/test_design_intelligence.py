@@ -105,6 +105,23 @@ def test_mixed_point_count_scales_flagged():
     assert any("point counts" in o for o in scale.observations)
 
 
+def test_mixed_scale_directions_flagged():
+    """A normal (agree-first) and a reversed (disagree-first) Likert of the
+    same family should be caught as running in both directions - the check
+    that the 'agree' substring of 'disagree' used to silently defeat."""
+    fwd = ChoiceList("af", [Choice("1", "Strongly agree"), Choice("2", "Agree"),
+                            Choice("3", "Disagree"),
+                            Choice("4", "Strongly disagree")])
+    rev = ChoiceList("ar", [Choice("1", "Strongly disagree"),
+                            Choice("2", "Disagree"), Choice("3", "Agree"),
+                            Choice("4", "Strongly agree")])
+    s = _score([_q("q1", "I feel safe", "select_one af", list_name="af"),
+                _q("q2", "I feel heard", "select_one ar", list_name="ar")],
+               [fwd, rev])
+    scale = s.dimension("scale_consistency")
+    assert any("both directions" in o for o in scale.observations)
+
+
 # --- 9. redundancy -----------------------------------------------------------
 def test_near_duplicate_questions_flagged():
     s = _score([_q("a", "How many children do you have living with you?"),
