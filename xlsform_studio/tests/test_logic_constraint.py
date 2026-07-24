@@ -27,6 +27,30 @@ def test_under_5_years_in_months():
     assert expr == "${age_months}<60"
 
 
+def test_range_between_compiles_both_bounds():
+    age = Question(name="age_years", raw_label="Age in years",
+                   xlsform_type="integer")
+    q = Question(raw_label="Follow-up", logic="if age between 18 and 65")
+    expr = LogicEngine().resolve(q, known=[age, q])
+    assert expr == "${age_years}>=18 and ${age_years}<=65"
+
+
+def test_range_from_to_compiles_both_bounds():
+    age = Question(name="age_years", raw_label="Age in years",
+                   xlsform_type="integer")
+    q = Question(raw_label="Follow-up", logic="if age from 18 to 65")
+    expr = LogicEngine().resolve(q, known=[age, q])
+    assert expr == "${age_years}>=18 and ${age_years}<=65"
+
+
+def test_range_from_to_converts_years_to_months():
+    age = Question(name="age_months", raw_label="Age in months",
+                   xlsform_type="integer")
+    q = Question(raw_label="Follow-up", logic="if age from 2 to 5 years")
+    expr = LogicEngine().resolve(q, known=[age, q])
+    assert expr == "${age_months}>=24 and ${age_months}<=60"
+
+
 def test_explicit_relevant_untouched():
     q = Question(raw_label="x", logic="if yes", relevant="${a}=1")
     assert LogicEngine().resolve(q) == "${a}=1"

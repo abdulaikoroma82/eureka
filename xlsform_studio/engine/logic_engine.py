@@ -15,6 +15,8 @@ Supported patterns (deterministic)
                                         a select_multiple)
 * comparisons: "if age is at least 18", "if income over 500",
   "if weight <= 20"                  -> ``${age}>=18`` etc.
+* ranges: "if age between 5 and 10",
+  "if age from 18 to 65"             -> ``${age}>=18 and ${age}<=65``
 * compound: "if yes and age over 18",
   "if under 5 years or oedema is yes" -> parts joined with ``and`` / ``or``
 
@@ -176,10 +178,11 @@ class LogicEngine:
                          else self._falsy_value(target))
                 return f"${{{target.name}}}={value}"
 
-        # --- "X between A and B" (the ~AND~ placeholder from _compile) ---
-        between = self._compile_between(low, known)
-        if between:
-            return between
+        # --- ranges: "X between A and B" / "X from A to B" ---------------
+        # (the ~AND~ placeholder marks a range's "and" from _compile)
+        rng = self._compile_range(low, known)
+        if rng:
+            return rng
 
         # --- numeric comparison ("age is at least 18", "under 5 years") --
         cmp_expr = self._compile_comparison(low, known)
@@ -204,10 +207,19 @@ class LogicEngine:
         return ""
 
     # ------------------------------------------------------------------
-    def _compile_between(self, low: str, known: List[Question]) -> str:
-        # The ~AND~ placeholder was inserted pre-lowercasing; match either case.
+    def _compile_range(self, low: str, known: List[Question]) -> str:
+        """Compile a two-sided numeric range on a single subject.
+
+        Handles both "X between A and B" (the "and" arrives as the ~AND~
+        placeholder inserted by :meth:`_compile` before the compound split)
+        and the equally common "X from A to B" phrasing. Both regexes share
+        the same group layout: subject, low, high, optional unit.
+        """
         m = re.search(rf"(.*?)\s*(?:is\s+)?between\s+{_NUM}\s+~and~\s+{_NUM}"
                       rf"\s*(years?|months?)?\s*$", low, re.IGNORECASE)
+        if not m:
+            m = re.search(rf"(.*?)\s*(?:is\s+)?from\s+{_NUM}\s+to\s+{_NUM}"
+                          rf"\s*(years?|months?)?\s*$", low, re.IGNORECASE)
         if not m:
             return ""
         subject = m.group(1).strip()
