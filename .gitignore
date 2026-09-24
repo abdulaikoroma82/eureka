@@ -31,4 +31,3 @@ Thumbs.db
 # unlazy skill runtime state
 .unlazy/
 .unlazy-hook-state.json
-GATES.md
