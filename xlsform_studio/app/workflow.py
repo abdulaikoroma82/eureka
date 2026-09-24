@@ -68,6 +68,7 @@ from ..analysis.duration import DurationEstimate, DurationEstimator
 from ..analysis.quality_score import QualityIndex, QualityScorer
 from ..engine.choice_normalizer import ChoiceNormalizer
 from ..engine.knowledge_base import KnowledgeBase
+from ..engine.pack_backfill import PackBackfill
 from ..engine.rule_engine import RuleEngine
 from ..models import Questionnaire
 from ..parsers.factory import parse_file
@@ -225,6 +226,9 @@ class Workflow:
         else:
             notes = AIFormAuthor(client, self.kb).author(
                 questionnaire, target=target, survey_context=survey_context)
+            # The AI never sees the domain packs; fill the bounds it left
+            # blank from them (never overriding its own constraints).
+            notes.extend(PackBackfill(self.kb).apply(questionnaire))
         self._emit(progress, STEP_LABELS[1], "done")
 
         # --- deterministic standards enforcement -----------------------

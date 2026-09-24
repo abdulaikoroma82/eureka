@@ -326,6 +326,13 @@ realistic value bounds *on top of* the neutral rules (pack rules match
 first; with no pack, behaviour is unchanged byte-for-byte). They are plain
 YAML — edit or add your own without touching Python.
 
+Packs apply in AI authoring too. The model drafts its own constraints and
+never sees the packs, so after it runs, any numeric question it left
+**without** a constraint gets the matching pack bound. The pack step never
+overrides a constraint the AI wrote (even a looser one), never applies the
+neutral rules, and records each bound it adds in the assumption log with
+the pack's name.
+
 ```bash
 python -m xlsform_studio.app.main survey.docx --packs nutrition,health
 ```
