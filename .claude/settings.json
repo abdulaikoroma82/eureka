@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/skills/unlazy/scripts/stop-hook.mjs\" --unlazy-hook-v2",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}
