@@ -1,0 +1,125 @@
+# =============================================================================
+# Domain rule pack: NTD (neglected tropical diseases)
+# =============================================================================
+# Preventive-chemotherapy NTD programmes: MDA registers and coverage
+# evaluation surveys (CES), LF transmission assessment surveys (TAS) and
+# sentinel/spot-check sites, onchocerciasis skin-snip surveys, trachoma
+# (TT/TF) surveys, and schistosomiasis/STH parasitology (Kato-Katz, urine
+# filtration).  Merged ON TOP of the neutral rules (pack entries match
+# first); plain YAML, edit freely.  Bounds exclude impossible values only -
+# heavy-intensity infections and maximum dose-pole doses stay valid.
+#
+# Keywords are deliberately drug + "tablet" (or unit) phrases, never a bare
+# drug name, so "Reason for not taking praziquantel" or "Days since you took
+# ivermectin" are not mistaken for a tablet count.
+# =============================================================================
+
+type_keywords:
+  - type: decimal
+    keywords: [
+      # Half tablets are dispensed: PZQ dose pole steps of 0.5 tablet;
+      # albendazole/mebendazole 1/2 tablet for children 12-23 months.
+      "praziquantel tablet", "tablets of praziquantel",
+      "tablet of praziquantel", "pzq tablet",
+      "albendazole tablet", "tablets of albendazole",
+      "tablet of albendazole", "mebendazole tablet",
+      "tablets of mebendazole", "tablet of mebendazole",
+      # Parasite densities are rates, not counts.
+      "microfilariae per ml", "microfilariae per mg", "mf/ml", "mf per ml",
+      "mf/mg", "mf per mg", "microfilarial density",
+      "dose pole height", "height on the dose pole", "height (cm)",
+      "height in cm"]
+  - type: integer
+    keywords: [
+      "ivermectin tablet", "tablets of ivermectin", "tablet of ivermectin",
+      "mectizan tablet", "tablets of mectizan",
+      "azithromycin tablet", "tablets of azithromycin",
+      "tablet of azithromycin", "zithromax tablet",
+      "eggs per gram", "epg", "eggs/g", "eggs per slide", "egg count",
+      "eggs counted", "eggs per 10 ml", "eggs per 10ml", "eggs/10 ml",
+      "eggs/10ml", "lashes touching", "trichiatic lashes"]
+
+constraints:
+  # --- Drug doses (single MDA round) --------------------------------------
+  # Praziquantel 40 mg/kg, 600 mg tablets, WHO dose pole: 1 tablet at
+  # 94 cm up to 5 tablets at >= 178 cm, in half-tablet steps.
+  - match: ["praziquantel tablet", "tablets of praziquantel",
+            "tablet of praziquantel", "pzq tablet"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 0 and . <= 5 and (. * 2) mod 1 = 0"
+    message: "Praziquantel is 0-5 tablets per dose (dose pole), in steps of 0.5."
+  # Ivermectin 3 mg tablets, dose pole: 1 tablet at 90 cm up to 4 at
+  # >= 159 cm; whole tablets only.
+  - match: ["ivermectin tablet", "tablets of ivermectin",
+            "tablet of ivermectin", "mectizan tablet", "tablets of mectizan"]
+    applies_to: ["integer", "decimal"]
+    constraint: ". >= 0 and . <= 4"
+    message: "Ivermectin is 0-4 tablets per dose (dose pole)."
+  # Albendazole 400 mg / mebendazole 500 mg: one tablet per round (half a
+  # tablet for children 12-23 months).
+  - match: ["albendazole tablet", "tablets of albendazole",
+            "tablet of albendazole", "mebendazole tablet",
+            "tablets of mebendazole", "tablet of mebendazole"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 0 and . <= 1 and (. * 2) mod 1 = 0"
+    message: "Albendazole/mebendazole is 0, 0.5 or 1 tablet per round."
+  # Azithromycin 20 mg/kg to a 1 g maximum = at most four 250 mg tablets
+  # (two if 500 mg tablets are used).  Syrup doses are recorded in ml and
+  # are not bounded here.
+  - match: ["azithromycin tablet", "tablets of azithromycin",
+            "tablet of azithromycin", "zithromax tablet"]
+    applies_to: ["integer", "decimal"]
+    constraint: ". >= 0 and . <= 4"
+    message: "Azithromycin is 0-4 tablets per dose (1 g maximum)."
+
+  # --- Parasitology -------------------------------------------------------
+  # Order matters (first match wins): urine counts, then per-gram, then
+  # per-slide, because labels such as "eggs counted in 10 ml urine" contain
+  # several of these phrases.
+  # S. haematobium urine filtration, eggs per 10 ml.  Heavy intensity is
+  # >= 50; counts in the thousands occur, so the ceiling is generous.
+  - match: ["eggs per 10 ml", "eggs per 10ml", "eggs/10 ml", "eggs/10ml",
+            "10 ml urine", "10 ml of urine", "10ml urine"]
+    applies_to: ["integer", "decimal"]
+    constraint: ". >= 0 and . <= 10000"
+    message: "Urine egg count per 10 ml must be between 0 and 10000."
+  # Kato-Katz eggs per gram (= eggs per 41.7 mg slide x 24).  Heavy Ascaris
+  # is >= 50000 EPG; 600000 = the per-slide ceiling below x 24.
+  - match: ["eggs per gram", "epg", "eggs/g"]
+    applies_to: ["integer", "decimal"]
+    constraint: ". >= 0 and . <= 600000"
+    message: "Eggs per gram must be between 0 and 600000."
+  # Raw count on one 41.7 mg Kato-Katz slide: 25000 (= 600000 EPG) is far
+  # beyond any countable slide, so only keying errors are excluded.
+  - match: ["eggs per slide", "egg count", "eggs counted"]
+    applies_to: ["integer"]
+    constraint: ". >= 0 and . <= 25000"
+    message: "Eggs counted on one Kato-Katz slide must be between 0 and 25000."
+  # LF night-blood microfilaraemia (mf/ml): high-density carriers reach the
+  # low thousands; 50000 excludes only data-entry errors.
+  - match: ["microfilariae per ml", "mf/ml", "mf per ml"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 0 and . <= 50000"
+    message: "Microfilariae per ml must be between 0 and 50000."
+  # Onchocerciasis skin-snip density (mf/mg): heavy loads exceed 50 and
+  # rarely a few hundred.
+  - match: ["microfilariae per mg", "mf/mg", "mf per mg"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 0 and . <= 1000"
+    message: "Microfilariae per mg of skin must be between 0 and 1000."
+
+  # --- Trachoma -----------------------------------------------------------
+  # Lashes touching the globe, per eye: an upper lid carries ~90-160 lashes.
+  - match: ["lashes touching", "trichiatic lashes"]
+    applies_to: ["integer"]
+    constraint: ". >= 0 and . <= 200"
+    message: "Lashes touching the eyeball must be between 0 and 200 per eye."
+
+  # --- Dose pole ----------------------------------------------------------
+  # Height used to read the dose pole, in cm (same bounds as the nutrition
+  # pack so the two stack without conflict).
+  - match: ["dose pole height", "height on the dose pole", "height (cm)",
+            "height in cm"]
+    applies_to: ["decimal", "integer"]
+    constraint: ". >= 30 and . <= 250"
+    message: "Height in cm must be between 30 and 250."

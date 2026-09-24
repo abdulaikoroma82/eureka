@@ -318,8 +318,10 @@ and point the tool at it with `--rules` on the CLI or
 Ready-made specialisations ship in `knowledge/packs/` — **nutrition**
 (MUAC, weight/height, z-scores, IYCF), **health** (vitals, ANC, RMNCAH
 counts), **agriculture** (land, livestock, yields), **education**
-(enrolment, grades, assessment scores) and **humanitarian** (PDM, food
-security, water access). Each pack adds type-detection keywords and
+(enrolment, grades, assessment scores), **humanitarian** (PDM, food
+security, water access) and **ntd** (MDA dose-pole tablet counts for
+praziquantel/ivermectin/albendazole/azithromycin, Kato-Katz and urine egg
+counts, LF/oncho microfilarial density, trachoma lash counts). Each pack adds type-detection keywords and
 realistic value bounds *on top of* the neutral rules (pack rules match
 first; with no pack, behaviour is unchanged byte-for-byte). They are plain
 YAML — edit or add your own without touching Python.

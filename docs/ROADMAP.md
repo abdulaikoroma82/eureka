@@ -36,7 +36,7 @@ Legend: ✅ shipped · 🚫 descoped
 | A9 | Enumerator Instruction Generator | ✅ | `ai/enumerator_notes.py` (advisory `hint` suggestions; author hints win) |
 | D10 | Deployment Readiness Checks | ✅ | `validation/readiness_validator.py` (translation/media/device/metadata completeness) + platform matrix + pyxform deep check |
 | A1 | Methodology Expert Review | ✅ | `ai/quality_reviewer.py` (expert-panel category 5: sequencing, priming, sensitive-question placement) |
-| D7 | Domain Rule Packs | ✅ | `knowledge/packs/*.yaml` (nutrition, health, agriculture, education, humanitarian) + `KnowledgeBase.load(packs=...)`, CLI `--packs`, UI multiselect |
+| D7 | Domain Rule Packs | ✅ | `knowledge/packs/*.yaml` (nutrition, health, agriculture, education, humanitarian, ntd) + `KnowledgeBase.load(packs=...)`, CLI `--packs`, UI multiselect |
 | A4 | Missing Question Detection | ✅ | `ai/completeness.py` (advisory findings; never adds questions) |
 | A5 | Objective Coverage Review | ✅ | `ai/coverage.py` (objectives via UI textarea / `--ai-objectives`) |
 | H2 | Coverage Matrix | ✅ | `coverage_matrix.md` artifact + Quality tab; question refs verified deterministically |
