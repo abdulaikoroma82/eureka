@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 
@@ -55,6 +55,11 @@ class KnowledgeBase:
 
     #: Names of the domain packs merged into this knowledge base.
     packs: List[str] = field(default_factory=list)
+    #: Each pack's own constraint templates as ``(pack_name, template)``,
+    #: in match order (first-loaded pack last, as in the merged list).
+    #: Lets later stages tell pack rules apart from the neutral ones.
+    pack_constraints: List[Tuple[str, Dict[str, Any]]] = field(
+        default_factory=list)
 
     # ------------------------------------------------------------------
     @classmethod
@@ -82,6 +87,7 @@ class KnowledgeBase:
             platform_data = _read_yaml(KNOWLEDGE_DIR / "platforms.yaml")
         rules = _read_yaml(directory / rules_file)
         loaded: List[str] = []
+        pack_constraints: List[Tuple[str, Dict[str, Any]]] = []
         for name in packs or []:
             pack_path = directory / "packs" / f"{name}.yaml"
             if not pack_path.exists() and directory != KNOWLEDGE_DIR:
@@ -94,9 +100,12 @@ class KnowledgeBase:
                     f"{', '.join(cls.available_packs(directory)) or 'none'}")
             rules = cls._merge_pack(rules, pack)
             loaded.append(name)
+            # Later packs are prepended by _merge_pack, so they match first.
+            pack_constraints = [(name, tpl) for tpl in
+                                pack.get("constraints") or []] + pack_constraints
         return cls(xlsform_rules=rules,
                    platforms=platform_data.get("platforms", {}),
-                   packs=loaded)
+                   packs=loaded, pack_constraints=pack_constraints)
 
     @staticmethod
     def available_packs(directory: Optional[Path] = None) -> List[str]:
