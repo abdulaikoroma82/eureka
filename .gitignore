@@ -27,3 +27,8 @@ Thumbs.db
 
 # Local AI translation cache (regenerated on demand)
 .translation_cache.json
+
+# unlazy skill runtime state
+.unlazy/
+.unlazy-hook-state.json
+GATES.md
